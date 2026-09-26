@@ -48,8 +48,9 @@ export function CoverSlide({ slide }: { slide: CoverSlideData }) {
               key={sign}
               style={{
                 position: 'absolute',
-                left: RING_BOX / 2 + Math.cos(angle) * RING_RADIUS - GLYPH_SIZE / 2,
-                top: RING_BOX / 2 + Math.sin(angle) * RING_RADIUS - GLYPH_SIZE / 2,
+                // Tam piksele yuvarlanır: kayan nokta farkları sunucu/istemci ve cihazlar arasında çıktıyı değiştirmesin.
+                left: Math.round(RING_BOX / 2 + Math.cos(angle) * RING_RADIUS - GLYPH_SIZE / 2),
+                top: Math.round(RING_BOX / 2 + Math.sin(angle) * RING_RADIUS - GLYPH_SIZE / 2),
                 width: GLYPH_SIZE,
                 height: GLYPH_SIZE,
               }}

@@ -10,12 +10,12 @@ import { SignSlide } from './sign-slide';
 import { AUDIENCE_ACCENTS, ELEMENT_TINTS, PALETTE } from './tokens';
 import { Watermark } from './watermark';
 
+// Köşelerde; başlık satırı, kartlar ve filigran alanıyla çakışmaz.
 const SPARKLES = [
-  { x: 0.08, y: 0.06, size: 34, opacity: 0.7 },
-  { x: 0.9, y: 0.1, size: 24, opacity: 0.6 },
-  { x: 0.87, y: 0.52, size: 18, opacity: 0.5 },
-  { x: 0.05, y: 0.74, size: 22, opacity: 0.5 },
-  { x: 0.92, y: 0.9, size: 30, opacity: 0.6 },
+  { x: 0.035, y: 0.022, size: 30, opacity: 0.7 },
+  { x: 0.93, y: 0.024, size: 22, opacity: 0.6 },
+  { x: 0.945, y: 0.88, size: 26, opacity: 0.6 },
+  { x: 0.03, y: 0.955, size: 24, opacity: 0.55 },
 ];
 
 function Backdrop({ audience, element }: { audience: Audience; element: Element | null }) {
@@ -33,7 +33,24 @@ function Backdrop({ audience, element }: { audience: Audience; element: Element 
 export function PastelSlide({ slide, brand, format }: SlideProps) {
   const { width, height } = FORMAT_SIZES[format];
   return (
-    <AbsoluteFill lang="tr" style={{ width, height, overflow: 'hidden', backgroundColor: PALETTE.cream, color: PALETTE.plum, fontFamily: BODY_FONT }}>
+    // Önizlemede slayt bir düğmenin içinde, render'da sayfanın gövdesinde durur; miras alınan yazı ayarları burada sabitlenir.
+    <AbsoluteFill
+      lang="tr"
+      style={{
+        width,
+        height,
+        overflow: 'hidden',
+        backgroundColor: PALETTE.cream,
+        color: PALETTE.plum,
+        fontFamily: BODY_FONT,
+        fontSize: 32,
+        fontStyle: 'normal',
+        fontWeight: 400,
+        lineHeight: 1.3,
+        letterSpacing: 'normal',
+        textAlign: 'left',
+      }}
+    >
       <Backdrop audience={slide.audience} element={slide.type === 'sign' ? slide.element : null} />
       {slide.type === 'cover' && <CoverSlide slide={slide} />}
       {slide.type === 'sign' && <SignSlide slide={slide} />}

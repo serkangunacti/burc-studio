@@ -46,6 +46,16 @@ describe('pastel@1', () => {
     expect(html(sampleProps(sampleSign(), { format: '3x4' }))).toContain('height:1440px');
   });
 
+  it('çizim konumları tam piksel; kök stil sayfadan miras alınan yazı ayarlarını sabitler', () => {
+    const cover = html(sampleProps(SAMPLE_COVER));
+    expect(cover).not.toMatch(/(left|top):-?\d+\.\d+px/);
+    for (const out of [cover, html(sampleProps(sampleSign()))]) {
+      expect(out).toContain('text-align:left');
+      expect(out).toContain('font-style:normal');
+      expect(out).toContain('letter-spacing:normal');
+    }
+  });
+
   it('12 burcun çizimi var; şablon kaydı sürümle çözülür', () => {
     expect(Object.keys(ZODIAC_PATHS).sort()).toEqual([...SIGN_SLUGS].sort());
     expect(getTemplate('pastel@1').Slide).toBe(PastelSlide);
