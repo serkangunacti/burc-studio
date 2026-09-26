@@ -38,11 +38,21 @@ export function availableProviders(env: Env): ProviderSpec[] {
   if (env.GROQ_API_KEY && env.GROQ_MODEL) {
     specs.push({ id: 'groq', label: 'Groq', model: env.GROQ_MODEL, dailyCap: 500, factory: openAICompatible('groq', 'https://api.groq.com/openai/v1', env.GROQ_API_KEY) });
   }
+  if (env.MISTRAL_API_KEY && env.MISTRAL_MODEL) {
+    specs.push({ id: 'mistral', label: 'Mistral', model: env.MISTRAL_MODEL, dailyCap: 200, factory: openAICompatible('mistral', 'https://api.mistral.ai/v1', env.MISTRAL_API_KEY) });
+  }
+  if (env.COHERE_API_KEY && env.COHERE_MODEL) {
+    // Ücretsiz deneme anahtarı ayda 1.000 istekle sınırlı.
+    specs.push({ id: 'cohere', label: 'Cohere', model: env.COHERE_MODEL, dailyCap: 30, factory: openAICompatible('cohere', 'https://api.cohere.ai/compatibility/v1', env.COHERE_API_KEY) });
+  }
   if (env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) {
     // Ücretsiz modellerin günlük 50 isteklik kotası hesap başınadır; iki model bunu paylaşır.
     const factory = openAICompatible('openrouter', 'https://openrouter.ai/api/v1', env.OPENROUTER_API_KEY);
     specs.push({ id: 'openrouter', label: 'OpenRouter', model: env.OPENROUTER_MODEL, dailyCap: 24, factory });
     if (env.OPENROUTER_MODEL_2) specs.push({ id: 'openrouter-2', label: 'OpenRouter (yedek)', model: env.OPENROUTER_MODEL_2, dailyCap: 24, factory });
+  }
+  if (env.NVIDIA_API_KEY && env.NVIDIA_MODEL) {
+    specs.push({ id: 'nvidia', label: 'NVIDIA NIM', model: env.NVIDIA_MODEL, dailyCap: 200, factory: openAICompatible('nvidia', 'https://integrate.api.nvidia.com/v1', env.NVIDIA_API_KEY) });
   }
   if (env.CEREBRAS_API_KEY && env.CEREBRAS_MODEL) {
     specs.push({ id: 'cerebras', label: 'Cerebras', model: env.CEREBRAS_MODEL, dailyCap: 500, factory: openAICompatible('cerebras', 'https://api.cerebras.ai/v1', env.CEREBRAS_API_KEY) });

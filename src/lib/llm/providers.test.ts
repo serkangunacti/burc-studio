@@ -34,6 +34,24 @@ describe('availableProviders', () => {
     expect(availableProviders({ OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free' }).map((spec) => spec.id)).toEqual(['openrouter']);
   });
 
+  it("Mistral ve Cohere Groq'un ardından, NVIDIA OpenRouter'ın ardından ve yalnızca model verilince eklenir", () => {
+    const env = {
+      GROQ_API_KEY: 'g', GROQ_MODEL: 'qwen/qwen3.8-27b',
+      MISTRAL_API_KEY: 'm', MISTRAL_MODEL: 'mistral-medium-latest',
+      COHERE_API_KEY: 'c', COHERE_MODEL: 'command-a-03-2025',
+      OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free',
+      NVIDIA_API_KEY: 'n', NVIDIA_MODEL: 'deepseek-ai/deepseek-v4.1-flash',
+    };
+    expect(availableProviders(env).map(({ id, model, dailyCap }) => ({ id, model, dailyCap }))).toEqual([
+      { id: 'groq', model: 'qwen/qwen3.8-27b', dailyCap: 500 },
+      { id: 'mistral', model: 'mistral-medium-latest', dailyCap: 200 },
+      { id: 'cohere', model: 'command-a-03-2025', dailyCap: 30 },
+      { id: 'openrouter', model: 'a:free', dailyCap: 24 },
+      { id: 'nvidia', model: 'deepseek-ai/deepseek-v4.1-flash', dailyCap: 200 },
+    ]);
+    expect(availableProviders({ MISTRAL_API_KEY: 'm', COHERE_API_KEY: 'c', NVIDIA_API_KEY: 'n' })).toEqual([]);
+  });
+
   it('fabrika istenen model kimliğiyle model üretir', () => {
     const [gemini] = availableProviders({ GOOGLE_GENERATIVE_AI_API_KEY: 'g' });
     expect((gemini.factory('gemini-3.8-flash') as { modelId: string }).modelId).toBe('gemini-3.8-flash');

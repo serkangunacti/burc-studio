@@ -14,7 +14,7 @@ export const GENERATED_KINDS: readonly GeneratedKind[] = ['horoscope', 'weekly']
 
 type Prompt = { instructions: string; prompt: string };
 export type SpecContext = {
-  batchPrompt(): Prompt;
+  batchPrompt(signs: readonly SignSlug[]): Prompt;
   signPrompt(sign: SignSlug, issues: QualityIssue[]): Prompt;
   tarotCardId(sign: SignSlug): string | undefined;
   forbidden?: ForbiddenPhrases;
@@ -25,6 +25,8 @@ export type GenerationSpec = {
   promptVersion: string;
   limits: EntryLimits;
   recentDays: number;
+  // Bir istekte yazılan burç sayısı; ücretsiz sağlayıcılar uzun haftalık yanıtı tek seferde bitiremiyor.
+  chunkSize: number;
   validDate(date: DateKey): boolean;
   context(input: { date: DateKey; audience: Audience; recent: RecentHeadline[]; keptCards?: ReadonlyMap<SignSlug, string> }): SpecContext;
 };
@@ -43,6 +45,7 @@ export const HOROSCOPE_SPEC: GenerationSpec = {
   promptVersion: HOROSCOPE_PROMPT_VERSION,
   limits: DAILY_LIMITS,
   recentDays: 2,
+  chunkSize: SIGN_SLUGS.length,
   validDate: () => true,
   context({ date, audience, recent }) {
     const input = { dateKey: date, audience, sky: getSkySnapshot(date), recent };
@@ -60,6 +63,7 @@ export const WEEKLY_SPEC: GenerationSpec = {
   promptVersion: WEEKLY_PROMPT_VERSION,
   limits: WEEKLY_LIMITS,
   recentDays: 7,
+  chunkSize: 4,
   validDate: isMonday,
   context({ date, audience, recent, keptCards }) {
     // Yeni üretimde 12 farklı kart çekilir; tek burç yenilemede mevcut kartlar korunur.
@@ -72,7 +76,7 @@ export const WEEKLY_SPEC: GenerationSpec = {
     );
     const input = { monday: date, audience, week: getWeekSky(date), cards, recent };
     return {
-      batchPrompt: () => buildWeeklyBatchPrompt(input),
+      batchPrompt: (signs) => buildWeeklyBatchPrompt(input, signs),
       signPrompt: (sign, issues) => buildWeeklySignPrompt({ ...input, sign, issues }),
       tarotCardId: (sign) => cards.get(sign)?.id,
       forbidden: (sign) => cardPhrases(cards.get(sign)!),

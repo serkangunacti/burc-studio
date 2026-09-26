@@ -17,9 +17,19 @@ describe('haftalık prompt', () => {
     expect(prompt).toContain('30 Eylül Çarşamba: Merkür Akrep burcuna geçiyor.');
     expect(prompt).toContain('- Koç (koc, 21 Mart – 19 Nisan): cesur, girişken, sabırsız, enerjik — haftanın kartı: Yıldız (umut, ilham, iyileşme, yenilenmiş inanç)');
     expect(WEEKLY_INSTRUCTIONS).toContain('600–850 karakter');
+    expect(WEEKLY_INSTRUCTIONS).toContain('yaklaşık 90–120 kelime, 6–8 cümle');
+    expect(WEEKLY_INSTRUCTIONS).toContain('en fazla 40 karakter (4–6 kelime)');
     expect(WEEKLY_INSTRUCTIONS).toContain('kartın adını');
     expect(WEEKLY_INSTRUCTIONS).toContain('burcun adını başlıkta tekrarlama');
     expect(WEEKLY_INSTRUCTIONS).toContain('gün adlarını gökyüzü listesindeki tarihlerle birebir kullan');
+  });
+
+  it('parça promptu yalnızca verilen burçları ve kartlarını ister', () => {
+    const { prompt } = buildWeeklyBatchPrompt(base, ['aslan', 'basak', 'terazi', 'akrep']);
+    expect(prompt).toContain('- Aslan (aslan');
+    expect(prompt).toContain('- Akrep (akrep');
+    expect(prompt).not.toContain('- Koç (koc');
+    expect(prompt).toContain('"burclar" dizisinde şu 4 burcun her biri tam bir kez');
   });
 
   it('tek burç promptu yalnızca o burcu ve kartını ister', () => {
