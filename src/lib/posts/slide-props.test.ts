@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from '@/lib/settings/schema';
 import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
 import { getPostDetail } from './repository';
-import { audienceOf, brandFromSettings, buildCoverProps, buildSlideProps } from './slide-props';
+import { audienceOf, brandFromSettings, buildCoverProps, buildSlideProps, variantFor } from './slide-props';
 
 const KEY = { date: '2026-09-26', kind: 'horoscope' as const, audience: 'kadin' as const };
 const BRAND = brandFromSettings({ ...DEFAULT_SETTINGS, instagramHandle: 'burc.studio' });
@@ -19,8 +19,10 @@ describe('buildSlideProps', () => {
     const post = await seedPost(db, KEY);
     const props = buildSlideProps((await getPostDetail(db, post.id))!, BRAND);
     expect(props).toHaveLength(14);
+    expect(props.every((item) => item.variant === 20722)).toBe(true);
     expect(props[0]).toEqual({
       format: '4x5',
+      variant: 20722,
       brand: { handle: 'burc.studio', enabled: true, position: 'bottom-center', opacity: 0.55 },
       slide: { type: 'cover', audience: 'kadin', dateLabel: '26 EYLÜL 2026 CUMARTESİ', hook: 'Kanca' },
     });
@@ -48,5 +50,15 @@ describe('buildSlideProps', () => {
     detail.slides[3] = { ...detail.slides[3], reading: null };
     expect(() => buildSlideProps(detail, BRAND)).toThrow('Slayt 3 için yorum bulunamadı');
     expect(() => audienceOf({ audience: 'genel' })).toThrow('Genel kitleli gönderiler');
+  });
+});
+
+describe('variantFor', () => {
+  it('aynı günün gönderileri birbirinden, ardışık günler de birbirinden farklı zemin alır', () => {
+    const day = (date: string, kind: 'horoscope' | 'tarot' | 'special', audience: 'kadin' | 'erkek' | 'genel') => variantFor({ date, kind, audience }) % 7;
+    const sameDay = [day('2026-09-26', 'horoscope', 'kadin'), day('2026-09-26', 'horoscope', 'erkek'), day('2026-09-26', 'tarot', 'kadin'), day('2026-09-26', 'tarot', 'erkek'), day('2026-09-26', 'special', 'genel')];
+    expect(new Set(sameDay).size).toBe(5);
+    expect(day('2026-09-27', 'horoscope', 'kadin')).not.toBe(day('2026-09-26', 'horoscope', 'kadin'));
+    expect(variantFor({ date: '2026-09-26', kind: 'horoscope', audience: 'kadin' })).toBe(20722);
   });
 });

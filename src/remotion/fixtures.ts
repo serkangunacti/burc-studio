@@ -51,5 +51,5 @@ export function sampleSign(slug: SignSlug = 'koc', audience: Audience = 'kadin')
 }
 
 export function sampleProps(slide: SlideData, overrides: Partial<Omit<SlideProps, 'slide'>> = {}): SlideProps {
-  return { slide, brand: SAMPLE_BRAND, format: '4x5', ...overrides };
+  return { slide, brand: SAMPLE_BRAND, format: '4x5', variant: 0, ...overrides };
 }

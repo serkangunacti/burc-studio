@@ -11,10 +11,24 @@ export const PALETTE = {
   card: 'rgba(255, 255, 255, 0.78)',
 } as const;
 
-export const AUDIENCE_ACCENTS: Record<Audience, { from: string; to: string; ink: string }> = {
-  kadin: { from: '#F4C2C2', to: '#C8B6E2', ink: '#7A5AA6' },
-  erkek: { from: '#BFD7ED', to: '#B7C9A8', ink: '#3F6477' },
-};
+export const AUDIENCE_INK: Record<Audience, string> = { kadin: '#7A5AA6', erkek: '#3F6477' };
+
+export type Backdrop = { from: string; to: string; angle: number };
+
+// Her gönderi bu pastel zeminlerden biriyle açılır; düzen, yazı ve renk ailesi hep aynı kalır.
+export const BACKDROPS: readonly Backdrop[] = [
+  { from: '#F4C2C2', to: '#C8B6E2', angle: 165 },
+  { from: '#BFD7ED', to: '#B7C9A8', angle: 200 },
+  { from: '#FFD1B3', to: '#F4C2C2', angle: 145 },
+  { from: '#D9C6F0', to: '#BFD7ED', angle: 185 },
+  { from: '#BEE3D3', to: '#FFF1A8', angle: 155 },
+  { from: '#EFE3CC', to: '#D9C6F0', angle: 210 },
+  { from: '#F7C9BC', to: '#BEE3D3', angle: 130 },
+];
+
+export function backdropIndex(variant: number): number {
+  return ((variant % BACKDROPS.length) + BACKDROPS.length) % BACKDROPS.length;
+}
 
 export const AUDIENCE_TITLES: Record<Audience, string> = { kadin: 'KADIN', erkek: 'ERKEK' };
 

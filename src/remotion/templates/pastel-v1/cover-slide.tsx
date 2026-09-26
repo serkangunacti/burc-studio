@@ -3,7 +3,7 @@ import { graphemeLength } from '@/lib/text/turkish';
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import type { CoverSlideData } from '@/remotion/slide-types';
 import { HEADING_FONT } from './fonts';
-import { AUDIENCE_ACCENTS, AUDIENCE_TITLES, PALETTE } from './tokens';
+import { AUDIENCE_INK, AUDIENCE_TITLES, PALETTE, type Backdrop } from './tokens';
 import { ZodiacGlyph } from './zodiac';
 
 const RING_RADIUS = 270;
@@ -18,19 +18,19 @@ export function hookFontSize(hook: string): number {
   return 40;
 }
 
-export function CoverSlide({ slide }: { slide: CoverSlideData }) {
-  const accent = AUDIENCE_ACCENTS[slide.audience];
+export function CoverSlide({ slide, backdrop }: { slide: CoverSlideData; backdrop: Backdrop }) {
+  const ink = AUDIENCE_INK[slide.audience];
   return (
     <AbsoluteFill style={{ padding: '96px 88px 110px', alignItems: 'center' }}>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 6, color: PALETTE.plumSoft }}>{slide.dateLabel}</div>
-      <div style={{ marginTop: 28, fontFamily: HEADING_FONT, fontSize: 64, fontWeight: 500, color: accent.ink }}>Günlük</div>
+      <div style={{ marginTop: 28, fontFamily: HEADING_FONT, fontSize: 64, fontWeight: 500, color: ink }}>Günlük</div>
       <div style={{ fontFamily: HEADING_FONT, fontSize: 104, fontWeight: 600, lineHeight: 1.02 }}>Burç Yorumları</div>
       <div
         style={{
           marginTop: 28,
           padding: '12px 40px',
           borderRadius: 999,
-          backgroundImage: `linear-gradient(90deg, ${accent.from}, ${accent.to})`,
+          backgroundImage: `linear-gradient(90deg, ${backdrop.from}, ${backdrop.to})`,
           fontSize: 30,
           fontWeight: 700,
           letterSpacing: 4,
@@ -64,7 +64,7 @@ export function CoverSlide({ slide }: { slide: CoverSlideData }) {
                 height: GLYPH_SIZE,
               }}
             >
-              <ZodiacGlyph sign={sign} size={GLYPH_SIZE} color={accent.ink} strokeWidth={5} />
+              <ZodiacGlyph sign={sign} size={GLYPH_SIZE} color={ink} strokeWidth={5} />
             </div>
           );
         })}

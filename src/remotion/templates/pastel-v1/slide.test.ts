@@ -62,6 +62,13 @@ describe('pastel@1', () => {
     }
   });
 
+  it('zemin gönderinin varyantına göre döner; yedi zemin sırayla tekrar eder', () => {
+    expect(html(sampleProps(sampleSign(), { variant: 0 }))).toContain('#F4C2C2');
+    expect(html(sampleProps(sampleSign(), { variant: 2 }))).toContain('#FFD1B3');
+    expect(html(sampleProps(SAMPLE_COVER, { variant: 9 }))).toBe(html(sampleProps(SAMPLE_COVER, { variant: 2 })));
+    expect(html(sampleProps(SAMPLE_COVER, { variant: 3 }))).not.toBe(html(sampleProps(SAMPLE_COVER, { variant: 4 })));
+  });
+
   it('12 burcun çizimi var; şablon kaydı sürümle çözülür', () => {
     expect(Object.keys(ZODIAC_PATHS).sort()).toEqual([...SIGN_SLUGS].sort());
     expect(getTemplate('pastel@1').Slide).toBe(PastelSlide);

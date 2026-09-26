@@ -1,6 +1,6 @@
 import type { PostRow } from '@/lib/content/repository';
 import { getLuckyColor } from '@/lib/content/lucky-colors';
-import type { Audience } from '@/lib/content/types';
+import type { Audience, ReadingAudience, ReadingKind } from '@/lib/content/types';
 import { formatDateLongTr, formatDateShortTr } from '@/lib/date/istanbul';
 import type { Settings } from '@/lib/settings/schema';
 import { getSign } from '@/lib/zodiac/signs';
@@ -14,6 +14,15 @@ export function audienceOf(post: Pick<PostRow, 'audience'>): Audience {
   return post.audience;
 }
 
+// Aynı günün gönderileri farklı, ardışık günler de farklı zeminle açılsın (7'lik döngüde 5 ayrı kaydırma).
+const KIND_OFFSETS: Record<ReadingKind, number> = { horoscope: 0, tarot: 1, special: 5 };
+const AUDIENCE_OFFSETS: Record<ReadingAudience, number> = { kadin: 0, erkek: 3, genel: 0 };
+
+export function variantFor(post: Pick<PostRow, 'date' | 'kind' | 'audience'>): number {
+  const day = Math.floor(Date.parse(`${post.date}T00:00:00Z`) / 86_400_000);
+  return day + KIND_OFFSETS[post.kind] + AUDIENCE_OFFSETS[post.audience];
+}
+
 export function brandFromSettings(settings: Settings): BrandProps {
   return { handle: settings.instagramHandle, ...settings.watermark };
 }
@@ -22,6 +31,7 @@ export function buildCoverProps(post: PostRow, brand: BrandProps): SlideProps {
   return {
     format: post.format,
     brand,
+    variant: variantFor(post),
     slide: { type: 'cover', audience: audienceOf(post), dateLabel: upper(formatDateLongTr(post.date)), hook: post.cover.hook },
   };
 }
@@ -29,9 +39,10 @@ export function buildCoverProps(post: PostRow, brand: BrandProps): SlideProps {
 export function buildSlideProps(detail: PostDetail, brand: BrandProps): SlideProps[] {
   const { post } = detail;
   const audience = audienceOf(post);
+  const variant = variantFor(post);
   return detail.slides.map((slide): SlideProps => {
     if (slide.type === 'cover') return buildCoverProps(post, brand);
-    if (slide.type === 'cta') return { format: post.format, brand, slide: { type: 'cta', audience } };
+    if (slide.type === 'cta') return { format: post.format, brand, variant, slide: { type: 'cta', audience } };
     const { reading } = slide;
     if (!reading) throw new Error(`Slayt ${slide.position} için yorum bulunamadı`);
     const sign = getSign(reading.sign);
@@ -39,6 +50,7 @@ export function buildSlideProps(detail: PostDetail, brand: BrandProps): SlidePro
     return {
       format: post.format,
       brand,
+      variant,
       slide: {
         type: 'sign',
         audience,

@@ -3,7 +3,7 @@ import { graphemeLength } from '@/lib/text/turkish';
 import type { SignSlideData } from '@/remotion/slide-types';
 import { HEADING_FONT } from './fonts';
 import { StarIcon } from './ornaments';
-import { AUDIENCE_ACCENTS, AUDIENCE_TITLES, CARD_SHADOW, PALETTE } from './tokens';
+import { AUDIENCE_INK, AUDIENCE_TITLES, CARD_SHADOW, PALETTE, type Backdrop } from './tokens';
 import { ZodiacGlyph } from './zodiac';
 
 // Kalite kapısı yorumu 420 grafemle sınırlar; en uzun metin 32px'te kartın gövdesine sığar.
@@ -27,8 +27,8 @@ function ScoreRow({ label, value, color }: { label: string; value: number; color
   );
 }
 
-export function SignSlide({ slide }: { slide: SignSlideData }) {
-  const accent = AUDIENCE_ACCENTS[slide.audience];
+export function SignSlide({ slide, backdrop }: { slide: SignSlideData; backdrop: Backdrop }) {
+  const ink = AUDIENCE_INK[slide.audience];
   return (
     <AbsoluteFill style={{ padding: '72px 72px 100px', gap: 32 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 24, fontWeight: 700, letterSpacing: 5, color: PALETTE.plumSoft }}>
@@ -42,7 +42,7 @@ export function SignSlide({ slide }: { slide: SignSlideData }) {
             height: 168,
             borderRadius: 84,
             border: `3px solid ${PALETTE.white}`,
-            backgroundImage: `linear-gradient(135deg, ${accent.from}, ${accent.to})`,
+            backgroundImage: `linear-gradient(135deg, ${backdrop.from}, ${backdrop.to})`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -68,7 +68,7 @@ export function SignSlide({ slide }: { slide: SignSlideData }) {
           boxShadow: CARD_SHADOW,
         }}
       >
-        <div data-slot="headline" style={{ fontFamily: HEADING_FONT, fontSize: 50, fontWeight: 500, lineHeight: 1.15, color: accent.ink }}>
+        <div data-slot="headline" style={{ fontFamily: HEADING_FONT, fontSize: 50, fontWeight: 500, lineHeight: 1.15, color: ink }}>
           {slide.headline}
         </div>
         <div data-slot="body" style={{ flex: 1, minHeight: 0, overflow: 'hidden', fontSize: bodyFontSize(slide.body), lineHeight: 1.45 }}>
@@ -76,9 +76,9 @@ export function SignSlide({ slide }: { slide: SignSlideData }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <ScoreRow label="Aşk" value={slide.scores.love} color={accent.ink} />
-            <ScoreRow label="Para" value={slide.scores.money} color={accent.ink} />
-            <ScoreRow label="Sağlık" value={slide.scores.health} color={accent.ink} />
+            <ScoreRow label="Aşk" value={slide.scores.love} color={ink} />
+            <ScoreRow label="Para" value={slide.scores.money} color={ink} />
+            <ScoreRow label="Sağlık" value={slide.scores.health} color={ink} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, fontSize: 26 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

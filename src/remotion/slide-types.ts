@@ -35,4 +35,5 @@ export type CtaSlideData = { type: 'cta'; audience: Audience };
 
 export type SlideData = CoverSlideData | SignSlideData | CtaSlideData;
 
-export type SlideProps = { slide: SlideData; brand: BrandProps; format: PostFormat };
+// variant: gönderiye özgü zemin sırası (şablon 7'lik döngüde yorumlar); tarih, tür ve kitleden hesaplanır.
+export type SlideProps = { slide: SlideData; brand: BrandProps; format: PostFormat; variant: number };
