@@ -8,7 +8,7 @@ import { mockHoroscopeBatch, mockHoroscopeEntry } from '@/lib/llm/mock-content';
 import { createMockModel } from '@/lib/llm/mock-model';
 import type { ProviderSpec } from '@/lib/llm/providers';
 import { AllProvidersFailedError } from '@/lib/llm/router';
-import { getCurrentPost, getCurrentReadings } from './repository';
+import { PostConflictError, createPostVersion, getCurrentPost, getCurrentReadings } from './repository';
 import { startRun } from './runs';
 import { generateHoroscopeSet, regenerateSign, rotateChain } from './horoscope-service';
 
@@ -138,6 +138,19 @@ describe('regenerateSign', () => {
     expect(after?.slides[5].readingId).toBe(current.find((row) => row.sign === 'aslan')?.id);
     expect(after?.slides[5].readingId).not.toBe(before?.slides[5].readingId);
     expect(after?.post.caption).toBe(before?.post.caption);
+  });
+
+  it('yenileme sürerken gönderi başka bir sürüme geçerse eski temelden sürüm açmaz', async () => {
+    await generateHoroscopeSet(deps([spec(createMockModel())]), { date: DATE, audience: 'kadin', trigger: 'button', skipIfExists: false });
+    const base = (await getCurrentPost(db, KEY))!;
+    const racing = scripted(() => ({ burc: mockHoroscopeEntry('aslan') }));
+    const original = racing.doGenerate.bind(racing);
+    racing.doGenerate = async (options) => {
+      await createPostVersion(db, { ...KEY, templateVersion: 'pastel@1', format: '4x5', cover: base.post.cover, caption: 'Araya giren sürüm', hashtags: [], signReadingIds: base.slides.filter((slide) => slide.type === 'sign').map((slide) => slide.readingId as string) });
+      return original(options);
+    };
+    await expect(regenerateSign(deps([spec(racing)]), { date: DATE, audience: 'kadin', sign: 'aslan' })).rejects.toBeInstanceOf(PostConflictError);
+    expect((await getCurrentPost(db, KEY))?.post).toMatchObject({ version: 2, caption: 'Araya giren sürüm' });
   });
 
   it('o günün yorumları yoksa missing döner', async () => {

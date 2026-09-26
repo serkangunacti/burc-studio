@@ -1,6 +1,6 @@
 import type { Db } from '@/db/types';
 import { MAX_HASHTAGS, normalizeHashtag } from '@/lib/content/hashtags';
-import { createPostVersion, getCurrentPost, saveReadings, type NewReading } from '@/lib/content/repository';
+import { PostConflictError, createPostVersion, getCurrentPost, saveReadings, type NewReading, type PostRow } from '@/lib/content/repository';
 import { graphemeLength } from '@/lib/text/turkish';
 import { EDIT_LIMITS, type PostEdit } from './edit-schema';
 import { getPostDetail } from './repository';
@@ -68,7 +68,8 @@ export async function editPost(db: Db, postId: string, edit: PostEdit, now: Date
   if (!detail) return { status: 'not-found' };
   const { post } = detail;
   const key = { date: post.date, kind: post.kind, audience: post.audience };
-  if (!post.isCurrent) return { status: 'stale', currentId: (await getCurrentPost(db, key))?.post.id ?? null };
+  const stale = async (): Promise<EditResult> => ({ status: 'stale', currentId: (await getCurrentPost(db, key))?.post.id ?? null });
+  if (!post.isCurrent) return stale();
 
   const value = checked.value;
   const readingBySign = new Map(detail.slides.flatMap((slide) => (slide.reading ? [[slide.reading.sign, slide.reading] as const] : [])));
@@ -85,38 +86,45 @@ export async function editPost(db: Db, postId: string, edit: PostEdit, now: Date
   const postChanged = hook !== post.cover.hook || caption !== post.caption || !sameList(hashtags, post.hashtags) || format !== post.format;
   if (!postChanged && changedSigns.length === 0) return { status: 'unchanged', postId };
 
-  const created = await db.transaction(async (tx) => {
-    const saved = await saveReadings(
-      tx,
-      key,
-      changedSigns.map(
-        ({ edited, reading }): NewReading => ({
-          sign: reading.sign,
-          headline: edited.headline,
-          body: edited.body,
-          short: edited.short,
-          meta: reading.meta,
-          provider: reading.provider,
-          model: reading.model,
-          promptVersion: reading.promptVersion,
-          runId: reading.runId,
-          editedAt: now,
-        }),
-      ),
-    );
-    const savedBySign = new Map(saved.map((row) => [row.sign, row.id]));
-    const signReadingIds = detail.slides
-      .filter((slide) => slide.type === 'sign')
-      .map((slide) => savedBySign.get(slide.reading!.sign) ?? (slide.readingId as string));
-    return createPostVersion(tx, {
-      ...key,
-      templateVersion: post.templateVersion,
-      format,
-      cover: { hook },
-      caption,
-      hashtags,
-      signReadingIds,
+  let created: PostRow;
+  try {
+    created = await db.transaction(async (tx) => {
+      const saved = await saveReadings(
+        tx,
+        key,
+        changedSigns.map(
+          ({ edited, reading }): NewReading => ({
+            sign: reading.sign,
+            headline: edited.headline,
+            body: edited.body,
+            short: edited.short,
+            meta: reading.meta,
+            provider: reading.provider,
+            model: reading.model,
+            promptVersion: reading.promptVersion,
+            runId: reading.runId,
+            editedAt: now,
+          }),
+        ),
+      );
+      const savedBySign = new Map(saved.map((row) => [row.sign, row.id]));
+      const signReadingIds = detail.slides
+        .filter((slide) => slide.type === 'sign')
+        .map((slide) => savedBySign.get(slide.reading!.sign) ?? (slide.readingId as string));
+      return createPostVersion(tx, {
+        ...key,
+        templateVersion: post.templateVersion,
+        format,
+        cover: { hook },
+        caption,
+        hashtags,
+        signReadingIds,
+        basePostId: post.id,
+      });
     });
-  });
+  } catch (error) {
+    if (error instanceof PostConflictError) return stale();
+    throw error;
+  }
   return { status: 'created', postId: created.id };
 }

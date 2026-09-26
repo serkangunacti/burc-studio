@@ -82,4 +82,13 @@ describe('editPost', () => {
     expect(await editPost(db, '00000000-0000-4000-8000-000000000000', { caption: 'x' })).toEqual({ status: 'not-found' });
     expect(await editPost(db, postId, { coverHook: '' })).toEqual({ status: 'invalid', errors: { coverHook: 'Boş bırakılamaz.' } });
   });
+
+  it('aynı sürüme eşzamanlı iki kayıt geldiğinde ikinci kayıt eski temelden yeni sürüm açmaz', async () => {
+    const results = await Promise.all([
+      editPost(db, postId, { caption: 'Birinci eşzamanlı açıklama' }),
+      editPost(db, postId, { caption: 'İkinci eşzamanlı açıklama' }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['created', 'stale']);
+    expect(await getPostVersions(db, KEY)).toHaveLength(2);
+  });
 });

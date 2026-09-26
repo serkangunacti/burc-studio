@@ -185,6 +185,7 @@ export async function regenerateSign(
         caption: current.post.caption,
         hashtags: current.post.hashtags,
         signReadingIds,
+        basePostId: current.post.id,
       });
     });
     return { status: 'created' as const, postId: created.id, providers: [source.providerId] };

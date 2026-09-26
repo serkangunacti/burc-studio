@@ -10,6 +10,7 @@ import {
   getCurrentPostsForDate,
   getCurrentReadings,
   getRecentHeadlines,
+  PostConflictError,
   saveReadings,
   type NewReading,
 } from './repository';
@@ -102,5 +103,14 @@ describe('gönderi sürümleri', () => {
     await expect(
       createPostVersion(db, { ...KEY, templateVersion: 'pastel@1', format: '4x5', cover: { hook: 'x' }, caption: 'x', hashtags: [], signReadingIds: [] }),
     ).rejects.toThrow('12 burç');
+  });
+
+  it('temel alınan sürüm artık güncel değilse yeni sürüm açmaz', async () => {
+    const saved = await saveReadings(db, KEY, SIGN_SLUGS.map((sign) => reading(sign)));
+    const input = { ...KEY, templateVersion: 'pastel@1', format: '4x5' as const, cover: { hook: 'K' }, caption: 'C', hashtags: [], signReadingIds: saved.map((row) => row.id) };
+    const first = await createPostVersion(db, input);
+    await createPostVersion(db, { ...input, basePostId: first.id });
+    await expect(createPostVersion(db, { ...input, basePostId: first.id })).rejects.toBeInstanceOf(PostConflictError);
+    expect((await getCurrentPost(db, KEY))?.post.version).toBe(2);
   });
 });

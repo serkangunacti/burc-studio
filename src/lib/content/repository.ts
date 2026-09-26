@@ -28,7 +28,16 @@ export type NewPost = ReadingKey & {
   caption: string;
   hashtags: string[];
   signReadingIds: readonly string[];
+  // Düzenleme ve tek burç yenileme bu sürümün üzerine kurulur; o sırada başka bir sürüm açılmışsa kayıt reddedilir.
+  basePostId?: string;
 };
+
+export class PostConflictError extends Error {
+  constructor() {
+    super('Gönderi bu sırada değişti; sayfayı yenile.');
+    this.name = 'PostConflictError';
+  }
+}
 
 function readingWhere(key: ReadingKey, sign: SignSlug) {
   return and(eq(readings.date, key.date), eq(readings.kind, key.kind), eq(readings.audience, key.audience), eq(readings.sign, sign));
@@ -87,6 +96,14 @@ export async function getRecentHeadlines(
 export async function createPostVersion(db: Db, input: NewPost): Promise<PostRow> {
   if (input.signReadingIds.length !== SIGN_SLUGS.length) throw new Error('Gönderi için 12 burç yorumu gerekir');
   return db.transaction(async (tx) => {
+    if (input.basePostId) {
+      const released = await tx
+        .update(posts)
+        .set({ isCurrent: false })
+        .where(and(eq(posts.id, input.basePostId), eq(posts.isCurrent, true)))
+        .returning({ id: posts.id });
+      if (released.length === 0) throw new PostConflictError();
+    }
     const [{ latest }] = await tx.select({ latest: max(posts.version) }).from(posts).where(postWhere(input));
     await tx.update(posts).set({ isCurrent: false }).where(and(postWhere(input), eq(posts.isCurrent, true)));
     const [post] = await tx
