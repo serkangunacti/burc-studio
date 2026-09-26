@@ -14,10 +14,12 @@ describe('haftalık prompt', () => {
     expect(prompt).toContain('HAFTALIK YORUM');
     expect(prompt).toContain('Hafta: 28 Eylül – 4 Ekim.');
     expect(prompt).toContain('Bu yorumlar erkek okurlar için.');
-    expect(prompt).toContain('30 Eylül: Merkür Akrep burcuna geçiyor.');
+    expect(prompt).toContain('30 Eylül Çarşamba: Merkür Akrep burcuna geçiyor.');
     expect(prompt).toContain('- Koç (koc, 21 Mart – 19 Nisan): cesur, girişken, sabırsız, enerjik — haftanın kartı: Yıldız (umut, ilham, iyileşme, yenilenmiş inanç)');
     expect(WEEKLY_INSTRUCTIONS).toContain('600–850 karakter');
     expect(WEEKLY_INSTRUCTIONS).toContain('kartın adını');
+    expect(WEEKLY_INSTRUCTIONS).toContain('burcun adını başlıkta tekrarlama');
+    expect(WEEKLY_INSTRUCTIONS).toContain('gün adlarını gökyüzü listesindeki tarihlerle birebir kullan');
   });
 
   it('tek burç promptu yalnızca o burcu ve kartını ister', () => {

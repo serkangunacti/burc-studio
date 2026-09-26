@@ -5,9 +5,13 @@ import { HEADING_FONT } from '../pastel-v1/fonts';
 import { AUDIENCE_INK, CARD_SHADOW, PALETTE, type Backdrop } from '../pastel-v1/tokens';
 import { ZodiacGlyph } from '../pastel-v1/zodiac';
 
-// Kalite kapısı haftalık yorumu 850 grafemle sınırlar; en uzun metin 28px'te kartın gövdesine sığar.
+// Kalite kapısı haftalık yorumu 850 grafemle sınırlar; en uzun metin 28px'te kartın gövdesine sığar,
+// kısa metinler kartta boşluk bırakmasın diye büyür.
 export function weeklyBodyFontSize(body: string): number {
-  return graphemeLength(body) <= 700 ? 30 : 28;
+  const length = graphemeLength(body);
+  if (length <= 650) return 32;
+  if (length <= 750) return 30;
+  return 28;
 }
 
 export function WeeklySign({ slide, backdrop }: { slide: SignSlideData; backdrop: Backdrop }) {

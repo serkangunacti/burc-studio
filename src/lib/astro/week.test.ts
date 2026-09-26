@@ -14,16 +14,16 @@ describe('haftanın gökyüzü', () => {
     expect(week.label).toBe('28 Eylül – 4 Ekim');
     expect(week.sunSigns).toEqual(['terazi']);
     expect(week.events).toEqual([
-      '28 Eylül: Mars Aslan burcuna geçiyor.',
-      '30 Eylül: Merkür Akrep burcuna geçiyor.',
-      expect.stringMatching(/^3 Ekim: Son Dördün \((İkizler|Yengeç)\)\.$/),
-      '3 Ekim: Venüs retrosu başlıyor.',
+      '28 Eylül Pazartesi: Mars Aslan burcuna geçiyor.',
+      '30 Eylül Çarşamba: Merkür Akrep burcuna geçiyor.',
+      expect.stringMatching(/^3 Ekim Cumartesi: Son Dördün \((İkizler|Yengeç)\)\.$/),
+      '3 Ekim Cumartesi: Venüs retrosu başlıyor.',
     ]);
     expect(describeWeekSkyTr(week)).toContain('Güneş hafta boyunca Terazi burcunda.');
   });
 
   it('5 Ekim haftasında Terazi yeni ayını bulur', () => {
-    expect(getWeekSky('2026-10-05').events).toContainEqual('10 Ekim: Yeni Ay (Terazi).');
+    expect(getWeekSky('2026-10-05').events).toContainEqual('10 Ekim Cumartesi: Yeni Ay (Terazi).');
   });
 
   it('pazartesi olmayan tarih için hata verir', () => {

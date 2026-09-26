@@ -1,5 +1,5 @@
 import { NextMoonQuarter, SearchMoonQuarter } from 'astronomy-engine';
-import { addDays, formatDateShortTr, istanbulDateKey, istanbulDayStart, weekLabelTr, type DateKey } from '@/lib/date/istanbul';
+import { addDays, formatDateWithWeekdayTr, istanbulDateKey, istanbulDayStart, weekLabelTr, type DateKey } from '@/lib/date/istanbul';
 import { getSign, signFromLongitude, type SignSlug } from '@/lib/zodiac/signs';
 import { BODY_NAMES_TR, PLANETS, eclipticLongitude, getSkySnapshot } from './sky';
 
@@ -23,7 +23,7 @@ export function getWeekSky(monday: DateKey): WeekSky {
 
   snapshots.forEach((snapshot, index) => {
     const at = istanbulDayStart(snapshot.dateKey).getTime();
-    const label = formatDateShortTr(snapshot.dateKey);
+    const label = formatDateWithWeekdayTr(snapshot.dateKey);
     for (const ingress of snapshot.ingresses) {
       if (ingress.body === 'Moon') continue;
       dated.push({ at: at + 1, text: `${label}: ${BODY_NAMES_TR[ingress.body]} ${getSign(ingress.sign).name} burcuna geçiyor.` });
@@ -41,7 +41,7 @@ export function getWeekSky(monday: DateKey): WeekSky {
   for (let quarter = SearchMoonQuarter(istanbulDayStart(monday)); quarter.time.date < end; quarter = NextMoonQuarter(quarter)) {
     const key = istanbulDateKey(quarter.time.date);
     const sign = getSign(signFromLongitude(eclipticLongitude('Moon', quarter.time.date))).name;
-    dated.push({ at: istanbulDayStart(key).getTime() + 2, text: `${formatDateShortTr(key)}: ${QUARTER_NAMES[quarter.quarter]} (${sign}).` });
+    dated.push({ at: istanbulDayStart(key).getTime() + 2, text: `${formatDateWithWeekdayTr(key)}: ${QUARTER_NAMES[quarter.quarter]} (${sign}).` });
   }
 
   return {
