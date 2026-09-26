@@ -79,3 +79,14 @@ describe('checkSingleSign', () => {
     });
   });
 });
+
+describe('gönderi alanlarının dili', () => {
+  it('İngilizce kapak kancası ve caption yanıtı reddeder', () => {
+    const raw = mockHoroscopeBatch();
+    raw.kapakKanca = 'Your stars today';
+    raw.caption = 'Save this post and tag a friend who really needs to hear this today!';
+    const check = checkHoroscopeBatch(raw, BASE);
+    expect(check.post).toBeNull();
+    expect(batchIssues(check)).toContainEqual({ field: 'caption', message: 'Metin Türkçe görünmüyor.' });
+  });
+});

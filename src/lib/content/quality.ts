@@ -117,6 +117,7 @@ export function checkHoroscopeBatch(raw: HoroscopeBatchRaw, baseHashtags: readon
     ...textIssues('kapakKanca', raw.kapakKanca, { min: 5, max: 60, maxEmoji: 1 }),
     ...textIssues('caption', raw.caption, { min: 40, max: 700, maxEmoji: 4 }),
     ...(raw.caption.includes('#') ? [{ field: 'caption', message: 'Caption hashtag içermemeli; hashtagler ayrı alanda.' }] : []),
+    ...(looksTurkish(`${raw.kapakKanca} ${raw.caption}`) ? [] : [{ field: 'caption', message: 'Metin Türkçe görünmüyor.' }]),
   ];
   const post = postIssues.length
     ? null
