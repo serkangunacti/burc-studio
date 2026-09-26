@@ -6,11 +6,12 @@ import { AUDIENCE_INK, CARD_SHADOW, PALETTE, type Backdrop } from '../pastel-v1/
 import { ZodiacGlyph } from '../pastel-v1/zodiac';
 
 // Kalite kapısı haftalık yorumu 850 grafemle sınırlar; en uzun metin 28px'te kartın gövdesine sığar,
-// kısa metinler kartta boşluk bırakmasın diye büyür.
+// kısa metinler kartı doldursun diye büyür.
 export function weeklyBodyFontSize(body: string): number {
   const length = graphemeLength(body);
-  if (length <= 650) return 32;
-  if (length <= 750) return 30;
+  if (length <= 620) return 34;
+  if (length <= 700) return 32;
+  if (length <= 780) return 30;
   return 28;
 }
 
@@ -54,11 +55,13 @@ export function WeeklySign({ slide, backdrop }: { slide: SignSlideData; backdrop
           boxShadow: CARD_SHADOW,
         }}
       >
-        <div data-slot="headline" style={{ fontFamily: HEADING_FONT, fontSize: 46, fontWeight: 500, lineHeight: 1.15, color: ink }}>
-          {slide.headline}
-        </div>
-        <div data-slot="body" style={{ flex: 1, minHeight: 0, overflow: 'hidden', fontSize: weeklyBodyFontSize(slide.body), lineHeight: 1.42 }}>
-          {slide.body}
+        <div data-slot="text" style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 22 }}>
+          <div data-slot="headline" style={{ fontFamily: HEADING_FONT, fontSize: 46, fontWeight: 500, lineHeight: 1.15, color: ink }}>
+            {slide.headline}
+          </div>
+          <div data-slot="body" style={{ fontSize: weeklyBodyFontSize(slide.body), lineHeight: 1.42 }}>
+            {slide.body}
+          </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, fontSize: 26 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
