@@ -1,6 +1,7 @@
-import { Settings, Sun, type LucideIcon } from 'lucide-react';
+import { Settings, Stars, Sun, type LucideIcon } from 'lucide-react';
 
 export const NAV_ITEMS: readonly { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/', label: 'Bugün', icon: Sun },
+  { href: '/burclar', label: 'Burçlar', icon: Stars },
   { href: '/ayarlar', label: 'Ayarlar', icon: Settings },
 ];

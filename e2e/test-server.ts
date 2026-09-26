@@ -11,6 +11,8 @@ async function main() {
     SESSION_SECRET: 'e2e-oturum-anahtari-'.padEnd(48, 'x'),
     APP_PASSWORD_HASH: await hashPassword(E2E_PASSWORD),
     CRON_SECRET: E2E_CRON_SECRET,
+    LLM_MOCK: '1',
+    LLM_PROVIDER_OVERRIDE: 'mock',
   };
   const next = spawn('npx', ['next', 'dev', '--port', String(E2E_PORT)], { env, stdio: 'inherit' });
   const stop = () => {
