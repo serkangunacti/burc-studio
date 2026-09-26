@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { istanbulDateKey } from '../src/lib/date/istanbul';
 import { LONGEST_BODY } from '../src/remotion/fixtures';
@@ -105,4 +106,15 @@ test('geçersiz düzenleme alan hatası gösterir ve sürüm açmaz', async ({ p
   await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Caption hashtag içermemeli' })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(id));
+});
+
+test('her slayt sağ üst köşesindeki butonla tek başına JPEG olarak indirilir', async ({ page }) => {
+  await login(page);
+  const id = await freshPost(page);
+  await page.goto(`/gonderi/${id}`);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Aslan slaytını indir' }).click()]);
+  expect(download.suggestedFilename()).toBe(`${istanbulDateKey()}_kadin-burc_06-aslan.jpg`);
+  expect(jpegSize(new Uint8Array(await readFile(await download.path())))).toEqual({ width: 1080, height: 1350 });
+  await page.getByLabel('Caption').fill('Kaydedilmemiş değişiklik varken tek slayt indirilemez.');
+  await expect(page.getByRole('button', { name: 'Kapak slaytını indir' })).toBeDisabled();
 });

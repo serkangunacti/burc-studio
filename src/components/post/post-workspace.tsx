@@ -10,6 +10,9 @@ import { AUDIENCE_LABELS } from '@/lib/content/types';
 import { formatDateLongTr } from '@/lib/date/istanbul';
 import { applyDraft, createDraft, draftToEdit, isEmptyEdit, type DraftSource } from '@/lib/posts/draft';
 import { STATUS_LABELS, type PostSummary, type VersionSummary } from '@/lib/posts/summary';
+import { saveBlob } from '@/lib/render/deliver';
+import { postBaseName, slideFileName } from '@/lib/render/file-names';
+import { renderSlideJpeg } from '@/lib/render/render-images';
 import { cn } from '@/lib/utils';
 import type { SlideProps } from '@/remotion/slide-types';
 import { ExportPanel } from './export-panel';
@@ -37,6 +40,15 @@ export function PostWorkspace({
   const dirty = !isEmptyEdit(edit);
   const current = versions.find((version) => version.isCurrent);
   const openPost = (postId: string) => router.push(`/gonderi/${postId}`);
+
+  async function downloadSlide(index: number) {
+    try {
+      const blob = await renderSlideJpeg(post.templateVersion, slides[index]);
+      saveBlob(blob, slideFileName(postBaseName(post), index, slides[index].slide));
+    } catch {
+      toast.error('Slayt indirilemedi; tekrar dene.');
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -88,7 +100,14 @@ export function PostWorkspace({
         </p>
       )}
 
-      <SlideStrip slides={preview} templateVersion={post.templateVersion} selected={selected} onSelect={setSelected} />
+      <SlideStrip
+        slides={preview}
+        templateVersion={post.templateVersion}
+        selected={selected}
+        onSelect={setSelected}
+        onDownload={downloadSlide}
+        downloadDisabled={dirty}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
