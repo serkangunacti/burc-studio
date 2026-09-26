@@ -23,3 +23,18 @@ export function mockHoroscopeBatch(): HoroscopeBatchRaw {
     burclar: SIGN_SLUGS.map(mockHoroscopeEntry),
   };
 }
+
+export function mockWeeklyEntry(slug: SignSlug): HoroscopeEntryRaw {
+  const daily = mockHoroscopeEntry(slug);
+  const { name } = getSign(slug);
+  return {
+    ...daily,
+    baslik: `${name} için geniş bir hafta`,
+    yorum: `${daily.yorum.replace(/ ✨$/, '.')} Haftanın ortasında işlerin hızlandığını hissedeceksin; yarım kalan bir konuşmayı tamamlamak için doğru an çarşamba gibi görünüyor. Hafta sonuna doğru ise kendine ayırdığın zaman sana yeni bir bakış açısı kazandıracak, sevdiklerinle kuracağın küçük planlar moralini yükseltecek ✨`,
+    kisa: `${name}: Haftanın ortasında hızlan, hafta sonunu kendine ayır ✨`,
+  };
+}
+
+export function mockWeeklyBatch(): HoroscopeBatchRaw {
+  return { ...mockHoroscopeBatch(), kapakKanca: 'Haftanın yıldızları senin için ne diyor? ✨', burclar: SIGN_SLUGS.map(mockWeeklyEntry) };
+}

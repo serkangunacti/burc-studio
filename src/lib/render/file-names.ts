@@ -2,7 +2,7 @@ import type { ReadingAudience, ReadingKind } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
 import type { SlideData } from '@/remotion/slide-types';
 
-const KIND_SLUGS: Record<ReadingKind, string> = { horoscope: 'burc', tarot: 'tarot', special: 'ozel' };
+const KIND_SLUGS: Record<ReadingKind, string> = { horoscope: 'burc', tarot: 'tarot', special: 'ozel', weekly: 'haftalik' };
 
 export const CAPTION_FILE_NAME = 'caption.txt';
 

@@ -1,7 +1,7 @@
 import type { DateKey } from '@/lib/date/istanbul';
 import type { SignSlug } from '@/lib/zodiac/signs';
 
-export const READING_KINDS = ['horoscope', 'tarot', 'special'] as const;
+export const READING_KINDS = ['horoscope', 'tarot', 'special', 'weekly'] as const;
 export type ReadingKind = (typeof READING_KINDS)[number];
 export const READING_AUDIENCES = ['kadin', 'erkek', 'genel'] as const;
 export type ReadingAudience = (typeof READING_AUDIENCES)[number];

@@ -61,4 +61,11 @@ describe('variantFor', () => {
     expect(day('2026-09-27', 'horoscope', 'kadin')).not.toBe(day('2026-09-26', 'horoscope', 'kadin'));
     expect(variantFor({ date: '2026-09-26', kind: 'horoscope', audience: 'kadin' })).toBe(20722);
   });
+
+  it('pazartesi haftalık gönderiler günlük, tarot ve özel gönderilerden farklı zemin alır', () => {
+    const all = (['horoscope', 'tarot', 'weekly'] as const).flatMap((kind) =>
+      (['kadin', 'erkek'] as const).map((audience) => variantFor({ date: '2026-09-28', kind, audience }) % 7),
+    );
+    expect(new Set([...all, variantFor({ date: '2026-09-28', kind: 'special', audience: 'genel' }) % 7]).size).toBe(7);
+  });
 });

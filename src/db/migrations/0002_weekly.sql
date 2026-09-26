@@ -1,0 +1,1 @@
+ALTER TYPE "public"."reading_kind" ADD VALUE 'weekly';

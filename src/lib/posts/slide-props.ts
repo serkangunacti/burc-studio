@@ -14,8 +14,8 @@ export function audienceOf(post: Pick<PostRow, 'audience'>): Audience {
   return post.audience;
 }
 
-// Aynı günün gönderileri farklı, ardışık günler de farklı zeminle açılsın (7'lik döngüde 5 ayrı kaydırma).
-const KIND_OFFSETS: Record<ReadingKind, number> = { horoscope: 0, tarot: 1, special: 5 };
+// Aynı günün gönderileri farklı, ardışık günler de farklı zeminle açılsın; pazartesi 7 gönderi 7 zeminin hepsini kullanır.
+const KIND_OFFSETS: Record<ReadingKind, number> = { horoscope: 0, tarot: 1, special: 5, weekly: 6 };
 const AUDIENCE_OFFSETS: Record<ReadingAudience, number> = { kadin: 0, erkek: 3, genel: 0 };
 
 export function variantFor(post: Pick<PostRow, 'date' | 'kind' | 'audience'>): number {

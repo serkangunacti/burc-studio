@@ -35,7 +35,12 @@ export const loginAttempts = pgTable('login_attempts', {
   windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
 });
 
-export type ReadingMeta = { scores: { love: number; money: number; health: number }; luckyColor: LuckyColorId; luckyNumber: number };
+export type ReadingMeta = {
+  scores: { love: number; money: number; health: number };
+  luckyColor: LuckyColorId;
+  luckyNumber: number;
+  tarotCardId?: string;
+};
 export type PostCover = { hook: string };
 export type PostFormat = '4x5' | '3x4';
 
