@@ -48,6 +48,7 @@ describe('ayar birleştirme', () => {
       baseHashtags: ['#burç', '#astroloji'],
       providerChain: [],
       spreadLoad: false,
+      defaultFormat: '4x5',
     });
   });
 
@@ -76,5 +77,10 @@ describe('üretim ayarları', () => {
   it('geçerli sağlayıcı tercihi kaydedilir', () => {
     const next = mergeSettings(DEFAULT_SETTINGS, { providerChain: [{ id: 'gemini-lite', enabled: true, dailyCap: 100 }] });
     expect(next.providerChain).toEqual([{ id: 'gemini-lite', enabled: true, dailyCap: 100 }]);
+  });
+
+  it('varsayılan format yalnızca 4x5 ya da 3x4 olabilir', () => {
+    expect(mergeSettings(DEFAULT_SETTINGS, { defaultFormat: '3x4' }).defaultFormat).toBe('3x4');
+    expect(() => mergeSettings(DEFAULT_SETTINGS, { defaultFormat: '5x5' as never })).toThrow();
   });
 });

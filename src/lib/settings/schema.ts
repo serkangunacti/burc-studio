@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PostFormat } from '@/db/schema';
 import { PROVIDER_IDS } from '@/lib/llm/provider-ids';
 
 export const WATERMARK_POSITIONS = ['bottom-center', 'bottom-right'] as const;
@@ -29,6 +30,7 @@ export const settingsSchema = z.object({
   baseHashtags: z.array(z.string().regex(/^#[\p{L}\p{N}_]+$/u)).max(2),
   providerChain: z.array(providerPreferenceSchema),
   spreadLoad: z.boolean(),
+  defaultFormat: z.enum(['4x5', '3x4']),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -40,6 +42,7 @@ export type SettingsPatch = {
   baseHashtags?: string[];
   providerChain?: Settings['providerChain'];
   spreadLoad?: boolean;
+  defaultFormat?: PostFormat;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -53,6 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   baseHashtags: ['#burç', '#astroloji'],
   providerChain: [],
   spreadLoad: false,
+  defaultFormat: '4x5',
 };
 
 export function normalizeInstagramHandle(input: string): string {

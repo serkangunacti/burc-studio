@@ -43,6 +43,7 @@ export function parseGenerationForm(
     patch: {
       cronEnabled: formData.get('cronEnabled') === 'true',
       spreadLoad: formData.get('spreadLoad') === 'true',
+      defaultFormat: formData.get('defaultFormat') === '3x4' ? '3x4' : '4x5',
       dailyPlan,
       baseHashtags: tags.filter((tag): tag is string => tag !== null),
       providerChain: chain.data,

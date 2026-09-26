@@ -4,6 +4,7 @@ import { AllProvidersFailedError, NoProvidersConfiguredError } from '@/lib/llm/r
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import { isAllowedGenerationDate } from './dates';
 import { generateHoroscopeSet, regenerateSign, type GenerationDeps } from './horoscope-service';
+import { PostConflictError } from './repository';
 
 export type HttpDeps = GenerationDeps & { today: DateKey };
 
@@ -23,6 +24,7 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, today: DateKe
 
 function failure(error: unknown): Response {
   if (error instanceof NoProvidersConfiguredError) return Response.json({ error: error.message }, { status: 503 });
+  if (error instanceof PostConflictError) return Response.json({ error: error.message }, { status: 409 });
   if (error instanceof AllProvidersFailedError) {
     return Response.json(
       {

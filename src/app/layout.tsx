@@ -7,7 +7,7 @@ const fraunces = Fraunces({ subsets: ['latin', 'latin-ext'], variable: '--font-f
 const nunito = Nunito({ subsets: ['latin', 'latin-ext'], variable: '--font-nunito' });
 
 export const metadata: Metadata = {
-  title: { default: 'Burç Stüdyosu', template: '%s · Burç Stüdyosu' },
+  title: { default: 'kozmikarkan', template: '%s · kozmikarkan' },
   description: 'Günlük burç ve tarot içerik stüdyosu',
   robots: { index: false, follow: false },
 };

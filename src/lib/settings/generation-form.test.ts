@@ -10,6 +10,7 @@ function form(entries: [string, string][]) {
 const valid: [string, string][] = [
   ['cronEnabled', 'false'],
   ['spreadLoad', 'true'],
+  ['defaultFormat', '3x4'],
   ['dailyPlan', 'horoscope:kadin'],
   ['hashtag1', 'Günlük Burç'],
   ['hashtag2', ''],
@@ -23,6 +24,7 @@ describe('parseGenerationForm', () => {
       patch: {
         cronEnabled: false,
         spreadLoad: true,
+        defaultFormat: '3x4',
         dailyPlan: [{ kind: 'horoscope', audience: 'kadin' }],
         baseHashtags: ['#günlükburç'],
         providerChain: [{ id: 'gemini', enabled: true, dailyCap: 10 }],

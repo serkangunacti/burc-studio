@@ -10,7 +10,19 @@ import type { DateKey } from '@/lib/date/istanbul';
 import { cn } from '@/lib/utils';
 import type { SignSlug } from '@/lib/zodiac/signs';
 
-export function RegenerateSignButton({ date, audience, sign, name }: { date: DateKey; audience: Audience; sign: SignSlug; name: string }) {
+export function RegenerateSignButton({
+  date,
+  audience,
+  sign,
+  name,
+  onRegenerated,
+}: {
+  date: DateKey;
+  audience: Audience;
+  sign: SignSlug;
+  name: string;
+  onRegenerated?: (postId: string) => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -28,10 +40,11 @@ export function RegenerateSignButton({ date, audience, sign, name }: { date: Dat
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ date, audience, sign }),
           });
-          const data = (await response.json().catch(() => ({}))) as { error?: string };
+          const data = (await response.json().catch(() => ({}))) as { error?: string; postId?: string };
           if (response.ok) {
             toast.success(`${name} yorumu yenilendi.`);
-            router.refresh();
+            if (onRegenerated && data.postId) onRegenerated(data.postId);
+            else router.refresh();
           } else {
             toast.error(data.error ?? 'Yeniden üretilemedi.');
           }

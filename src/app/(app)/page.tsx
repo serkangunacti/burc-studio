@@ -22,10 +22,10 @@ export default async function TodayPage({
   const date = tomorrow ? addDays(today, 1) : today;
   const db = getDb();
   const [settings, posts] = await Promise.all([getSettings(db), getCurrentPostsForDate(db, date)]);
-  const items = settings.dailyPlan.map((item) => ({
-    ...item,
-    ready: posts.some((post) => post.kind === item.kind && post.audience === item.audience),
-  }));
+  const items = settings.dailyPlan.map((item) => {
+    const post = posts.find((candidate) => candidate.kind === item.kind && candidate.audience === item.audience);
+    return { ...item, ready: Boolean(post), postId: post?.id ?? null };
+  });
 
   return (
     <section className="mx-auto max-w-3xl space-y-8">

@@ -19,7 +19,7 @@ export default async function LoginPage({
       <Card className="relative w-full max-w-sm overflow-hidden">
         <ShineBorder shineColor={['#c8b6e2', '#f4c2c2', '#bfd7ed']} />
         <CardHeader>
-          <CardTitle className="font-heading text-3xl">Burç Stüdyosu</CardTitle>
+          <CardTitle className="font-heading text-3xl">kozmikarkan</CardTitle>
           <CardDescription>Devam etmek için şifreni gir.</CardDescription>
         </CardHeader>
         <CardContent>

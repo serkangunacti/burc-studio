@@ -10,6 +10,7 @@ import {
   getCurrentPostsForDate,
   getCurrentReadings,
   getRecentHeadlines,
+  PostConflictError,
   saveReadings,
   type NewReading,
 } from './repository';
@@ -67,6 +68,12 @@ describe('okuma sürümleri', () => {
       ['2026-09-25', 'son başlık'],
     ]);
   });
+
+  it('elle düzenleme zamanını saklar', async () => {
+    const editedAt = new Date('2026-09-26T08:00:00Z');
+    const [row] = await saveReadings(db, KEY, [{ ...reading('koc'), editedAt }]);
+    expect(row.editedAt).toEqual(editedAt);
+  });
 });
 
 describe('gönderi sürümleri', () => {
@@ -96,5 +103,14 @@ describe('gönderi sürümleri', () => {
     await expect(
       createPostVersion(db, { ...KEY, templateVersion: 'pastel@1', format: '4x5', cover: { hook: 'x' }, caption: 'x', hashtags: [], signReadingIds: [] }),
     ).rejects.toThrow('12 burç');
+  });
+
+  it('temel alınan sürüm artık güncel değilse yeni sürüm açmaz', async () => {
+    const saved = await saveReadings(db, KEY, SIGN_SLUGS.map((sign) => reading(sign)));
+    const input = { ...KEY, templateVersion: 'pastel@1', format: '4x5' as const, cover: { hook: 'K' }, caption: 'C', hashtags: [], signReadingIds: saved.map((row) => row.id) };
+    const first = await createPostVersion(db, input);
+    await createPostVersion(db, { ...input, basePostId: first.id });
+    await expect(createPostVersion(db, { ...input, basePostId: first.id })).rejects.toBeInstanceOf(PostConflictError);
+    expect((await getCurrentPost(db, KEY))?.post.version).toBe(2);
   });
 });
