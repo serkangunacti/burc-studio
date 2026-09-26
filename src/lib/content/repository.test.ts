@@ -67,6 +67,12 @@ describe('okuma sürümleri', () => {
       ['2026-09-25', 'son başlık'],
     ]);
   });
+
+  it('elle düzenleme zamanını saklar', async () => {
+    const editedAt = new Date('2026-09-26T08:00:00Z');
+    const [row] = await saveReadings(db, KEY, [{ ...reading('koc'), editedAt }]);
+    expect(row.editedAt).toEqual(editedAt);
+  });
 });
 
 describe('gönderi sürümleri', () => {

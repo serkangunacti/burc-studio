@@ -16,6 +16,7 @@ export type NewReading = {
   model: string;
   promptVersion: string;
   runId: string | null;
+  editedAt?: Date;
 };
 export type ReadingRow = typeof readings.$inferSelect;
 export type PostRow = typeof posts.$inferSelect;
