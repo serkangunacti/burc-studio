@@ -18,6 +18,7 @@ describe('ayar deposu', () => {
     await saveSettings(db, { instagramHandle: 'burc.studio' });
     await saveSettings(db, { watermark: { opacity: 0.8 } });
     expect(await getSettings(db)).toEqual({
+      ...DEFAULT_SETTINGS,
       instagramHandle: 'burc.studio',
       watermark: { enabled: true, position: 'bottom-center', opacity: 0.8 },
     });
