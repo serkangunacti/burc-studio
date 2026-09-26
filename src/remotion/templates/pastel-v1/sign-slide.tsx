@@ -3,7 +3,7 @@ import { graphemeLength } from '@/lib/text/turkish';
 import type { SignSlideData } from '@/remotion/slide-types';
 import { HEADING_FONT } from './fonts';
 import { StarIcon } from './ornaments';
-import { AUDIENCE_INK, AUDIENCE_TITLES, CARD_SHADOW, PALETTE, type Backdrop } from './tokens';
+import { AUDIENCE_INK, CARD_SHADOW, PALETTE, type Backdrop } from './tokens';
 import { ZodiacGlyph } from './zodiac';
 
 // Kalite kapısı yorumu 420 grafemle sınırlar; en uzun metin 32px'te kartın gövdesine sığar.
@@ -31,8 +31,7 @@ export function SignSlide({ slide, backdrop }: { slide: SignSlideData; backdrop:
   const ink = AUDIENCE_INK[slide.audience];
   return (
     <AbsoluteFill style={{ padding: '72px 72px 100px', gap: 32 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 24, fontWeight: 700, letterSpacing: 5, color: PALETTE.plumSoft }}>
-        <span>{`GÜNLÜK BURÇ · ${AUDIENCE_TITLES[slide.audience]}`}</span>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 24, fontWeight: 700, letterSpacing: 5, color: PALETTE.plumSoft }}>
         <span>{slide.dateLabel}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 36 }}>

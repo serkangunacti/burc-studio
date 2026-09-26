@@ -22,13 +22,15 @@ describe('pastel@1', () => {
 
   it('burç slaytı adı, tarihleri, metinleri, puanları ve şansları gösterir', () => {
     const out = html(sampleProps(sampleSign('koc')));
-    for (const text of ['GÜNLÜK BURÇ · KADIN', '26 EYLÜL', 'Koç', '21 Mart – 19 Nisan', 'Işıltılı ve cesur bir gün', 'Lila', 'Şanslı sayı']) {
+    for (const text of ['26 EYLÜL', 'Koç', '21 Mart – 19 Nisan', 'Işıltılı ve cesur bir gün', 'Lila', 'Şanslı sayı']) {
       expect(out).toContain(text);
     }
     expect(count(out, 'data-sign=')).toBe(1);
     expect(count(out, 'data-star="full"')).toBe(12);
     expect(count(out, 'data-star="empty"')).toBe(3);
-    expect(html(sampleProps(sampleSign('oglak', 'erkek')))).toContain('GÜNLÜK BURÇ · ERKEK');
+    for (const audience of ['kadin', 'erkek'] as const) {
+      expect(html(sampleProps(sampleSign('oglak', audience)))).not.toContain('GÜNLÜK BURÇ');
+    }
   });
 
   it('filigran yalnızca açık ve kullanıcı adı varken görünür; kapanışta kullanıcı adı bir kez yazılır', () => {
