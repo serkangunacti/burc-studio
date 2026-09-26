@@ -9,13 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AnimatedListItem } from '@/components/ui/animated-list';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
-import { AUDIENCE_LABELS, type Audience } from '@/lib/content/types';
+import type { PackageItem } from '@/lib/content/daily-package';
+import { postTitle } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
 
-type Item = { kind: 'horoscope'; audience: Audience; ready: boolean; postId: string | null };
+type Item = PackageItem & { ready: boolean; postId: string | null };
 type LogEntry = { id: number; text: string; tone: 'info' | 'success' | 'error' };
 
-const label = (audience: Audience) => `${AUDIENCE_LABELS[audience]} burç yorumları`;
+const label = (item: PackageItem) => postTitle(item.kind, item.audience);
 
 export function DailyPackagePanel({ date, items }: { date: DateKey; items: Item[] }) {
   const router = useRouter();
@@ -34,18 +35,18 @@ export function DailyPackagePanel({ date, items }: { date: DateKey; items: Item[
     const targets = force ? items : items.filter((item) => !item.ready);
     const outcomes = await Promise.all(
       targets.map(async (item) => {
-        append(`${label(item.audience)} hazırlanıyor…`, 'info');
+        append(`${label(item)} hazırlanıyor…`, 'info');
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ date, audience: item.audience, force }),
+          body: JSON.stringify({ date, audience: item.audience, kind: item.kind, force }),
         });
         const data = (await response.json().catch(() => ({}))) as { status?: string; providers?: string[]; error?: string };
         if (response.ok) {
-          append(`✓ ${label(item.audience)} hazır${data.providers ? ` (${data.providers.join(', ')})` : ''}`, 'success');
+          append(`✓ ${label(item)} hazır${data.providers ? ` (${data.providers.join(', ')})` : ''}`, 'success');
           return true;
         }
-        append(`✗ ${label(item.audience)}: ${data.error ?? 'Bilinmeyen hata'}`, 'error');
+        append(`✗ ${label(item)}: ${data.error ?? 'Bilinmeyen hata'}`, 'error');
         return false;
       }),
     );
@@ -66,8 +67,8 @@ export function DailyPackagePanel({ date, items }: { date: DateKey; items: Item[
       <CardContent className="space-y-6">
         <ul className="space-y-2">
           {items.map((item) => (
-            <li key={item.audience} className="flex items-center justify-between rounded-xl border px-4 py-3">
-              <span className="text-sm font-medium">{label(item.audience)}</span>
+            <li key={`${item.kind}-${item.audience}`} className="flex items-center justify-between rounded-xl border px-4 py-3">
+              <span className="text-sm font-medium">{label(item)}</span>
               <span className="flex items-center gap-2">
                 {item.postId && (
                   <Link href={`/gonderi/${item.postId}`} className={buttonVariants({ variant: 'link', size: 'sm' })}>

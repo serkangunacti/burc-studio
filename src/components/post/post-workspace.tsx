@@ -6,8 +6,8 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AUDIENCE_LABELS } from '@/lib/content/types';
-import { formatDateLongTr } from '@/lib/date/istanbul';
+import { postTitle } from '@/lib/content/types';
+import { formatDateLongTr, weekLabelTr } from '@/lib/date/istanbul';
 import { applyDraft, createDraft, draftToEdit, isEmptyEdit, type DraftSource } from '@/lib/posts/draft';
 import { STATUS_LABELS, type PostSummary, type VersionSummary } from '@/lib/posts/summary';
 import { saveBlob } from '@/lib/render/deliver';
@@ -31,7 +31,7 @@ export function PostWorkspace({
   slides: SlideProps[];
   source: DraftSource;
   versions: VersionSummary[];
-  reels: ReelsProps;
+  reels: ReelsProps | null;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(() => createDraft(source));
@@ -86,8 +86,8 @@ export function PostWorkspace({
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <header className="space-y-2">
-        <p className="text-sm text-muted-foreground">{formatDateLongTr(post.date)}</p>
-        <h1 className="font-heading text-3xl sm:text-4xl">{AUDIENCE_LABELS[post.audience]} burç yorumları</h1>
+        <p className="text-sm text-muted-foreground">{post.kind === 'weekly' ? weekLabelTr(post.date) : formatDateLongTr(post.date)}</p>
+        <h1 className="font-heading text-3xl sm:text-4xl">{postTitle(post.kind, post.audience)}</h1>
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Sürüm {post.version}</Badge>
           <Badge variant="secondary" data-testid="post-status">
@@ -126,7 +126,7 @@ export function PostWorkspace({
                 onChange={setDraft}
                 onRegenerated={openPost}
               />
-              <PostTextEditor draft={draft} errors={errors} onChange={setDraft} />
+              <PostTextEditor post={post} draft={draft} errors={errors} onChange={setDraft} />
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" disabled={!dirty || saving} onClick={() => void save()}>
                   {saving ? 'Kaydediliyor…' : 'Değişiklikleri kaydet'}
@@ -138,7 +138,7 @@ export function PostWorkspace({
         </div>
         <aside className="space-y-6">
           <ExportPanel post={post} slides={slides} blocked={dirty} />
-          <ReelsPanel post={post} reels={reels} blocked={dirty} />
+          {reels && <ReelsPanel post={post} reels={reels} blocked={dirty} />}
           <nav aria-label="Sürümler" className="space-y-2">
             <h2 className="text-sm font-medium">Sürümler</h2>
             <ul className="space-y-1 text-sm">

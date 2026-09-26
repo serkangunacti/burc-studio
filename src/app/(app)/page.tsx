@@ -5,6 +5,7 @@ import { SkySummary } from '@/components/today/sky-summary';
 import { BlurFade } from '@/components/ui/blur-fade';
 import { getDb } from '@/db/client';
 import { getSkySnapshot } from '@/lib/astro/sky';
+import { packageItemsFor } from '@/lib/content/daily-package';
 import { getCurrentPostsForDate } from '@/lib/content/repository';
 import { addDays, formatDateLongTr, istanbulDateKey } from '@/lib/date/istanbul';
 import { getSettings } from '@/lib/settings/repository';
@@ -22,7 +23,7 @@ export default async function TodayPage({
   const date = tomorrow ? addDays(today, 1) : today;
   const db = getDb();
   const [settings, posts] = await Promise.all([getSettings(db), getCurrentPostsForDate(db, date)]);
-  const items = settings.dailyPlan.map((item) => {
+  const items = packageItemsFor(date, settings.dailyPlan).map((item) => {
     const post = posts.find((candidate) => candidate.kind === item.kind && candidate.audience === item.audience);
     return { ...item, ready: Boolean(post), postId: post?.id ?? null };
   });

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import type { Audience } from '@/lib/content/types';
+import type { Audience, ReadingKind } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
 import { cn } from '@/lib/utils';
 import type { SignSlug } from '@/lib/zodiac/signs';
@@ -15,10 +15,12 @@ export function RegenerateSignButton({
   audience,
   sign,
   name,
+  kind = 'horoscope',
   onRegenerated,
 }: {
   date: DateKey;
   audience: Audience;
+  kind?: ReadingKind;
   sign: SignSlug;
   name: string;
   onRegenerated?: (postId: string) => void;
@@ -38,7 +40,7 @@ export function RegenerateSignButton({
           const response = await fetch('/api/generate/sign', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ date, audience, sign }),
+            body: JSON.stringify({ date, audience, sign, kind }),
           });
           const data = (await response.json().catch(() => ({}))) as { error?: string; postId?: string };
           if (response.ok) {

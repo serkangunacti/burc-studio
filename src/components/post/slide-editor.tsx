@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { PostDraft, SignText } from '@/lib/posts/draft';
-import { EDIT_LIMITS } from '@/lib/posts/edit-schema';
+import { editLimitsFor } from '@/lib/posts/edit-schema';
 import type { PostSummary } from '@/lib/posts/summary';
 import type { SlideData } from '@/remotion/slide-types';
 import { CharField } from './char-field';
 
 type EditorProps = {
+  post: PostSummary;
   draft: PostDraft;
   errors: Record<string, string>;
   onChange: (draft: PostDraft) => void;
@@ -24,7 +25,8 @@ export function SlideEditor({
   errors,
   onChange,
   onRegenerated,
-}: EditorProps & { slide: SlideData; post: PostSummary; onRegenerated: (postId: string) => void }) {
+}: EditorProps & { slide: SlideData; onRegenerated: (postId: string) => void }) {
+  const limits = editLimitsFor(post.kind);
   if (slide.type === 'cover') {
     return (
       <Card>
@@ -35,7 +37,7 @@ export function SlideEditor({
           <CharField
             label="Kapak cümlesi"
             value={draft.hook}
-            max={EDIT_LIMITS.coverHook}
+            max={limits.coverHook}
             error={errors.coverHook}
             onChange={(hook) => onChange({ ...draft, hook })}
           />
@@ -61,29 +63,36 @@ export function SlideEditor({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>{slide.signName}</CardTitle>
-        <RegenerateSignButton date={post.date} audience={post.audience} sign={slide.sign} name={slide.signName} onRegenerated={onRegenerated} />
+        <RegenerateSignButton
+          date={post.date}
+          audience={post.audience}
+          kind={post.kind}
+          sign={slide.sign}
+          name={slide.signName}
+          onRegenerated={onRegenerated}
+        />
       </CardHeader>
       <CardContent className="space-y-4">
         <CharField
           label="Başlık"
           value={text.headline}
-          max={EDIT_LIMITS.headline}
+          max={limits.headline}
           error={errors[`${slide.sign}.headline`]}
           onChange={(headline) => update({ headline })}
         />
         <CharField
           label="Yorum"
-          rows={7}
+          rows={post.kind === 'weekly' ? 12 : 7}
           value={text.body}
-          max={EDIT_LIMITS.body}
+          max={limits.body}
           error={errors[`${slide.sign}.body`]}
           onChange={(body) => update({ body })}
         />
         <CharField
-          label="Kısa metin (Reels)"
+          label={post.kind === 'weekly' ? 'Kısa metin' : 'Kısa metin (Reels)'}
           rows={2}
           value={text.short}
-          max={EDIT_LIMITS.short}
+          max={limits.short}
           error={errors[`${slide.sign}.short`]}
           onChange={(short) => update({ short })}
         />
@@ -92,7 +101,8 @@ export function SlideEditor({
   );
 }
 
-export function PostTextEditor({ draft, errors, onChange }: EditorProps) {
+export function PostTextEditor({ post, draft, errors, onChange }: EditorProps) {
+  const limits = editLimitsFor(post.kind);
   const hashtagsId = useId();
   return (
     <Card>
@@ -104,7 +114,7 @@ export function PostTextEditor({ draft, errors, onChange }: EditorProps) {
           label="Caption"
           rows={6}
           value={draft.caption}
-          max={EDIT_LIMITS.caption}
+          max={limits.caption}
           error={errors.caption}
           onChange={(caption) => onChange({ ...draft, caption })}
         />

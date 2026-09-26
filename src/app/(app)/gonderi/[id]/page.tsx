@@ -28,7 +28,7 @@ export default async function PostPage(props: PageProps<'/gonderi/[id]'>) {
       key={post.id}
       post={toPostSummary(post)}
       slides={buildSlideProps(detail, brand)}
-      reels={buildReelsProps(detail, brand)}
+      reels={post.kind === 'horoscope' ? buildReelsProps(detail, brand) : null}
       source={toDraftSource(detail)}
       versions={versions.map(toVersionSummary)}
     />

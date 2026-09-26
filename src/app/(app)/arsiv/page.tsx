@@ -5,7 +5,7 @@ import { SlideThumbnail } from '@/components/post/slide-thumbnail';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { getDb } from '@/db/client';
-import { AUDIENCE_LABELS } from '@/lib/content/types';
+import { AUDIENCE_LABELS, postTitle } from '@/lib/content/types';
 import { formatDateLongTr, formatDateShortTr, isDateKey } from '@/lib/date/istanbul';
 import { listArchivePage, type PostStatus } from '@/lib/posts/repository';
 import { audienceOf, brandFromSettings, buildCoverProps } from '@/lib/posts/slide-props';
@@ -17,7 +17,8 @@ export const metadata: Metadata = { title: 'Arşiv' };
 
 const PAGE_SIZE = 30;
 const STATUS_FILTERS: PostStatus[] = ['taslak', 'indirildi', 'paylasildi'];
-type Filters = { kitle?: string; durum?: string; once?: string };
+const KIND_FILTERS = { gunluk: 'horoscope', haftalik: 'weekly' } as const;
+type Filters = { tur?: string; kitle?: string; durum?: string; once?: string };
 
 function archiveHref(filters: Filters): string {
   const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
@@ -46,13 +47,14 @@ function FilterNav({ label, options, active, href }: { label: string; options: [
 export default async function ArchivePage(props: PageProps<'/arsiv'>) {
   await connection();
   const params = await props.searchParams;
+  const tur = params.tur === 'gunluk' || params.tur === 'haftalik' ? params.tur : undefined;
   const kitle = params.kitle === 'kadin' || params.kitle === 'erkek' ? params.kitle : undefined;
   const durum = STATUS_FILTERS.find((value) => value === params.durum);
   const once = isDateKey(params.once) ? params.once : undefined;
   const db = getDb();
   const [settings, page] = await Promise.all([
     getSettings(db),
-    listArchivePage(db, { kind: 'horoscope', audience: kitle, status: durum, before: once }, PAGE_SIZE),
+    listArchivePage(db, { kind: tur ? KIND_FILTERS[tur] : undefined, audience: kitle, status: durum, before: once }, PAGE_SIZE),
   ]);
   const items = page.posts;
   const brand = brandFromSettings(settings);
@@ -63,16 +65,22 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
       <header className="space-y-3">
         <h1 className="font-heading text-4xl">Arşiv</h1>
         <FilterNav
+          label="Tür"
+          options={[[undefined, 'Tümü'], ['gunluk', 'Günlük'], ['haftalik', 'Haftalık']]}
+          active={tur}
+          href={(value) => archiveHref({ tur: value, kitle, durum })}
+        />
+        <FilterNav
           label="Kitle"
           options={[[undefined, 'Tümü'], ['kadin', 'Kadın'], ['erkek', 'Erkek']]}
           active={kitle}
-          href={(value) => archiveHref({ kitle: value, durum })}
+          href={(value) => archiveHref({ tur, kitle: value, durum })}
         />
         <FilterNav
           label="Durum"
           options={[[undefined, 'Tümü'], ...STATUS_FILTERS.map((value): [string, string] => [value, STATUS_LABELS[value]])]}
           active={durum}
-          href={(value) => archiveHref({ kitle, durum: value })}
+          href={(value) => archiveHref({ tur, kitle, durum: value })}
         />
       </header>
       {items.length === 0 ? (
@@ -90,13 +98,14 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
                     <li key={post.id}>
                       <Link
                         href={`/gonderi/${post.id}`}
-                        aria-label={`${formatDateShortTr(post.date)} · ${AUDIENCE_LABELS[audience]} burç yorumları`}
+                        aria-label={`${formatDateShortTr(post.date)} · ${postTitle(post.kind, audience)}`}
                         className="block space-y-2 rounded-2xl border bg-card p-2 transition-colors hover:border-primary"
                       >
                         <SlideThumbnail templateVersion={post.templateVersion} props={buildCoverProps(post, brand)} />
                         <span className="flex items-center justify-between gap-2 px-1 text-sm">
                           <span className="font-medium">
-                            {AUDIENCE_LABELS[audience]} · Sürüm {post.version}
+                            {AUDIENCE_LABELS[audience]}
+                            {post.kind === 'weekly' && ' · Haftalık'} · Sürüm {post.version}
                           </span>
                           <Badge variant="outline">{STATUS_LABELS[post.status]}</Badge>
                         </span>
@@ -109,7 +118,7 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
         ))
       )}
       {page.nextBefore && (
-        <Link href={archiveHref({ kitle, durum, once: page.nextBefore })} className={buttonVariants({ variant: 'outline' })}>
+        <Link href={archiveHref({ tur, kitle, durum, once: page.nextBefore })} className={buttonVariants({ variant: 'outline' })}>
           Daha eski
         </Link>
       )}

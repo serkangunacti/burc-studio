@@ -1,7 +1,9 @@
 import { NextMoonQuarter, SearchMoonQuarter } from 'astronomy-engine';
-import { addDays, formatDateShortTr, istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
+import { addDays, formatDateShortTr, istanbulDateKey, istanbulDayStart, weekLabelTr, type DateKey } from '@/lib/date/istanbul';
 import { getSign, signFromLongitude, type SignSlug } from '@/lib/zodiac/signs';
 import { BODY_NAMES_TR, PLANETS, eclipticLongitude, getSkySnapshot } from './sky';
+
+export { weekLabelTr };
 
 export type WeekSky = { monday: DateKey; label: string; sunSigns: SignSlug[]; events: string[] };
 
@@ -9,10 +11,6 @@ const QUARTER_NAMES = ['Yeni Ay', 'İlk Dördün', 'Dolunay', 'Son Dördün'] as
 
 export function isMonday(date: DateKey): boolean {
   return new Date(`${date}T12:00:00Z`).getUTCDay() === 1;
-}
-
-export function weekLabelTr(monday: DateKey): string {
-  return `${formatDateShortTr(monday)} – ${formatDateShortTr(addDays(monday, 6))}`;
 }
 
 export function getWeekSky(monday: DateKey): WeekSky {
