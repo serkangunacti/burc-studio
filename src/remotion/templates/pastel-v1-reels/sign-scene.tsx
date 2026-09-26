@@ -1,11 +1,12 @@
 import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { Audience } from '@/lib/content/types';
-import type { ReelsSign } from '@/remotion/slide-types';
+import type { BrandProps, ReelsSign } from '@/remotion/slide-types';
 import { HEADING_FONT } from '../pastel-v1/fonts';
 import { StarIcon } from '../pastel-v1/ornaments';
 import { AUDIENCE_INK, CARD_SHADOW, PALETTE, type Backdrop } from '../pastel-v1/tokens';
 import { ZODIAC_PATHS } from '../pastel-v1/zodiac';
 import { drawProgress, enter } from './motion';
+import { ReelsWatermark } from './watermark';
 
 const SCORE_LABELS = [
   ['love', 'Aşk'],
@@ -19,20 +20,22 @@ export function SignScene({
   total,
   audience,
   backdrop,
+  brand,
 }: {
   sign: ReelsSign;
   index: number;
   total: number;
   audience: Audience;
   backdrop: Backdrop;
+  brand: BrandProps;
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const ink = AUDIENCE_INK[audience];
   const medallion = spring({ frame, fps, config: { damping: 14 } });
   return (
-    <AbsoluteFill style={{ padding: '260px 80px 420px', alignItems: 'center', gap: 28 }}>
-      <div style={{ alignSelf: 'flex-end', fontSize: 26, fontWeight: 700, letterSpacing: 4, color: PALETTE.plumSoft }}>
+    <AbsoluteFill style={{ padding: '260px 80px 420px', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
+      <div style={{ position: 'absolute', top: 260, right: 80, fontSize: 26, fontWeight: 700, letterSpacing: 4, color: PALETTE.plumSoft }}>
         {index + 1} / {total}
       </div>
       <div
@@ -100,6 +103,7 @@ export function SignScene({
         <span style={{ color: PALETTE.plumSoft }}>· Şanslı sayı</span>
         <span style={{ fontFamily: HEADING_FONT, fontSize: 44, fontWeight: 600 }}>{sign.luckyNumber}</span>
       </div>
+      <ReelsWatermark brand={brand} />
     </AbsoluteFill>
   );
 }

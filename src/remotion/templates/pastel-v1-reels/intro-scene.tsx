@@ -6,6 +6,7 @@ import { HEADING_FONT } from '../pastel-v1/fonts';
 import { AUDIENCE_INK, AUDIENCE_TITLES, PALETTE, type Backdrop } from '../pastel-v1/tokens';
 import { ZODIAC_PATHS } from '../pastel-v1/zodiac';
 import { enter } from './motion';
+import { ReelsWatermark } from './watermark';
 
 const RING_RADIUS = 300;
 const GLYPH = 64;
@@ -17,7 +18,7 @@ export function IntroScene({ reels, backdrop }: { reels: ReelsProps; backdrop: B
   const ink = AUDIENCE_INK[reels.audience];
   const turn = Math.round(frame * 4) / 10;
   return (
-    <AbsoluteFill style={{ padding: '260px 80px 420px', alignItems: 'center' }}>
+    <AbsoluteFill style={{ padding: '260px 80px 500px', alignItems: 'center' }}>
       <div style={{ ...enter(frame, fps, 0), fontSize: 30, fontWeight: 700, letterSpacing: 6, color: PALETTE.plumSoft }}>{reels.dateLabel}</div>
       <div style={{ ...enter(frame, fps, 6), marginTop: 36, fontFamily: HEADING_FONT, fontSize: 76, fontWeight: 500, color: ink }}>Günlük</div>
       <div style={{ ...enter(frame, fps, 10), fontFamily: HEADING_FONT, fontSize: 108, fontWeight: 600, lineHeight: 1.02, textAlign: 'center' }}>
@@ -48,29 +49,26 @@ export function IntroScene({ reels, backdrop }: { reels: ReelsProps; backdrop: B
           justifyContent: 'center',
         }}
       >
-        <div style={{ position: 'absolute', inset: 0, transform: `rotate(${turn}deg)` }}>
+        {/* Tarayıcı render'ı yalnızca bir CSS alt kümesini çizer; SVG'ler konumlu bir div içinde durur, dönüş div'e uygulanır. */}
+        <div style={{ position: 'absolute', left: 0, top: 0, width: RING_BOX, height: RING_BOX, transform: `rotate(${turn}deg)` }}>
           {SIGN_SLUGS.map((sign, index) => {
             const angle = (index / SIGN_SLUGS.length) * Math.PI * 2 - Math.PI / 2;
             return (
-              <svg
+              <div
                 key={sign}
-                width={GLYPH}
-                height={GLYPH}
-                viewBox="0 0 100 100"
-                fill="none"
-                stroke={ink}
-                strokeWidth={5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
                 style={{
                   position: 'absolute',
                   left: Math.round(RING_BOX / 2 + Math.cos(angle) * RING_RADIUS - GLYPH / 2),
                   top: Math.round(RING_BOX / 2 + Math.sin(angle) * RING_RADIUS - GLYPH / 2),
+                  width: GLYPH,
+                  height: GLYPH,
                   transform: `rotate(${-turn}deg)`,
                 }}
               >
-                <path d={ZODIAC_PATHS[sign]} />
-              </svg>
+                <svg width={GLYPH} height={GLYPH} viewBox="0 0 100 100" fill="none" stroke={ink} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d={ZODIAC_PATHS[sign]} />
+                </svg>
+              </div>
             );
           })}
         </div>
@@ -88,6 +86,7 @@ export function IntroScene({ reels, backdrop }: { reels: ReelsProps; backdrop: B
           {reels.hook}
         </div>
       </div>
+      <ReelsWatermark brand={reels.brand} />
     </AbsoluteFill>
   );
 }

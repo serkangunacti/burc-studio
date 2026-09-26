@@ -43,7 +43,7 @@ export function PastelReels(reels: ReelsProps) {
           <Fragment key={sign.sign}>
             <TransitionSeries.Transition presentation={fade()} timing={TIMING} />
             <TransitionSeries.Sequence durationInFrames={SIGN_FRAMES}>
-              <SignScene sign={sign} index={index} total={reels.signs.length} audience={reels.audience} backdrop={backdrop} />
+              <SignScene sign={sign} index={index} total={reels.signs.length} audience={reels.audience} backdrop={backdrop} brand={reels.brand} />
             </TransitionSeries.Sequence>
           </Fragment>
         ))}
@@ -52,11 +52,6 @@ export function PastelReels(reels: ReelsProps) {
           <OutroScene reels={reels} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
-      {reels.brand.enabled && reels.brand.handle && (
-        <div style={{ position: 'absolute', left: 80, right: 80, bottom: 420, display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: 1, opacity: reels.brand.opacity }}>@{reels.brand.handle}</span>
-        </div>
-      )}
     </AbsoluteFill>
   );
 }

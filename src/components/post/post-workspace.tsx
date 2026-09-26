@@ -14,8 +14,9 @@ import { saveBlob } from '@/lib/render/deliver';
 import { postBaseName, slideFileName } from '@/lib/render/file-names';
 import { renderSlideJpeg } from '@/lib/render/render-images';
 import { cn } from '@/lib/utils';
-import type { SlideProps } from '@/remotion/slide-types';
+import type { ReelsProps, SlideProps } from '@/remotion/slide-types';
 import { ExportPanel } from './export-panel';
+import { ReelsPanel } from './reels-panel';
 import { PostTextEditor, SlideEditor } from './slide-editor';
 import { SlideStrip } from './slide-strip';
 
@@ -24,11 +25,13 @@ export function PostWorkspace({
   slides,
   source,
   versions,
+  reels,
 }: {
   post: PostSummary;
   slides: SlideProps[];
   source: DraftSource;
   versions: VersionSummary[];
+  reels: ReelsProps;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(() => createDraft(source));
@@ -135,6 +138,7 @@ export function PostWorkspace({
         </div>
         <aside className="space-y-6">
           <ExportPanel post={post} slides={slides} blocked={dirty} />
+          <ReelsPanel post={post} reels={reels} blocked={dirty} />
           <nav aria-label="Sürümler" className="space-y-2">
             <h2 className="text-sm font-medium">Sürümler</h2>
             <ul className="space-y-1 text-sm">
