@@ -1,10 +1,21 @@
 import { z } from 'zod';
+import { PROVIDER_IDS } from '@/lib/llm/provider-ids';
 
 export const WATERMARK_POSITIONS = ['bottom-center', 'bottom-right'] as const;
 export type WatermarkPosition = (typeof WATERMARK_POSITIONS)[number];
 
 const HANDLE_PATTERN = /^[a-z0-9._]{1,30}$/;
 export const HANDLE_ERROR = 'Kullanıcı adı yalnızca harf, rakam, nokta ve alt çizgi içerebilir (en fazla 30 karakter).';
+
+export const planItemSchema = z.object({ kind: z.literal('horoscope'), audience: z.enum(['kadin', 'erkek']) });
+export type PlanItem = z.infer<typeof planItemSchema>;
+
+export const providerPreferenceSchema = z.object({
+  id: z.enum(PROVIDER_IDS),
+  enabled: z.boolean(),
+  dailyCap: z.number().int().positive().optional(),
+  model: z.string().min(1).optional(),
+});
 
 export const settingsSchema = z.object({
   instagramHandle: z.string().regex(HANDLE_PATTERN, HANDLE_ERROR).nullable(),
@@ -13,17 +24,35 @@ export const settingsSchema = z.object({
     position: z.enum(WATERMARK_POSITIONS),
     opacity: z.number().min(0.2).max(1),
   }),
+  cronEnabled: z.boolean(),
+  dailyPlan: z.array(planItemSchema).min(1),
+  baseHashtags: z.array(z.string().regex(/^#[\p{L}\p{N}_]+$/u)).max(2),
+  providerChain: z.array(providerPreferenceSchema),
+  spreadLoad: z.boolean(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type SettingsPatch = {
   instagramHandle?: string | null;
   watermark?: Partial<Settings['watermark']>;
+  cronEnabled?: boolean;
+  dailyPlan?: PlanItem[];
+  baseHashtags?: string[];
+  providerChain?: Settings['providerChain'];
+  spreadLoad?: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
   instagramHandle: null,
   watermark: { enabled: true, position: 'bottom-center', opacity: 0.55 },
+  cronEnabled: true,
+  dailyPlan: [
+    { kind: 'horoscope', audience: 'kadin' },
+    { kind: 'horoscope', audience: 'erkek' },
+  ],
+  baseHashtags: ['#burç', '#astroloji'],
+  providerChain: [],
+  spreadLoad: false,
 };
 
 export function normalizeInstagramHandle(input: string): string {

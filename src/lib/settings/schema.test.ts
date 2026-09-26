@@ -40,6 +40,14 @@ describe('ayar birleştirme', () => {
     expect(DEFAULT_SETTINGS).toEqual({
       instagramHandle: null,
       watermark: { enabled: true, position: 'bottom-center', opacity: 0.55 },
+      cronEnabled: true,
+      dailyPlan: [
+        { kind: 'horoscope', audience: 'kadin' },
+        { kind: 'horoscope', audience: 'erkek' },
+      ],
+      baseHashtags: ['#burç', '#astroloji'],
+      providerChain: [],
+      spreadLoad: false,
     });
   });
 
@@ -50,5 +58,23 @@ describe('ayar birleştirme', () => {
 
   it('geçersiz opaklık reddedilir', () => {
     expect(() => mergeSettings(DEFAULT_SETTINGS, { watermark: { opacity: 1.5 } })).toThrow();
+  });
+});
+
+describe('üretim ayarları', () => {
+  it('Faz 0 kaydı yeni alanların varsayılanlarıyla okunur', () => {
+    expect(parseStoredSettings({ instagramHandle: 'burc.studio' }).dailyPlan).toHaveLength(2);
+  });
+
+  it('boş günlük plan, 2den fazla hashtag ve bilinmeyen sağlayıcı reddedilir', () => {
+    expect(() => mergeSettings(DEFAULT_SETTINGS, { dailyPlan: [] })).toThrow();
+    expect(() => mergeSettings(DEFAULT_SETTINGS, { baseHashtags: ['#a', '#b', '#c'] })).toThrow();
+    expect(() => mergeSettings(DEFAULT_SETTINGS, { baseHashtags: ['burç'] })).toThrow();
+    expect(() => mergeSettings(DEFAULT_SETTINGS, { providerChain: [{ id: 'openai' as never, enabled: true }] })).toThrow();
+  });
+
+  it('geçerli sağlayıcı tercihi kaydedilir', () => {
+    const next = mergeSettings(DEFAULT_SETTINGS, { providerChain: [{ id: 'gemini-lite', enabled: true, dailyCap: 100 }] });
+    expect(next.providerChain).toEqual([{ id: 'gemini-lite', enabled: true, dailyCap: 100 }]);
   });
 });
