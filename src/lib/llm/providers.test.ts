@@ -40,6 +40,7 @@ describe('availableProviders', () => {
       MISTRAL_API_KEY: 'm', MISTRAL_MODEL: 'mistral-medium-latest',
       COHERE_API_KEY: 'c', COHERE_MODEL: 'command-a-03-2025',
       OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free',
+      ORCA_API_KEY: 'o', ORCA_MODEL: 'orcarouter/free',
       NVIDIA_API_KEY: 'n', NVIDIA_MODEL: 'deepseek-ai/deepseek-v4.1-flash',
     };
     expect(availableProviders(env).map(({ id, model, dailyCap }) => ({ id, model, dailyCap }))).toEqual([
@@ -47,9 +48,10 @@ describe('availableProviders', () => {
       { id: 'mistral', model: 'mistral-medium-latest', dailyCap: 200 },
       { id: 'cohere', model: 'command-a-03-2025', dailyCap: 30 },
       { id: 'openrouter', model: 'a:free', dailyCap: 24 },
+      { id: 'orca', model: 'orcarouter/free', dailyCap: 45 },
       { id: 'nvidia', model: 'deepseek-ai/deepseek-v4.1-flash', dailyCap: 200 },
     ]);
-    expect(availableProviders({ MISTRAL_API_KEY: 'm', COHERE_API_KEY: 'c', NVIDIA_API_KEY: 'n' })).toEqual([]);
+    expect(availableProviders({ MISTRAL_API_KEY: 'm', COHERE_API_KEY: 'c', NVIDIA_API_KEY: 'n', ORCA_API_KEY: 'o' })).toEqual([]);
   });
 
   it('fabrika istenen model kimliğiyle model üretir', () => {

@@ -51,6 +51,10 @@ export function availableProviders(env: Env): ProviderSpec[] {
     specs.push({ id: 'openrouter', label: 'OpenRouter', model: env.OPENROUTER_MODEL, dailyCap: 24, factory });
     if (env.OPENROUTER_MODEL_2) specs.push({ id: 'openrouter-2', label: 'OpenRouter (yedek)', model: env.OPENROUTER_MODEL_2, dailyCap: 24, factory });
   }
+  if (env.ORCA_API_KEY && env.ORCA_MODEL) {
+    // Ücretsiz modeller günde 50 istekle sınırlı.
+    specs.push({ id: 'orca', label: 'OrcaRouter', model: env.ORCA_MODEL, dailyCap: 45, factory: openAICompatible('orca', 'https://api.orcarouter.ai/v1', env.ORCA_API_KEY) });
+  }
   if (env.NVIDIA_API_KEY && env.NVIDIA_MODEL) {
     specs.push({ id: 'nvidia', label: 'NVIDIA NIM', model: env.NVIDIA_MODEL, dailyCap: 200, factory: openAICompatible('nvidia', 'https://integrate.api.nvidia.com/v1', env.NVIDIA_API_KEY) });
   }
