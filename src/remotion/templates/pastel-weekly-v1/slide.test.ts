@@ -42,4 +42,8 @@ describe('pastel-weekly@1', () => {
     expect(count(html(sampleProps({ ...sampleSign(), dateLabel: WEEK })), 'data-mark="saturn"')).toBe(1);
     expect(count(html(sampleProps(SAMPLE_CTA)), 'data-mark="saturn"')).toBe(1);
   });
+
+  it('burç adı kuyruklu harflerin tarih satırına binmeyeceği satır yüksekliğiyle yazılır', () => {
+    expect(html(sampleProps({ ...sampleSign('oglak'), dateLabel: WEEK }))).toMatch(/data-slot="sign-name" style="[^"]*line-height:1.25/);
+  });
 });

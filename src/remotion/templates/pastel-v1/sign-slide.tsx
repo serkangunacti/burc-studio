@@ -50,7 +50,9 @@ export function SignSlide({ slide, backdrop }: { slide: SignSlideData; backdrop:
           <ZodiacGlyph sign={slide.sign} size={104} color={PALETTE.plum} strokeWidth={5.5} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontFamily: HEADING_FONT, fontSize: 96, fontWeight: 600, lineHeight: 1 }}>{slide.signName}</div>
+          <div data-slot="sign-name" style={{ fontFamily: HEADING_FONT, fontSize: 96, fontWeight: 600, lineHeight: 1.25 }}>
+            {slide.signName}
+          </div>
           <div style={{ fontSize: 30, color: PALETTE.plumSoft }}>{slide.dateRange}</div>
         </div>
       </div>

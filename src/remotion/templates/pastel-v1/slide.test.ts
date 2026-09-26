@@ -85,4 +85,8 @@ describe('pastel@1', () => {
     expect(getTemplate('pastel@1').Reels).toBe(PastelReels);
     expect(() => getTemplate('yok@9')).toThrow('Bilinmeyen şablon: yok@9');
   });
+
+  it('burç adı kuyruklu harflerin (ç, ğ, ş, g, y) tarih satırına binmeyeceği satır yüksekliğiyle yazılır', () => {
+    expect(html(sampleProps(sampleSign('oglak')))).toMatch(/data-slot="sign-name" style="[^"]*line-height:1.25/);
+  });
 });

@@ -56,7 +56,9 @@ export function SignScene({
         </svg>
       </div>
       <div style={{ ...enter(frame, fps, 6), display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <div style={{ fontFamily: HEADING_FONT, fontSize: 120, fontWeight: 600, lineHeight: 1 }}>{sign.signName}</div>
+        <div data-slot="sign-name" style={{ fontFamily: HEADING_FONT, fontSize: 120, fontWeight: 600, lineHeight: 1.25 }}>
+          {sign.signName}
+        </div>
         <div style={{ fontSize: 36, color: PALETTE.plumSoft }}>{sign.dateRange}</div>
       </div>
       <div style={{ ...enter(frame, fps, 16), fontFamily: HEADING_FONT, fontSize: 56, fontWeight: 500, lineHeight: 1.15, color: ink, textAlign: 'center' }}>

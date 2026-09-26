@@ -12,7 +12,7 @@ const FROZEN: Record<string, string> = {
   'motion.ts': 'd618b1315a8aab163e8c5048db466b3180e9d34e28ab48a63c00811a46db89e7',
   'outro-scene.tsx': 'ff8245710635722bbb0f619766eadab0e7b36919bb6db9c1eab628031e128e98',
   'reels.tsx': '1d0c1a9434037fe5ac2bf9770a4e67b90174304ae2109f0004596cc350825fe3',
-  'sign-scene.tsx': '479a2bc71472b035bbd2c0d0c4f363541b8f340d22598230be3418f6b905a212',
+  'sign-scene.tsx': 'bbae85433c81f10d97730e22ed1a4fd35b32b38bce480983e3e9766fdc382514',
   'watermark.tsx': 'ee27e93c472f617d13a137672ed4f59c0dac43240e0d63bdf13b9228d284b0ac',
 };
 
