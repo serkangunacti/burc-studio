@@ -52,4 +52,12 @@ describe('handleDailyCron', () => {
     const second = await (await handleDailyCron(request('Bearer cron-anahtari'), deps())).json();
     expect(second.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['skipped', 'skipped']);
   });
+
+  it('pazartesi günlük ve haftalık paketleri birlikte üretir', async () => {
+    const body = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...deps(), today: '2026-09-28' })).json();
+    expect(body.ok).toBe(true);
+    expect(
+      body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`),
+    ).toEqual(['horoscope:kadin:created', 'horoscope:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created']);
+  });
 });

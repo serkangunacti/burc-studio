@@ -1,4 +1,4 @@
-import { generateDailyPackage } from '@/lib/content/daily-package';
+import { generateDailyPackage, packageItemsFor } from '@/lib/content/daily-package';
 import type { GenerationDeps } from '@/lib/content/horoscope-service';
 import type { DateKey } from '@/lib/date/istanbul';
 import type { Settings } from '@/lib/settings/schema';
@@ -13,7 +13,7 @@ export async function handleDailyCron(
   if (!generation.settings.cronEnabled) return Response.json({ ok: true, skipped: 'Otomatik üretim kapalı.', generated: [] });
   const generated = await generateDailyPackage(generation, {
     date: deps.today,
-    items: generation.settings.dailyPlan,
+    items: packageItemsFor(deps.today, generation.settings.dailyPlan),
     trigger: 'cron',
     skipIfExists: true,
   });
