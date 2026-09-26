@@ -1,7 +1,8 @@
 import { getLuckyColor } from '@/lib/content/lucky-colors';
 import type { Audience } from '@/lib/content/types';
-import { getSign, type SignSlug } from '@/lib/zodiac/signs';
-import type { BrandProps, CoverSlideData, CtaSlideData, SignSlideData, SlideData, SlideProps } from './slide-types';
+import { SIGN_SLUGS, getSign, type SignSlug } from '@/lib/zodiac/signs';
+import { toReelsSign } from './reels';
+import type { BrandProps, CoverSlideData, CtaSlideData, ReelsProps, SignSlideData, SlideData, SlideProps } from './slide-types';
 
 const graphemes = new Intl.Segmenter('tr', { granularity: 'grapheme' });
 
@@ -52,4 +53,20 @@ export function sampleSign(slug: SignSlug = 'koc', audience: Audience = 'kadin')
 
 export function sampleProps(slide: SlideData, overrides: Partial<Omit<SlideProps, 'slide'>> = {}): SlideProps {
   return { slide, brand: SAMPLE_BRAND, format: '4x5', variant: 0, ...overrides };
+}
+
+export const LONGEST_SHORT = `${cutGraphemes(`Yay: ${'Çağırılmayacaklarımızdanmışsınız gibi davranma, sesini yükselt; '.repeat(3)}`, 138).trimEnd()} ✨`;
+
+export function sampleReels(audience: Audience = 'kadin'): ReelsProps {
+  return {
+    audience,
+    dateLabel: SAMPLE_COVER.dateLabel,
+    hook: SAMPLE_COVER.hook,
+    brand: SAMPLE_BRAND,
+    variant: 0,
+    signs: SIGN_SLUGS.map((slug) => {
+      const slide = sampleSign(slug, audience);
+      return toReelsSign(slide, `${slide.signName}: küçük fırsatlara açık ol, akşamı kendine ayır ✨`);
+    }),
+  };
 }

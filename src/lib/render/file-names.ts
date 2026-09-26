@@ -23,3 +23,7 @@ export function slideFileName(baseName: string, index: number, slide: SlideData)
 export function zipFileName(baseName: string): string {
   return `${baseName}.zip`;
 }
+
+export function reelsFileName(baseName: string): string {
+  return `${baseName}_reels.mp4`;
+}
