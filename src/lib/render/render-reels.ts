@@ -31,6 +31,7 @@ export async function renderReelsMp4(input: {
     stalled = true;
     controller.abort();
   });
+  if (input.signal?.aborted) controller.abort();
   input.signal?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
     const result = await renderMediaOnWeb({
