@@ -23,6 +23,17 @@ describe('availableProviders', () => {
     expect(availableProviders({ LLM_MOCK: '1', OLLAMA_LOCAL_MODEL: 'gemma4:26b' }).map((spec) => spec.id)).toEqual(['ollama-local', 'mock']);
   });
 
+  it("OpenRouter iki ücretsiz modelle, Gemini'nin ardından ve günlük 50 isteklik ortak kotayı bölüşerek eklenir", () => {
+    const env = { GOOGLE_GENERATIVE_AI_API_KEY: 'g', OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free', OPENROUTER_MODEL_2: 'b:free' };
+    expect(availableProviders(env).map(({ id, model, dailyCap }) => ({ id, model, dailyCap }))).toEqual([
+      { id: 'gemini', model: 'gemini-3.5-flash', dailyCap: 18 },
+      { id: 'gemini-lite', model: 'gemini-3.5-flash-lite', dailyCap: 450 },
+      { id: 'openrouter', model: 'a:free', dailyCap: 24 },
+      { id: 'openrouter-2', model: 'b:free', dailyCap: 24 },
+    ]);
+    expect(availableProviders({ OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free' }).map((spec) => spec.id)).toEqual(['openrouter']);
+  });
+
   it('fabrika istenen model kimliğiyle model üretir', () => {
     const [gemini] = availableProviders({ GOOGLE_GENERATIVE_AI_API_KEY: 'g' });
     expect((gemini.factory('gemini-3.8-flash') as { modelId: string }).modelId).toBe('gemini-3.8-flash');

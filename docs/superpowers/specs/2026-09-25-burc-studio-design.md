@@ -187,6 +187,16 @@ Seçilen konu için tek tıkla 12 burçluk cinsiyetsiz yorum ve bir özel gönde
 
 Bugün bir olay varsa ana sayfada bir öneri kartı çıkar ("Bugün Dolunay (Koç'ta). Özel gönderi üretilsin mi?"). Otomatik üretim yapılmaz, karar sende kalır.
 
+### 1.7 Haftalık yorumlar (26.09.2026 kararı)
+
+- **Ne zaman:** Her pazartesi, günlük paketle birlikte kadın ve erkek için ayrı birer haftalık carousel üretilir: kapak, 12 burç kartı ve kapanış.
+- **Kart içeriği:** Her burç tek kart. Başlık ve 600–850 karakterlik geniş, genel bir haftalık yorum; burç ve tarot ayrımı yoktur.
+- **Metnin kaynağı:** Yorum, haftanın gökyüzü olaylarını (ay evreleri, burç geçişleri, retro başlangıç ve bitişleri) ve o burç için çekilen haftanın tarot kartını tek metinde harmanlar. Kartın adı metinde geçmez.
+- **Görünüm ve üretim:**
+  - Görünüm `pastel-weekly@1` şablonudur.
+  - Cron pazartesi sabahı günlük paketin yanında haftalık paketi de üretir.
+  - Arşivde "Haftalık" süzgeciyle ayrılır.
+
 ## 2. Veri modeli (`src/db/schema.ts`, Drizzle)
 
 - **`readings`:** Bir burcun tek bir yorumu.

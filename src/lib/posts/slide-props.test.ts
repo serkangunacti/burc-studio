@@ -53,6 +53,15 @@ describe('buildSlideProps', () => {
   });
 });
 
+describe('haftalık gönderi verisi', () => {
+  it('kapak ve burç slaytlarında tarih yerine hafta aralığını yazar', async () => {
+    const post = await seedPost(db, { date: '2026-09-28', kind: 'weekly', audience: 'erkek' });
+    const props = buildSlideProps((await getPostDetail(db, post.id))!, BRAND);
+    expect(props[0].slide).toMatchObject({ type: 'cover', dateLabel: '28 EYLÜL – 4 EKİM' });
+    expect(props[1].slide).toMatchObject({ type: 'sign', dateLabel: '28 EYLÜL – 4 EKİM' });
+  });
+});
+
 describe('variantFor', () => {
   it('aynı günün gönderileri birbirinden, ardışık günler de birbirinden farklı zemin alır', () => {
     const day = (date: string, kind: 'horoscope' | 'tarot' | 'special', audience: 'kadin' | 'erkek' | 'genel') => variantFor({ date, kind, audience }) % 7;
@@ -60,5 +69,12 @@ describe('variantFor', () => {
     expect(new Set(sameDay).size).toBe(5);
     expect(day('2026-09-27', 'horoscope', 'kadin')).not.toBe(day('2026-09-26', 'horoscope', 'kadin'));
     expect(variantFor({ date: '2026-09-26', kind: 'horoscope', audience: 'kadin' })).toBe(20722);
+  });
+
+  it('pazartesi haftalık gönderiler günlük, tarot ve özel gönderilerden farklı zemin alır', () => {
+    const all = (['horoscope', 'tarot', 'weekly'] as const).flatMap((kind) =>
+      (['kadin', 'erkek'] as const).map((audience) => variantFor({ date: '2026-09-28', kind, audience }) % 7),
+    );
+    expect(new Set([...all, variantFor({ date: '2026-09-28', kind: 'special', audience: 'genel' }) % 7]).size).toBe(7);
   });
 });

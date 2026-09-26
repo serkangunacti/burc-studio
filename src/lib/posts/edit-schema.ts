@@ -1,7 +1,13 @@
 import { z } from 'zod';
+import type { ReadingKind } from '@/lib/content/types';
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 
-export const EDIT_LIMITS = { coverHook: 60, caption: 700, headline: 40, body: 420, short: 140 } as const;
+export const EDIT_LIMITS = { coverHook: 60, caption: 700, headline: 40, body: 420, short: 140 };
+export type EditLimits = typeof EDIT_LIMITS;
+
+export function editLimitsFor(kind: ReadingKind): EditLimits {
+  return kind === 'weekly' ? { ...EDIT_LIMITS, body: 850 } : EDIT_LIMITS;
+}
 
 export const postEditSchema = z.object({
   format: z.enum(['4x5', '3x4']).optional(),

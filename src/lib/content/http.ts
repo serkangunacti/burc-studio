@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DateKey } from '@/lib/date/istanbul';
 import { AllProvidersFailedError, NoProvidersConfiguredError } from '@/lib/llm/router';
+import { isMonday } from '@/lib/astro/week';
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import { isAllowedGenerationDate } from './dates';
 import { generateHoroscopeSet, regenerateSign, type GenerationDeps } from './horoscope-service';
@@ -9,8 +10,9 @@ import { PostConflictError } from './repository';
 export type HttpDeps = GenerationDeps & { today: DateKey };
 
 const audienceSchema = z.enum(['kadin', 'erkek']);
-const generateSchema = z.object({ date: z.string(), audience: audienceSchema, force: z.boolean().optional() });
-const signSchema = z.object({ date: z.string(), audience: audienceSchema, sign: z.enum(SIGN_SLUGS) });
+const kindSchema = z.enum(['horoscope', 'weekly']).optional();
+const generateSchema = z.object({ date: z.string(), audience: audienceSchema, kind: kindSchema, force: z.boolean().optional() });
+const signSchema = z.object({ date: z.string(), audience: audienceSchema, kind: kindSchema, sign: z.enum(SIGN_SLUGS) });
 
 const BAD_REQUEST = () => Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
 const BUSY = () => Response.json({ error: 'Bu içerik şu anda üretiliyor.' }, { status: 409 });
@@ -18,7 +20,8 @@ const BUSY = () => Response.json({ error: 'Bu içerik şu anda üretiliyor.' }, 
 async function readBody<T>(request: Request, schema: z.ZodType<T>, today: DateKey): Promise<T | null> {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return null;
-  const date = (parsed.data as { date: string }).date;
+  const { date, kind } = parsed.data as { date: string; kind?: string };
+  if (kind === 'weekly' && !isMonday(date)) return null;
   return isAllowedGenerationDate(date, today) ? parsed.data : null;
 }
 
@@ -41,7 +44,13 @@ export async function handleGenerate(request: Request, deps: HttpDeps): Promise<
   const body = await readBody(request, generateSchema, deps.today);
   if (!body) return BAD_REQUEST();
   try {
-    const result = await generateHoroscopeSet(deps, { date: body.date, audience: body.audience, trigger: 'button', skipIfExists: !body.force });
+    const result = await generateHoroscopeSet(deps, {
+      date: body.date,
+      audience: body.audience,
+      kind: body.kind,
+      trigger: 'button',
+      skipIfExists: !body.force,
+    });
     return result.status === 'busy' ? BUSY() : Response.json(result);
   } catch (error) {
     return failure(error);

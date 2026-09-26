@@ -7,6 +7,23 @@ import { LUCKY_COLOR_IDS, normalizeLuckyColor, type LuckyColorId } from './lucky
 export const MAX_FAILED_SIGNS = 6;
 
 export type QualityIssue = { field: string; message: string };
+export type TextLimit = { min: number; max: number; maxEmoji: number };
+export type EntryLimits = { baslik: TextLimit; yorum: TextLimit; kisa: TextLimit };
+export const DAILY_LIMITS: EntryLimits = {
+  baslik: { min: 3, max: 40, maxEmoji: 1 },
+  yorum: { min: 280, max: 420, maxEmoji: 2 },
+  kisa: { min: 20, max: 140, maxEmoji: 1 },
+};
+export const WEEKLY_LIMITS: EntryLimits = { ...DAILY_LIMITS, yorum: { min: 600, max: 850, maxEmoji: 3 } };
+// Burca göre metinde geçmemesi gereken ifadeler (ör. haftalık yorumda çekilen kartın adı).
+export type ForbiddenPhrases = (sign: SignSlug) => readonly string[];
+
+function forbiddenIssues(sign: SignSlug | null, text: string, forbidden: ForbiddenPhrases | undefined): QualityIssue[] {
+  if (!sign || !forbidden) return [];
+  const lower = text.toLocaleLowerCase('tr-TR');
+  const found = forbidden(sign).find((phrase) => lower.includes(phrase.toLocaleLowerCase('tr-TR')));
+  return found ? [{ field: 'yorum', message: `Metinde "${found}" geçmemeli.` }] : [];
+}
 export type HoroscopeEntry = {
   sign: SignSlug;
   headline: string;
@@ -37,7 +54,7 @@ const BANNED_PHRASES = [
   'ayrılacaksınız',
 ];
 
-function textIssues(field: string, text: string, limits: { min: number; max: number; maxEmoji: number }): QualityIssue[] {
+function textIssues(field: string, text: string, limits: TextLimit): QualityIssue[] {
   const issues: QualityIssue[] = [];
   const length = graphemeLength(text.trim());
   if (length < limits.min || length > limits.max) {
@@ -59,14 +76,19 @@ function scoreIssues(raw: HoroscopeEntryRaw): QualityIssue[] {
   });
 }
 
-export function checkHoroscopeEntry(raw: HoroscopeEntryRaw): { sign: SignSlug | null; entry: HoroscopeEntry | null; issues: QualityIssue[] } {
+export function checkHoroscopeEntry(
+  raw: HoroscopeEntryRaw,
+  limits: EntryLimits = DAILY_LIMITS,
+  forbidden?: ForbiddenPhrases,
+): { sign: SignSlug | null; entry: HoroscopeEntry | null; issues: QualityIssue[] } {
   const sign = normalizeSignName(raw.burc);
   const luckyColor = normalizeLuckyColor(raw.sansliRenk);
   const issues: QualityIssue[] = [
     ...(sign ? [] : [{ field: 'burc', message: `Tanınmayan burç adı: "${raw.burc}".` }]),
-    ...textIssues('baslik', raw.baslik, { min: 3, max: 40, maxEmoji: 1 }),
-    ...textIssues('yorum', raw.yorum, { min: 280, max: 420, maxEmoji: 2 }),
-    ...textIssues('kisa', raw.kisa, { min: 20, max: 140, maxEmoji: 1 }),
+    ...textIssues('baslik', raw.baslik, limits.baslik),
+    ...textIssues('yorum', raw.yorum, limits.yorum),
+    ...textIssues('kisa', raw.kisa, limits.kisa),
+    ...forbiddenIssues(sign, `${raw.baslik} ${raw.yorum} ${raw.kisa}`, forbidden),
     ...(looksTurkish(`${raw.baslik} ${raw.yorum} ${raw.kisa}`) ? [] : [{ field: 'yorum', message: 'Metin Türkçe görünmüyor.' }]),
     ...scoreIssues(raw),
     ...(luckyColor ? [] : [{ field: 'sansliRenk', message: `Şu kimliklerden biri olmalı: ${LUCKY_COLOR_IDS.join(', ')}.` }]),
@@ -90,17 +112,27 @@ export function checkHoroscopeEntry(raw: HoroscopeEntryRaw): { sign: SignSlug | 
   };
 }
 
-export function checkSingleSign(raw: HoroscopeSingleRaw, expected: SignSlug): { entry: HoroscopeEntry | null; issues: QualityIssue[] } {
-  const { sign, entry, issues } = checkHoroscopeEntry(raw.burc);
+export function checkSingleSign(
+  raw: HoroscopeSingleRaw,
+  expected: SignSlug,
+  limits: EntryLimits = DAILY_LIMITS,
+  forbidden?: ForbiddenPhrases,
+): { entry: HoroscopeEntry | null; issues: QualityIssue[] } {
+  const { sign, entry, issues } = checkHoroscopeEntry(raw.burc, limits, forbidden);
   if (sign !== expected) return { entry: null, issues: [{ field: 'burc', message: `${getSign(expected).name} için yazılmalıydı.` }] };
   return { entry, issues };
 }
 
-export function checkHoroscopeBatch(raw: HoroscopeBatchRaw, baseHashtags: readonly string[]): BatchCheck {
+export function checkHoroscopeBatch(
+  raw: HoroscopeBatchRaw,
+  baseHashtags: readonly string[],
+  limits: EntryLimits = DAILY_LIMITS,
+  forbidden?: ForbiddenPhrases,
+): BatchCheck {
   const entries = new Map<SignSlug, HoroscopeEntry>();
   const issuesBySign = new Map<SignSlug, QualityIssue[]>();
   for (const item of raw.burclar) {
-    const { sign, entry, issues } = checkHoroscopeEntry(item);
+    const { sign, entry, issues } = checkHoroscopeEntry(item, limits, forbidden);
     if (!sign || entries.has(sign)) continue;
     if (entry) {
       entries.set(sign, entry);

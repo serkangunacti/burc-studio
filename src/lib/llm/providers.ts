@@ -39,7 +39,10 @@ export function availableProviders(env: Env): ProviderSpec[] {
     specs.push({ id: 'groq', label: 'Groq', model: env.GROQ_MODEL, dailyCap: 500, factory: openAICompatible('groq', 'https://api.groq.com/openai/v1', env.GROQ_API_KEY) });
   }
   if (env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) {
-    specs.push({ id: 'openrouter', label: 'OpenRouter', model: env.OPENROUTER_MODEL, dailyCap: 45, factory: openAICompatible('openrouter', 'https://openrouter.ai/api/v1', env.OPENROUTER_API_KEY) });
+    // Ücretsiz modellerin günlük 50 isteklik kotası hesap başınadır; iki model bunu paylaşır.
+    const factory = openAICompatible('openrouter', 'https://openrouter.ai/api/v1', env.OPENROUTER_API_KEY);
+    specs.push({ id: 'openrouter', label: 'OpenRouter', model: env.OPENROUTER_MODEL, dailyCap: 24, factory });
+    if (env.OPENROUTER_MODEL_2) specs.push({ id: 'openrouter-2', label: 'OpenRouter (yedek)', model: env.OPENROUTER_MODEL_2, dailyCap: 24, factory });
   }
   if (env.CEREBRAS_API_KEY && env.CEREBRAS_MODEL) {
     specs.push({ id: 'cerebras', label: 'Cerebras', model: env.CEREBRAS_MODEL, dailyCap: 500, factory: openAICompatible('cerebras', 'https://api.cerebras.ai/v1', env.CEREBRAS_API_KEY) });

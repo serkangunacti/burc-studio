@@ -23,6 +23,12 @@ export const LONGEST_BODY = `${cutGraphemes(
   418,
 ).trimEnd()} ✨`;
 
+// Haftalık kalite kapısının üst sınırı 850 grafem; en uzun sözcüklerle kartın sığma sınırını zorlar.
+export const LONGEST_WEEKLY_BODY = `${cutGraphemes(
+  `🌕 ${'Çağırılmayacaklarımızdanmışsınız gibi davranmak yerine içindeki güçlü sesi dinle ve cesaretini göster; '.repeat(10)}`,
+  848,
+).trimEnd()} ✨`;
+
 export const SAMPLE_COVER: CoverSlideData = {
   type: 'cover',
   audience: 'kadin',

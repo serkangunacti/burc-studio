@@ -1,19 +1,17 @@
 import type { PostFormat } from '@/db/schema';
 import type { Db } from '@/db/types';
-import { getSkySnapshot } from '@/lib/astro/sky';
 import type { DateKey } from '@/lib/date/istanbul';
 import type { ProviderId } from '@/lib/llm/provider-ids';
 import type { ProviderSpec } from '@/lib/llm/providers';
 import { generateWithFailover, type RouterDeps } from '@/lib/llm/router';
 import { SIGN_SLUGS, getSign, type SignSlug } from '@/lib/zodiac/signs';
 import { horoscopeBatchSchema, horoscopeSingleSchema } from './horoscope-schema';
-import { HOROSCOPE_PROMPT_VERSION, buildHoroscopeBatchPrompt, buildHoroscopeSignPrompt, type HoroscopePromptInput } from './horoscope-prompt';
-import { batchIssues, checkHoroscopeBatch, checkSingleSign, type HoroscopeEntry, type QualityIssue } from './quality';
-import { createPostVersion, getCurrentPost, getRecentHeadlines, saveReadings, type NewReading } from './repository';
+import { specFor, type GeneratedKind, type SpecContext } from './generation-spec';
+import { batchIssues, checkHoroscopeBatch, checkSingleSign, type EntryLimits, type HoroscopeEntry, type QualityIssue } from './quality';
+import { createPostVersion, getCurrentPost, getCurrentReadings, getRecentHeadlines, saveReadings, type NewReading } from './repository';
 import { finishRun, getProviderUsage, logLlmCall, startRun } from './runs';
 import { AUDIENCES, type Audience, type RunTrigger } from './types';
 
-export const TEMPLATE_VERSION = 'pastel@1';
 // Rotalar maxDuration = 300 s ile çalışır; kayıt ve finishRun için pay bırakılır.
 const DEFAULT_BUDGET_MS = 240_000;
 
@@ -54,27 +52,27 @@ function routerFor(deps: GenerationDeps, runId: string, deadline: number, chain:
   };
 }
 
-function toNewReading(entry: HoroscopeEntry, source: Source, runId: string): NewReading {
+function toNewReading(entry: HoroscopeEntry, source: Source, runId: string, promptVersion: string, tarotCardId?: string): NewReading {
   return {
     sign: entry.sign,
     headline: entry.headline,
     body: entry.body,
     short: entry.short,
-    meta: { scores: entry.scores, luckyColor: entry.luckyColor, luckyNumber: entry.luckyNumber },
+    meta: { scores: entry.scores, luckyColor: entry.luckyColor, luckyNumber: entry.luckyNumber, ...(tarotCardId ? { tarotCardId } : {}) },
     provider: source.providerId,
     model: source.model,
-    promptVersion: HOROSCOPE_PROMPT_VERSION,
+    promptVersion,
     runId,
   };
 }
 
-async function generateSign(router: RouterDeps, promptInput: HoroscopePromptInput, sign: SignSlug, issues: QualityIssue[]) {
+async function generateSign(router: RouterDeps, context: SpecContext, sign: SignSlug, issues: QualityIssue[], limits: EntryLimits) {
   const result = await generateWithFailover(router, {
     schema: horoscopeSingleSchema,
-    ...buildHoroscopeSignPrompt({ ...promptInput, sign, issues }),
-    validate: (value) => checkSingleSign(value, sign).issues,
+    ...context.signPrompt(sign, issues),
+    validate: (value) => checkSingleSign(value, sign, limits, context.forbidden).issues,
   });
-  const { entry } = checkSingleSign(result.value, sign);
+  const { entry } = checkSingleSign(result.value, sign, limits, context.forbidden);
   if (!entry) throw new Error(`${getSign(sign).name} için kabul edilen yanıt doğrulanamadı`);
   return { entry, source: { providerId: result.providerId, model: result.model } };
 }
@@ -93,10 +91,12 @@ async function withRun<T>(deps: GenerationDeps, runId: string, work: () => Promi
 
 export async function generateHoroscopeSet(
   deps: GenerationDeps,
-  input: { date: DateKey; audience: Audience; trigger: RunTrigger; skipIfExists: boolean },
+  input: { date: DateKey; audience: Audience; trigger: RunTrigger; skipIfExists: boolean; kind?: GeneratedKind },
 ): Promise<SetResult> {
+  const spec = specFor(input.kind ?? 'horoscope');
+  if (!spec.validDate(input.date)) throw new Error('Haftalık yorum yalnızca pazartesi üretilir');
   const deadline = Date.now() + (deps.budgetMs ?? DEFAULT_BUDGET_MS);
-  const key = { date: input.date, kind: 'horoscope' as const, audience: input.audience };
+  const key = { date: input.date, kind: spec.kind, audience: input.audience };
   if (input.skipIfExists && (await getCurrentPost(deps.db, key))) return { status: 'skipped' };
   const run = await startRun(deps.db, { ...key, trigger: input.trigger }, clock(deps)());
   if (!run) return { status: 'busy' };
@@ -104,24 +104,23 @@ export async function generateHoroscopeSet(
   return withRun(deps, run.id, async () => {
     const chain = deps.spreadLoad ? rotateChain(deps.chain, AUDIENCES.indexOf(input.audience)) : deps.chain;
     const router = routerFor(deps, run.id, deadline, chain);
-    const promptInput: HoroscopePromptInput = {
-      dateKey: input.date,
+    const context = spec.context({
+      date: input.date,
       audience: input.audience,
-      sky: getSkySnapshot(input.date),
-      recent: await getRecentHeadlines(deps.db, key, input.date, 2),
-    };
+      recent: await getRecentHeadlines(deps.db, key, input.date, spec.recentDays),
+    });
     const batch = await generateWithFailover(router, {
       schema: horoscopeBatchSchema,
-      ...buildHoroscopeBatchPrompt(promptInput),
-      validate: (value) => batchIssues(checkHoroscopeBatch(value, deps.baseHashtags)),
+      ...context.batchPrompt(),
+      validate: (value) => batchIssues(checkHoroscopeBatch(value, deps.baseHashtags, spec.limits, context.forbidden)),
     });
-    const check = checkHoroscopeBatch(batch.value, deps.baseHashtags);
+    const check = checkHoroscopeBatch(batch.value, deps.baseHashtags, spec.limits, context.forbidden);
     const post = check.post;
     if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
 
     const sources = new Map<SignSlug, Source>();
     for (const sign of check.entries.keys()) sources.set(sign, { providerId: batch.providerId, model: batch.model });
-    const retried = await Promise.all(check.failedSigns.map((failed) => generateSign(router, promptInput, failed.sign, failed.issues)));
+    const retried = await Promise.all(check.failedSigns.map((failed) => generateSign(router, context, failed.sign, failed.issues, spec.limits)));
     for (const { entry, source } of retried) {
       check.entries.set(entry.sign, entry);
       sources.set(entry.sign, source);
@@ -131,11 +130,13 @@ export async function generateHoroscopeSet(
       const rows = await saveReadings(
         tx,
         key,
-        SIGN_SLUGS.map((sign) => toNewReading(check.entries.get(sign) as HoroscopeEntry, sources.get(sign) as Source, run.id)),
+        SIGN_SLUGS.map((sign) =>
+          toNewReading(check.entries.get(sign) as HoroscopeEntry, sources.get(sign) as Source, run.id, spec.promptVersion, context.tarotCardId(sign)),
+        ),
       );
       return createPostVersion(tx, {
         ...key,
-        templateVersion: TEMPLATE_VERSION,
+        templateVersion: spec.templateVersion,
         format: deps.format ?? '4x5',
         cover: { hook: post.coverHook },
         caption: post.caption,
@@ -153,29 +154,37 @@ export async function generateHoroscopeSet(
 
 export async function regenerateSign(
   deps: GenerationDeps,
-  input: { date: DateKey; audience: Audience; sign: SignSlug },
+  input: { date: DateKey; audience: Audience; sign: SignSlug; kind?: GeneratedKind },
 ): Promise<SetResult | { status: 'missing' }> {
+  const spec = specFor(input.kind ?? 'horoscope');
   const deadline = Date.now() + (deps.budgetMs ?? DEFAULT_BUDGET_MS);
-  const key = { date: input.date, kind: 'horoscope' as const, audience: input.audience };
+  const key = { date: input.date, kind: spec.kind, audience: input.audience };
   const current = await getCurrentPost(deps.db, key);
   if (!current) return { status: 'missing' };
   const run = await startRun(deps.db, { ...key, sign: input.sign, trigger: 'regenerate' }, clock(deps)());
   if (!run) return { status: 'busy' };
 
   return withRun(deps, run.id, async () => {
-    const promptInput: HoroscopePromptInput = {
-      dateKey: input.date,
+    const keptCards = new Map(
+      (await getCurrentReadings(deps.db, key)).flatMap((row) => (row.meta.tarotCardId ? [[row.sign, row.meta.tarotCardId] as const] : [])),
+    );
+    const context = spec.context({
+      date: input.date,
       audience: input.audience,
-      sky: getSkySnapshot(input.date),
-      recent: await getRecentHeadlines(deps.db, key, input.date, 2),
-    };
+      recent: await getRecentHeadlines(deps.db, key, input.date, spec.recentDays),
+      keptCards,
+    });
     const signIndex = SIGN_SLUGS.indexOf(input.sign);
     const signSlides = current.slides.filter((slide) => slide.type === 'sign');
-    const { entry, source } = await generateSign(routerFor(deps, run.id, deadline), promptInput, input.sign, [
-      { field: 'yorum', message: 'Bu burç için daha önce yazılan metinden tamamen farklı bir açı seç.' },
-    ]);
+    const { entry, source } = await generateSign(
+      routerFor(deps, run.id, deadline),
+      context,
+      input.sign,
+      [{ field: 'yorum', message: 'Bu burç için daha önce yazılan metinden tamamen farklı bir açı seç.' }],
+      spec.limits,
+    );
     const created = await deps.db.transaction(async (tx) => {
-      const [row] = await saveReadings(tx, key, [toNewReading(entry, source, run.id)]);
+      const [row] = await saveReadings(tx, key, [toNewReading(entry, source, run.id, spec.promptVersion, context.tarotCardId(input.sign))]);
       const signReadingIds = signSlides.map((slide, index) => (index === signIndex ? row.id : (slide.readingId as string)));
       return createPostVersion(tx, {
         ...key,

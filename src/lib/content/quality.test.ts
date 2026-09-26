@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mockHoroscopeBatch, mockHoroscopeEntry } from '@/lib/llm/mock-content';
-import { batchIssues, checkHoroscopeBatch, checkHoroscopeEntry, checkSingleSign } from './quality';
+import { mockHoroscopeBatch, mockHoroscopeEntry, mockWeeklyBatch, mockWeeklyEntry } from '@/lib/llm/mock-content';
+import { WEEKLY_LIMITS, batchIssues, checkHoroscopeBatch, checkHoroscopeEntry, checkSingleSign } from './quality';
 
 const BASE = ['#burç', '#astroloji'];
 
@@ -88,5 +88,31 @@ describe('gönderi alanlarının dili', () => {
     const check = checkHoroscopeBatch(raw, BASE);
     expect(check.post).toBeNull();
     expect(batchIssues(check)).toContainEqual({ field: 'caption', message: 'Metin Türkçe görünmüyor.' });
+  });
+});
+
+describe('haftalık sınırlar', () => {
+  it('haftalık yorumu 600–850 aralığında ve en fazla 3 emojiyle kabul eder', () => {
+    const entry = mockWeeklyEntry('aslan');
+    expect(checkHoroscopeEntry(entry, WEEKLY_LIMITS).issues).toEqual([]);
+    expect(checkHoroscopeEntry(entry).issues).toContainEqual({ field: 'yorum', message: expect.stringMatching(/^280-420 karakter olmalı/) });
+    expect(checkHoroscopeEntry({ ...entry, yorum: entry.yorum.slice(0, 500) }, WEEKLY_LIMITS).issues[0].message).toMatch(/^600-850 karakter olmalı/);
+    expect(checkSingleSign({ burc: entry }, 'aslan', WEEKLY_LIMITS).entry?.body.length).toBeGreaterThanOrEqual(600);
+    expect(checkHoroscopeBatch(mockWeeklyBatch(), ['#burç'], WEEKLY_LIMITS).entries.size).toBe(12);
+  });
+});
+
+describe('haftalık yasaklı ifadeler', () => {
+  it('yorumda tarot sözcüğü ya da çekilen kartın adı geçerse o burcu reddeder', () => {
+    const entry = mockWeeklyEntry('aslan');
+    const forbidden = () => ['tarot', 'Kupa Ası'];
+    expect(checkHoroscopeEntry(entry, WEEKLY_LIMITS, forbidden).issues).toEqual([]);
+    const leaked = { ...entry, yorum: entry.yorum.replace('Haftanın ortasında', 'Kupa ası sana diyor ki haftanın ortasında') };
+    expect(checkHoroscopeEntry(leaked, WEEKLY_LIMITS, forbidden).issues).toContainEqual({ field: 'yorum', message: 'Metinde "Kupa Ası" geçmemeli.' });
+    const tarot = { ...entry, yorum: entry.yorum.replace('Haftanın ortasında', 'Tarot falın haftanın ortasında') };
+    expect(checkHoroscopeBatch({ ...mockWeeklyBatch(), burclar: [tarot] }, ['#burç'], WEEKLY_LIMITS, forbidden).failedSigns.find((failed) => failed.sign === 'aslan')?.issues).toContainEqual({
+      field: 'yorum',
+      message: 'Metinde "tarot" geçmemeli.',
+    });
   });
 });

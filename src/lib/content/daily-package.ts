@@ -1,10 +1,21 @@
+import { isMonday } from '@/lib/astro/week';
 import type { DateKey } from '@/lib/date/istanbul';
 import { AllProvidersFailedError } from '@/lib/llm/router';
 import type { PlanItem } from '@/lib/settings/schema';
+import type { GeneratedKind } from './generation-spec';
 import { generateHoroscopeSet, type GenerationDeps, type SetResult } from './horoscope-service';
-import type { RunTrigger } from './types';
+import { AUDIENCES, type Audience, type RunTrigger } from './types';
 
-export type PackageItemResult = { item: PlanItem; result: SetResult } | { item: PlanItem; error: string };
+export type PackageItem = { kind: GeneratedKind; audience: Audience };
+export type PackageItemResult = { item: PackageItem; result: SetResult } | { item: PackageItem; error: string };
+
+// Pazartesi, plandaki her kitle için haftalık yorumlar da pakete girer.
+export function packageItemsFor(date: DateKey, plan: readonly PlanItem[]): PackageItem[] {
+  const planned = plan.map((item): PackageItem => ({ kind: item.kind, audience: item.audience }));
+  if (!isMonday(date)) return planned;
+  const audiences = AUDIENCES.filter((audience) => plan.some((item) => item.audience === audience));
+  return [...planned, ...audiences.map((audience): PackageItem => ({ kind: 'weekly', audience }))];
+}
 
 export function describeGenerationError(error: unknown): string {
   if (error instanceof AllProvidersFailedError) {
@@ -15,11 +26,17 @@ export function describeGenerationError(error: unknown): string {
 
 export async function generateDailyPackage(
   deps: GenerationDeps,
-  input: { date: DateKey; items: readonly PlanItem[]; trigger: RunTrigger; skipIfExists: boolean },
+  input: { date: DateKey; items: readonly PackageItem[]; trigger: RunTrigger; skipIfExists: boolean },
 ): Promise<PackageItemResult[]> {
   const settled = await Promise.allSettled(
     input.items.map((item) =>
-      generateHoroscopeSet(deps, { date: input.date, audience: item.audience, trigger: input.trigger, skipIfExists: input.skipIfExists }),
+      generateHoroscopeSet(deps, {
+        date: input.date,
+        audience: item.audience,
+        trigger: input.trigger,
+        skipIfExists: input.skipIfExists,
+        kind: item.kind,
+      }),
     ),
   );
   return settled.map((outcome, index) =>

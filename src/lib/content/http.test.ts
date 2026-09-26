@@ -28,6 +28,15 @@ describe('handleGenerate', () => {
     expect((await handleGenerate(post(body), deps())).status).toBe(400);
   });
 
+  it('haftalık üretim yalnızca pazartesi tarihinde kabul edilir', async () => {
+    const monday = await handleGenerate(post({ date: '2026-09-21', audience: 'kadin', kind: 'weekly' }), deps());
+    expect(monday.status).toBe(200);
+    expect(await monday.json()).toMatchObject({ status: 'created' });
+    expect((await handleGenerate(post({ date: '2026-09-22', audience: 'kadin', kind: 'weekly' }), deps())).status).toBe(400);
+    expect((await handleGenerate(post({ date: '2026-09-21', audience: 'kadin', kind: 'tarot' }), deps())).status).toBe(400);
+    expect((await handleRegenerateSign(post({ date: '2026-09-21', audience: 'kadin', sign: 'koc', kind: 'weekly' }), deps())).status).toBe(200);
+  });
+
   it('üretir, ikinci istekte atlar, force ile yeniden üretir', async () => {
     const first = await handleGenerate(post({ date: '2026-09-27', audience: 'kadin' }), deps());
     expect(first.status).toBe(200);

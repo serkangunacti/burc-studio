@@ -14,6 +14,12 @@ const longFormatter = new Intl.DateTimeFormat('tr-TR', {
   month: 'long',
   year: 'numeric',
 });
+const dayFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: TIME_ZONE,
+  day: 'numeric',
+  month: 'long',
+  weekday: 'long',
+});
 const shortFormatter = new Intl.DateTimeFormat('tr-TR', {
   timeZone: TIME_ZONE,
   day: 'numeric',
@@ -51,4 +57,12 @@ export function formatDateLongTr(key: DateKey): string {
 
 export function formatDateShortTr(key: DateKey): string {
   return shortFormatter.format(istanbulNoon(key));
+}
+
+export function formatDateWithWeekdayTr(key: DateKey): string {
+  return dayFormatter.format(istanbulNoon(key));
+}
+
+export function weekLabelTr(monday: DateKey): string {
+  return `${formatDateShortTr(monday)} – ${formatDateShortTr(addDays(monday, 6))}`;
 }
