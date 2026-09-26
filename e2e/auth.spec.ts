@@ -5,6 +5,7 @@ import { login } from './helpers';
 test('girişsiz ziyaretçi giriş sayfasına yönlenir, doğru şifreyle hedef sayfaya döner', async ({ page }) => {
   await page.goto('/ayarlar');
   await expect(page).toHaveURL(/\/giris\?next=%2Fayarlar$/);
+  await expect(page.getByRole('img', { name: 'kozmikarkan logosu' })).toBeVisible();
   await page.getByLabel('Şifre').fill('yanlis-sifre-00');
   await page.getByRole('button', { name: 'Giriş yap' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Şifre hatalı.' })).toBeVisible();

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Logo } from '@/components/brand/logo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Particles } from '@/components/ui/particles';
 import { ShineBorder } from '@/components/ui/shine-border';
@@ -19,7 +20,9 @@ export default async function LoginPage({
       <Card className="relative w-full max-w-sm overflow-hidden">
         <ShineBorder shineColor={['#c8b6e2', '#f4c2c2', '#bfd7ed']} />
         <CardHeader>
-          <CardTitle className="font-heading text-3xl">kozmikarkan</CardTitle>
+          <CardTitle className="text-3xl">
+            <Logo markSize={40} planetFill="var(--card)" />
+          </CardTitle>
           <CardDescription>Devam etmek için şifreni gir.</CardDescription>
         </CardHeader>
         <CardContent>

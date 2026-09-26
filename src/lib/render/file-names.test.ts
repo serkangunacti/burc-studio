@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SAMPLE_COVER, SAMPLE_CTA, sampleSign } from '@/remotion/fixtures';
-import { CAPTION_FILE_NAME, postBaseName, slideFileName, zipFileName } from './file-names';
+import { CAPTION_FILE_NAME, postBaseName, reelsFileName, slideFileName, zipFileName } from './file-names';
 
 describe('dosya adları', () => {
   const base = postBaseName({ date: '2026-09-26', kind: 'horoscope', audience: 'kadin' });
@@ -12,6 +12,7 @@ describe('dosya adları', () => {
     expect(slideFileName(base, 13, SAMPLE_CTA)).toBe('2026-09-26_kadin-burc_14-kapanis.jpg');
     expect(zipFileName(base)).toBe('2026-09-26_kadin-burc.zip');
     expect(CAPTION_FILE_NAME).toBe('caption.txt');
+    expect(reelsFileName(base)).toBe('2026-09-26_kadin-burc_reels.mp4');
   });
 
   it('özel ve tarot türleri kendi ekini alır', () => {

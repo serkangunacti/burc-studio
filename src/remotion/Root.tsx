@@ -1,7 +1,9 @@
 import { Composition } from 'remotion';
-import { LONGEST_BODY, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleSign } from './fixtures';
+import { LONGEST_BODY, LONGEST_SHORT, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleReels, sampleSign } from './fixtures';
+import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from './reels';
 import { FORMAT_SIZES, SLIDE_FPS, type SlideProps } from './slide-types';
 import { PastelSlide } from './templates/pastel-v1';
+import { PastelReels } from './templates/pastel-v1-reels';
 
 const SAMPLES: { id: string; props: SlideProps }[] = [
   { id: 'Kapak', props: sampleProps(SAMPLE_COVER) },
@@ -25,6 +27,24 @@ export function RemotionRoot() {
           width={FORMAT_SIZES[props.format].width}
           height={FORMAT_SIZES[props.format].height}
           defaultProps={props}
+        />
+      ))}
+      {(
+        [
+          ['Reels-Kadin', sampleReels('kadin')],
+          ['Reels-Erkek', { ...sampleReels('erkek'), variant: 3 }],
+          ['Reels-EnUzun', { ...sampleReels(), signs: sampleReels().signs.map((sign) => ({ ...sign, headline: 'Çığır açan, güçlü bir gün geçireceksin!!', short: LONGEST_SHORT })) }],
+        ] as const
+      ).map(([id, reels]) => (
+        <Composition
+          key={id}
+          id={id}
+          component={PastelReels}
+          durationInFrames={reelsDurationInFrames(reels.signs.length)}
+          fps={REELS_FPS}
+          width={REELS_SIZE.width}
+          height={REELS_SIZE.height}
+          defaultProps={reels}
         />
       ))}
     </>

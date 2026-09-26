@@ -37,3 +37,17 @@ export type SlideData = CoverSlideData | SignSlideData | CtaSlideData;
 
 // variant: gönderiye özgü zemin sırası (şablon 7'lik döngüde yorumlar); tarih, tür ve kitleden hesaplanır.
 export type SlideProps = { slide: SlideData; brand: BrandProps; format: PostFormat; variant: number };
+
+export type ReelsSign = {
+  sign: SignSlug;
+  signName: string;
+  dateRange: string;
+  element: Element;
+  headline: string;
+  short: string;
+  scores: { love: number; money: number; health: number };
+  luckyColor: { name: string; hex: string };
+  luckyNumber: number;
+};
+
+export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number };

@@ -1,4 +1,5 @@
 import { AbsoluteFill } from 'remotion';
+import { SaturnMark } from '@/lib/brand/saturn-mark';
 import type { BrandProps, CtaSlideData } from '@/remotion/slide-types';
 import { HEADING_FONT } from './fonts';
 import { AUDIENCE_INK, CARD_SHADOW, PALETTE } from './tokens';
@@ -36,8 +37,15 @@ export function CtaSlide({ slide, brand }: { slide: CtaSlideData; brand: BrandPr
           </div>
         </div>
       ))}
-      <div data-slot="handle" style={{ marginTop: 24, fontSize: 40, fontWeight: 700 }}>
-        {brand.handle ? `@${brand.handle}` : 'Yarın yeni yorumlarla buradayız'}
+      <div data-slot="handle" style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 14, fontSize: 40, fontWeight: 700 }}>
+        {brand.handle ? (
+          <>
+            <SaturnMark size={52} color={PALETTE.plum} strokeWidth={5.5} starColor={PALETTE.gold} />
+            <span>@{brand.handle}</span>
+          </>
+        ) : (
+          'Yarın yeni yorumlarla buradayız'
+        )}
       </div>
     </AbsoluteFill>
   );
