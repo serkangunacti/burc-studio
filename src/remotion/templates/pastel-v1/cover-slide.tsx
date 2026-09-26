@@ -1,4 +1,5 @@
 import { AbsoluteFill } from 'remotion';
+import { graphemeLength } from '@/lib/text/turkish';
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import type { CoverSlideData } from '@/remotion/slide-types';
 import { HEADING_FONT } from './fonts';
@@ -8,6 +9,14 @@ import { ZodiacGlyph } from './zodiac';
 const RING_RADIUS = 270;
 const GLYPH_SIZE = 60;
 const RING_BOX = RING_RADIUS * 2 + GLYPH_SIZE * 2;
+
+// Kanca en fazla 60 grafem; uzun kancalar çemberin içinde üç satırı aşmasın.
+export function hookFontSize(hook: string): number {
+  const length = graphemeLength(hook);
+  if (length <= 30) return 52;
+  if (length <= 42) return 46;
+  return 40;
+}
 
 export function CoverSlide({ slide }: { slide: CoverSlideData }) {
   const accent = AUDIENCE_ACCENTS[slide.audience];
@@ -59,7 +68,7 @@ export function CoverSlide({ slide }: { slide: CoverSlideData }) {
             </div>
           );
         })}
-        <div style={{ width: RING_RADIUS * 2 - 150, textAlign: 'center', fontFamily: HEADING_FONT, fontSize: 52, fontWeight: 500, lineHeight: 1.2 }}>
+        <div style={{ width: RING_RADIUS * 2 - 110, textAlign: 'center', fontFamily: HEADING_FONT, fontSize: hookFontSize(slide.hook), fontWeight: 500, lineHeight: 1.2 }}>
           {slide.hook}
         </div>
       </div>

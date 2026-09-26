@@ -46,6 +46,12 @@ describe('pastel@1', () => {
     expect(html(sampleProps(sampleSign(), { format: '3x4' }))).toContain('height:1440px');
   });
 
+  it('kapak cümlesi uzadıkça küçülür', () => {
+    expect(html(sampleProps({ ...SAMPLE_COVER, hook: 'Bugün yıldızlar senden yana ✨' }))).toContain('font-size:52px');
+    expect(html(sampleProps({ ...SAMPLE_COVER, hook: 'Koç dolunayı geldi, sen hazır mısın? 🌕' }))).toContain('font-size:46px');
+    expect(html(sampleProps({ ...SAMPLE_COVER, hook: 'Koç Dolunayı Geldi! Hayatında Neler Değişiyor? 🌕' }))).toContain('font-size:40px');
+  });
+
   it('çizim konumları tam piksel; kök stil sayfadan miras alınan yazı ayarlarını sabitler', () => {
     const cover = html(sampleProps(SAMPLE_COVER));
     expect(cover).not.toMatch(/(left|top):-?\d+\.\d+px/);
