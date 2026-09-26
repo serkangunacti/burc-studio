@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
-import { getPostDetail, getPostVersions, isPostId, listArchivePosts, markPostDownloaded, setPostPublished } from './repository';
+import { getPostDetail, getPostVersions, isPostId, listArchivePage, listArchivePosts, markPostDownloaded, setPostPublished } from './repository';
 
 const KEY = { date: '2026-09-26', kind: 'horoscope' as const, audience: 'kadin' as const };
 const T1 = new Date('2026-09-26T09:00:00Z');
@@ -56,6 +56,23 @@ describe('listArchivePosts', () => {
     expect(await listArchivePosts(db, { limit: 1 })).toHaveLength(1);
     await markPostDownloaded(db, older.id, T1);
     expect((await listArchivePosts(db, { status: 'indirildi', kind: 'horoscope', limit: 10 })).map((post) => post.id)).toEqual([older.id]);
+  });
+});
+
+describe('listArchivePage', () => {
+  it('sayfayı gün sınırında keser; bir günün gönderileri iki sayfaya bölünmez ve hiçbiri atlanmaz', async () => {
+    const ids: string[] = [];
+    for (const date of ['2026-09-26', '2026-09-25', '2026-09-24']) {
+      ids.push((await seedPost(db, { ...KEY, date })).id, (await seedPost(db, { ...KEY, date, audience: 'erkek' })).id);
+    }
+    const first = await listArchivePage(db, {}, 3);
+    expect(first.posts.map((post) => post.id)).toEqual(ids.slice(0, 2));
+    expect(first.nextBefore).toBe('2026-09-26');
+    const second = await listArchivePage(db, { before: first.nextBefore! }, 3);
+    expect(second.posts.map((post) => post.id)).toEqual(ids.slice(2, 4));
+    const third = await listArchivePage(db, { before: second.nextBefore! }, 3);
+    expect(third).toEqual({ posts: expect.any(Array), nextBefore: null });
+    expect(third.posts.map((post) => post.id)).toEqual(ids.slice(4, 6));
   });
 });
 

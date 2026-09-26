@@ -3,7 +3,7 @@ import { postSlides, posts, readings } from '@/db/schema';
 import type { Db } from '@/db/types';
 import type { PostRow, ReadingKey, ReadingRow, SlideRow } from '@/lib/content/repository';
 import type { ReadingAudience, ReadingKind } from '@/lib/content/types';
-import type { DateKey } from '@/lib/date/istanbul';
+import { addDays, type DateKey } from '@/lib/date/istanbul';
 
 export type PostStatus = PostRow['status'];
 export type SlideWithReading = SlideRow & { reading: ReadingRow | null };
@@ -62,6 +62,20 @@ export async function listArchivePosts(db: Db, filter: ArchiveFilter): Promise<P
     .where(and(...conditions))
     .orderBy(desc(posts.date), asc(posts.audience))
     .limit(filter.limit);
+}
+
+// Sayfa gün sınırında kesilir: sınırdaki günün gönderileri bir sonraki sayfaya bütün olarak geçer.
+// Günde en fazla 5 gönderi var; tek bir gün sayfa boyunu aşamaz.
+export async function listArchivePage(
+  db: Db,
+  filter: Omit<ArchiveFilter, 'limit'>,
+  size: number,
+): Promise<{ posts: PostRow[]; nextBefore: DateKey | null }> {
+  const rows = await listArchivePosts(db, { ...filter, limit: size + 1 });
+  if (rows.length <= size) return { posts: rows, nextBefore: null };
+  const boundary = rows[size].date;
+  const complete = rows.slice(0, size).filter((post) => post.date !== boundary);
+  return { posts: complete, nextBefore: addDays(boundary, 1) };
 }
 
 export async function markPostDownloaded(db: Db, id: string, now: Date = new Date()): Promise<PostRow | null> {

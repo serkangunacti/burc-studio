@@ -7,7 +7,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { getDb } from '@/db/client';
 import { AUDIENCE_LABELS } from '@/lib/content/types';
 import { formatDateLongTr, formatDateShortTr, isDateKey } from '@/lib/date/istanbul';
-import { listArchivePosts, type PostStatus } from '@/lib/posts/repository';
+import { listArchivePage, type PostStatus } from '@/lib/posts/repository';
 import { audienceOf, brandFromSettings, buildCoverProps } from '@/lib/posts/slide-props';
 import { STATUS_LABELS } from '@/lib/posts/summary';
 import { getSettings } from '@/lib/settings/repository';
@@ -50,13 +50,13 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
   const durum = STATUS_FILTERS.find((value) => value === params.durum);
   const once = isDateKey(params.once) ? params.once : undefined;
   const db = getDb();
-  const [settings, items] = await Promise.all([
+  const [settings, page] = await Promise.all([
     getSettings(db),
-    listArchivePosts(db, { kind: 'horoscope', audience: kitle, status: durum, before: once, limit: PAGE_SIZE }),
+    listArchivePage(db, { kind: 'horoscope', audience: kitle, status: durum, before: once }, PAGE_SIZE),
   ]);
+  const items = page.posts;
   const brand = brandFromSettings(settings);
   const dates = [...new Set(items.map((post) => post.date))];
-  const last = items.at(-1);
 
   return (
     <section className="mx-auto max-w-6xl space-y-6">
@@ -108,8 +108,8 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
           </div>
         ))
       )}
-      {items.length === PAGE_SIZE && last && (
-        <Link href={archiveHref({ kitle, durum, once: last.date })} className={buttonVariants({ variant: 'outline' })}>
+      {page.nextBefore && (
+        <Link href={archiveHref({ kitle, durum, once: page.nextBefore })} className={buttonVariants({ variant: 'outline' })}>
           Daha eski
         </Link>
       )}
