@@ -45,3 +45,8 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 !.env.example
+
+# Neon entegrasyonunun kurduğu yerel ajan skill'leri
+.agents/
+.claude/skills/
+skills-lock.json
