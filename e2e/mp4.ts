@@ -1,10 +1,11 @@
-// MP4 kutularından süreyi (mvhd) ve görüntü izinin ölçüsünü (tkhd) okur.
-export function mp4Info(bytes: Uint8Array): { durationSeconds: number; width: number; height: number } {
+// MP4 kutularından süreyi (mvhd), görüntü izinin ölçüsünü (tkhd) ve iz türlerini (hdlr) okur.
+export function mp4Info(bytes: Uint8Array): { durationSeconds: number; width: number; height: number; hasAudio: boolean } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const type = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
   let durationSeconds = 0;
   let width = 0;
   let height = 0;
+  let hasAudio = false;
   const walk = (start: number, end: number) => {
     let offset = start;
     while (offset + 8 <= end) {
@@ -18,7 +19,8 @@ export function mp4Info(bytes: Uint8Array): { durationSeconds: number; width: nu
       }
       const box = type(offset + 4);
       const body = offset + header;
-      if (box === 'moov' || box === 'trak') walk(body, offset + size);
+      if (box === 'moov' || box === 'trak' || box === 'mdia') walk(body, offset + size);
+      if (box === 'hdlr' && type(body + 8) === 'soun') hasAudio = true;
       if (box === 'mvhd') {
         const version = bytes[body];
         const timescale = view.getUint32(body + (version === 1 ? 20 : 12));
@@ -37,5 +39,5 @@ export function mp4Info(bytes: Uint8Array): { durationSeconds: number; width: nu
     }
   };
   walk(0, bytes.length);
-  return { durationSeconds, width, height };
+  return { durationSeconds, width, height, hasAudio };
 }

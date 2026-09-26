@@ -6,17 +6,21 @@ import { toast } from 'sonner';
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progress-bar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { composeAmbient, musicSeed } from '@/lib/music/compose';
+import { renderScoreToWav } from '@/lib/music/synth';
 import type { PostSummary } from '@/lib/posts/summary';
 import { canShareFiles, saveBlob } from '@/lib/render/deliver';
 import { postBaseName, reelsFileName } from '@/lib/render/file-names';
-import { checkReelsSupport, renderReelsMp4 } from '@/lib/render/render-reels';
+import { checkReelsSupport, renderReelsMp4, type ReelsSupport } from '@/lib/render/render-reels';
 import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from '@/remotion/reels';
+import { withMusic } from '@/remotion/reels-music';
 import type { ReelsProps } from '@/remotion/slide-types';
 import { getTemplate } from '@/remotion/templates';
 
 export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels: ReelsProps; blocked: boolean }) {
   const controller = useRef<AbortController | null>(null);
-  const [support, setSupport] = useState<{ ok: true } | { ok: false; reason: string } | null>(null);
+  const [support, setSupport] = useState<ReelsSupport | null>(null);
+  const [music, setMusic] = useState<{ status: 'loading' } | { status: 'ready'; src: string } | { status: 'failed' }>({ status: 'loading' });
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +38,26 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
     };
   }, []);
 
+  // Müzik gönderinin zemin varyantından tohumlanır; aynı gönderi her seferinde aynı müziği alır.
+  const seed = musicSeed(reels);
+  const seconds = durationInFrames / REELS_FPS;
+  useEffect(() => {
+    let src: string | null = null;
+    let active = true;
+    renderScoreToWav(composeAmbient(seed, seconds))
+      .then((blob) => {
+        src = URL.createObjectURL(blob);
+        if (active) setMusic({ status: 'ready', src });
+        else URL.revokeObjectURL(src);
+      })
+      .catch(() => active && setMusic({ status: 'failed' }));
+    return () => {
+      active = false;
+      if (src) URL.revokeObjectURL(src);
+    };
+  }, [seed, seconds]);
+  const musicSrc = music.status === 'ready' && support?.ok && support.music ? music.src : null;
+
   async function prepare() {
     const abort = new AbortController();
     controller.current = abort;
@@ -42,7 +66,7 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
     setFile(null);
     setProgress(0);
     try {
-      const blob = await renderReelsMp4({ templateVersion: post.templateVersion, reels, signal: abort.signal, onProgress: setProgress });
+      const blob = await renderReelsMp4({ templateVersion: post.templateVersion, reels, musicSrc, signal: abort.signal, onProgress: setProgress });
       setFile(new File([blob], reelsFileName(postBaseName(post)), { type: 'video/mp4' }));
     } catch (caught) {
       if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : 'Reels hazırlanamadı.');
@@ -66,12 +90,12 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
         <CardTitle>
           <h2>Reels videosu</h2>
         </CardTitle>
-        <CardDescription>59 sn · 1080×1920 · müziksiz. Müziği Instagram&apos;da ekleyebilirsin. Hazırlanırken sekmeyi açık tut.</CardDescription>
+        <CardDescription>59 sn · 1080×1920 · bu gönderiye özel, kodla üretilen telifsiz müzikle. Hazırlanırken sekmeyi açık tut.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Player
-          component={getTemplate(post.templateVersion).Reels}
-          inputProps={reels}
+          component={withMusic(getTemplate(post.templateVersion).Reels)}
+          inputProps={{ ...reels, musicSrc }}
           durationInFrames={durationInFrames}
           fps={REELS_FPS}
           compositionWidth={REELS_SIZE.width}
@@ -85,10 +109,14 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
             {support.reason}
           </p>
         )}
+        {support?.ok && !support.music && (
+          <p className="text-sm text-muted-foreground">Bu tarayıcı Instagram&apos;ın istediği AAC sesi kodlayamıyor; video müziksiz üretilecek.</p>
+        )}
+        {music.status === 'failed' && <p className="text-sm text-muted-foreground">Müzik hazırlanamadı; video müziksiz üretilecek.</p>}
         {blocked && <p className="text-sm text-muted-foreground">Önce değişiklikleri kaydet; video kayıtlı sürümden üretilir.</p>}
         {!file && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" disabled={running || blocked || !support?.ok} onClick={() => void prepare()}>
+            <Button type="button" disabled={running || blocked || !support?.ok || music.status === 'loading'} onClick={() => void prepare()}>
               {running ? 'Hazırlanıyor…' : "Reels'i hazırla"}
             </Button>
             {running && (

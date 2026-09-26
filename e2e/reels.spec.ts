@@ -4,7 +4,7 @@ import { istanbulDateKey } from '../src/lib/date/istanbul';
 import { freshPost, login } from './helpers';
 import { mp4Info } from './mp4';
 
-test('Reels 1080×1920, 59 saniyelik MP4 olarak üretilir ve indirilir', async ({ page }) => {
+test('Reels 1080×1920, 59 saniyelik, müzikli MP4 olarak üretilir ve indirilir', async ({ page }) => {
   test.setTimeout(600_000);
   await login(page);
   const id = await freshPost(page);
@@ -15,7 +15,7 @@ test('Reels 1080×1920, 59 saniyelik MP4 olarak üretilir ve indirilir', async (
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'MP4 indir' }).click()]);
   expect(download.suggestedFilename()).toBe(`${istanbulDateKey()}_kadin-burc_reels.mp4`);
   const info = mp4Info(new Uint8Array(await readFile(await download.path())));
-  expect(info).toMatchObject({ width: 1080, height: 1920 });
+  expect(info).toMatchObject({ width: 1080, height: 1920, hasAudio: true });
   expect(info.durationSeconds).toBeCloseTo(59, 0);
 });
 
