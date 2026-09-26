@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Db } from '@/db/types';
 import { getClientIp } from './client-ip';
 import { verifyPassword } from './password';
-import { checkLoginAllowed, clearLoginAttempts, recordFailedLogin } from './rate-limit';
+import { clearLoginAttempts, reserveLoginAttempt } from './rate-limit';
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from './session';
 
 export type LoginDeps = { db: Db; passwordHash: string | undefined; now?: Date };
@@ -10,15 +10,6 @@ export type LoginDeps = { db: Db; passwordHash: string | undefined; now?: Date }
 export async function handleLogin(request: Request, deps: LoginDeps): Promise<NextResponse> {
   const now = deps.now ?? new Date();
   const ip = getClientIp(request.headers);
-
-  const allowance = await checkLoginAllowed(deps.db, ip, now);
-  if (!allowance.allowed) {
-    const minutes = Math.ceil(allowance.retryAfterSeconds / 60);
-    return NextResponse.json(
-      { error: `Çok fazla hatalı deneme. ${minutes} dakika sonra tekrar dene.` },
-      { status: 429, headers: { 'Retry-After': String(allowance.retryAfterSeconds) } },
-    );
-  }
 
   const body: unknown = await request.json().catch(() => null);
   const password =
@@ -32,8 +23,17 @@ export async function handleLogin(request: Request, deps: LoginDeps): Promise<Ne
     return NextResponse.json({ error: 'Sunucu yapılandırması eksik.' }, { status: 503 });
   }
 
+  // Deneme, şifre kontrolünden önce atomik olarak sayılır; aksi halde paralel istekler sınırı aşar.
+  const allowance = await reserveLoginAttempt(deps.db, ip, now);
+  if (!allowance.allowed) {
+    const minutes = Math.ceil(allowance.retryAfterSeconds / 60);
+    return NextResponse.json(
+      { error: `Çok fazla hatalı deneme. ${minutes} dakika sonra tekrar dene.` },
+      { status: 429, headers: { 'Retry-After': String(allowance.retryAfterSeconds) } },
+    );
+  }
+
   if (!(await verifyPassword(password, deps.passwordHash))) {
-    await recordFailedLogin(deps.db, ip, now);
     return NextResponse.json({ error: 'Şifre hatalı.' }, { status: 401 });
   }
 

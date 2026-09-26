@@ -4,7 +4,7 @@ import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { handleLogin } from './login-handler';
 import { hashPassword } from './password';
-import { recordFailedLogin } from './rate-limit';
+import { reserveLoginAttempt } from './rate-limit';
 
 const T0 = new Date('2026-09-26T10:00:00Z');
 let db: Db;
@@ -32,7 +32,7 @@ function loginRequest(body: unknown, ip = '203.0.113.7') {
 
 describe('handleLogin', () => {
   it('doğru şifre oturum çerezi verir ve deneme sayacını temizler', async () => {
-    await recordFailedLogin(db, '203.0.113.7', T0);
+    await reserveLoginAttempt(db, '203.0.113.7', T0);
     const res = await handleLogin(loginRequest({ password: 'dogru-sifre-1234' }), { db, passwordHash: hash, now: T0 });
     expect(res.status).toBe(200);
     const cookie = res.headers.get('set-cookie') ?? '';
@@ -57,6 +57,15 @@ describe('handleLogin', () => {
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('900');
     expect(await res.json()).toEqual({ error: 'Çok fazla hatalı deneme. 15 dakika sonra tekrar dene.' });
+  });
+
+  it('paralel yanlış denemelerde en fazla 5 tanesi şifre kontrolüne ulaşır', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => handleLogin(loginRequest({ password: 'yanlis-sifre-00' }), { db, passwordHash: hash, now: T0 })),
+    );
+    const statuses = results.map((res) => res.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(5);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(5);
   });
 
   it('APP_PASSWORD_HASH yoksa 503 döner ve kimseyi içeri almaz', async () => {
