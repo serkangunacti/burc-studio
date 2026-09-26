@@ -101,3 +101,18 @@ describe('haftalık sınırlar', () => {
     expect(checkHoroscopeBatch(mockWeeklyBatch(), ['#burç'], WEEKLY_LIMITS).entries.size).toBe(12);
   });
 });
+
+describe('haftalık yasaklı ifadeler', () => {
+  it('yorumda tarot sözcüğü ya da çekilen kartın adı geçerse o burcu reddeder', () => {
+    const entry = mockWeeklyEntry('aslan');
+    const forbidden = () => ['tarot', 'Kupa Ası'];
+    expect(checkHoroscopeEntry(entry, WEEKLY_LIMITS, forbidden).issues).toEqual([]);
+    const leaked = { ...entry, yorum: entry.yorum.replace('Haftanın ortasında', 'Kupa ası sana diyor ki haftanın ortasında') };
+    expect(checkHoroscopeEntry(leaked, WEEKLY_LIMITS, forbidden).issues).toContainEqual({ field: 'yorum', message: 'Metinde "Kupa Ası" geçmemeli.' });
+    const tarot = { ...entry, yorum: entry.yorum.replace('Haftanın ortasında', 'Tarot falın haftanın ortasında') };
+    expect(checkHoroscopeBatch({ ...mockWeeklyBatch(), burclar: [tarot] }, ['#burç'], WEEKLY_LIMITS, forbidden).failedSigns.find((failed) => failed.sign === 'aslan')?.issues).toContainEqual({
+      field: 'yorum',
+      message: 'Metinde "tarot" geçmemeli.',
+    });
+  });
+});

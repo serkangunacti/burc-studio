@@ -76,4 +76,35 @@ describe('haftalık üretim', () => {
     const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' });
     expect(readings.every((row) => row.body.length >= 600)).toBe(true);
   });
+
+  it('yorumunda "tarot" geçen burcu yasaklı ifade uyarısıyla tek başına yeniden ister', async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        const text = JSON.stringify(prompt);
+        prompts.push(text);
+        const batch = mockWeeklyBatch();
+        const leaked = { ...batch.burclar[1], yorum: batch.burclar[1].yorum.replace('Haftanın ortasında', 'Tarot kartın diyor ki haftanın ortasında') };
+        const payload = text.includes('Yalnızca şu burç için yaz') ? { burc: mockWeeklyEntry('boga') } : { ...batch, burclar: batch.burclar.map((entry, index) => (index === 1 ? leaked : entry)) };
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload) }],
+          finishReason: { unified: 'stop', raw: undefined },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 1, text: 1, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      },
+    });
+    await generateHoroscopeSet(
+      { ...deps(), chain: [{ ...mock, factory: () => model }] },
+      { date: MONDAY, audience: 'erkek', trigger: 'button', skipIfExists: false, kind: 'weekly' },
+    );
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('Yalnızca şu burç için yaz: Boğa (boga)');
+    expect(prompts[1]).toContain('Metinde \\"tarot\\" geçmemeli.');
+    const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'erkek' });
+    expect(readings.some((row) => /tarot/i.test(row.body))).toBe(false);
+  });
 });

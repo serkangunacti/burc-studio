@@ -5,7 +5,7 @@ import { getTarotCard, type TarotCard } from '@/lib/tarot/deck';
 import { drawCards } from '@/lib/tarot/draw';
 import { SIGN_SLUGS, type SignSlug } from '@/lib/zodiac/signs';
 import { HOROSCOPE_PROMPT_VERSION, buildHoroscopeBatchPrompt, buildHoroscopeSignPrompt } from './horoscope-prompt';
-import { DAILY_LIMITS, WEEKLY_LIMITS, type EntryLimits, type QualityIssue } from './quality';
+import { DAILY_LIMITS, WEEKLY_LIMITS, type EntryLimits, type ForbiddenPhrases, type QualityIssue } from './quality';
 import type { Audience, RecentHeadline } from './types';
 import { WEEKLY_PROMPT_VERSION, buildWeeklyBatchPrompt, buildWeeklySignPrompt } from './weekly-prompt';
 
@@ -17,6 +17,7 @@ export type SpecContext = {
   batchPrompt(): Prompt;
   signPrompt(sign: SignSlug, issues: QualityIssue[]): Prompt;
   tarotCardId(sign: SignSlug): string | undefined;
+  forbidden?: ForbiddenPhrases;
 };
 export type GenerationSpec = {
   kind: GeneratedKind;
@@ -27,6 +28,14 @@ export type GenerationSpec = {
   validDate(date: DateKey): boolean;
   context(input: { date: DateKey; audience: Audience; recent: RecentHeadline[]; keptCards?: ReadonlyMap<SignSlug, string> }): SpecContext;
 };
+
+// Tek sözcüklük kart adlarının çoğu (Ay, Güneş, Yıldız, Güç, Adalet…) gündelik Türkçe ve gökyüzü metninde de geçer;
+// yalnızca çok sözcüklü ve kendine özgü adlar aranır.
+const DISTINCTIVE_SINGLE_NAMES = new Set(['Büyücü', 'Başrahibe', 'İmparatoriçe', 'İmparator', 'Başrahip']);
+
+function cardPhrases(card: TarotCard): string[] {
+  return ['tarot', ...(card.name.includes(' ') || DISTINCTIVE_SINGLE_NAMES.has(card.name) ? [card.name] : [])];
+}
 
 export const HOROSCOPE_SPEC: GenerationSpec = {
   kind: 'horoscope',
@@ -66,6 +75,7 @@ export const WEEKLY_SPEC: GenerationSpec = {
       batchPrompt: () => buildWeeklyBatchPrompt(input),
       signPrompt: (sign, issues) => buildWeeklySignPrompt({ ...input, sign, issues }),
       tarotCardId: (sign) => cards.get(sign)?.id,
+      forbidden: (sign) => cardPhrases(cards.get(sign)!),
     };
   },
 };

@@ -70,9 +70,9 @@ async function generateSign(router: RouterDeps, context: SpecContext, sign: Sign
   const result = await generateWithFailover(router, {
     schema: horoscopeSingleSchema,
     ...context.signPrompt(sign, issues),
-    validate: (value) => checkSingleSign(value, sign, limits).issues,
+    validate: (value) => checkSingleSign(value, sign, limits, context.forbidden).issues,
   });
-  const { entry } = checkSingleSign(result.value, sign, limits);
+  const { entry } = checkSingleSign(result.value, sign, limits, context.forbidden);
   if (!entry) throw new Error(`${getSign(sign).name} için kabul edilen yanıt doğrulanamadı`);
   return { entry, source: { providerId: result.providerId, model: result.model } };
 }
@@ -112,9 +112,9 @@ export async function generateHoroscopeSet(
     const batch = await generateWithFailover(router, {
       schema: horoscopeBatchSchema,
       ...context.batchPrompt(),
-      validate: (value) => batchIssues(checkHoroscopeBatch(value, deps.baseHashtags, spec.limits)),
+      validate: (value) => batchIssues(checkHoroscopeBatch(value, deps.baseHashtags, spec.limits, context.forbidden)),
     });
-    const check = checkHoroscopeBatch(batch.value, deps.baseHashtags, spec.limits);
+    const check = checkHoroscopeBatch(batch.value, deps.baseHashtags, spec.limits, context.forbidden);
     const post = check.post;
     if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
 
