@@ -5,6 +5,7 @@ import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import { LONGEST_BODY, SAMPLE_BRAND, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleSign } from '@/remotion/fixtures';
 import type { SlideProps } from '@/remotion/slide-types';
 import { getTemplate } from '@/remotion/templates';
+import { PastelReels } from '@/remotion/templates/pastel-v1-reels';
 import { PastelSlide } from './slide';
 import { ZODIAC_PATHS } from './zodiac';
 
@@ -74,6 +75,7 @@ describe('pastel@1', () => {
   it('12 burcun çizimi var; şablon kaydı sürümle çözülür', () => {
     expect(Object.keys(ZODIAC_PATHS).sort()).toEqual([...SIGN_SLUGS].sort());
     expect(getTemplate('pastel@1').Slide).toBe(PastelSlide);
+    expect(getTemplate('pastel@1').Reels).toBe(PastelReels);
     expect(() => getTemplate('yok@9')).toThrow('Bilinmeyen şablon: yok@9');
   });
 });

@@ -1,0 +1,62 @@
+import { Fragment } from 'react';
+import { AbsoluteFill } from 'remotion';
+import { linearTiming, TransitionSeries } from '@remotion/transitions';
+import { fade } from '@remotion/transitions/fade';
+import { INTRO_FRAMES, OUTRO_FRAMES, REELS_SIZE, SIGN_FRAMES, TRANSITION_FRAMES } from '@/remotion/reels';
+import type { ReelsProps } from '@/remotion/slide-types';
+import { BODY_FONT } from '../pastel-v1/fonts';
+import { BACKDROPS, PALETTE, backdropIndex } from '../pastel-v1/tokens';
+import { IntroScene } from './intro-scene';
+import { OutroScene } from './outro-scene';
+import { SignScene } from './sign-scene';
+
+const TIMING = linearTiming({ durationInFrames: TRANSITION_FRAMES });
+
+export function PastelReels(reels: ReelsProps) {
+  const backdrop = BACKDROPS[backdropIndex(reels.variant)];
+  return (
+    <AbsoluteFill
+      lang="tr"
+      style={{
+        width: REELS_SIZE.width,
+        height: REELS_SIZE.height,
+        overflow: 'hidden',
+        backgroundColor: PALETTE.cream,
+        color: PALETTE.plum,
+        fontFamily: BODY_FONT,
+        fontSize: 32,
+        fontStyle: 'normal',
+        fontWeight: 400,
+        lineHeight: 1.3,
+        letterSpacing: 'normal',
+        textAlign: 'left',
+      }}
+    >
+      <AbsoluteFill
+        style={{ backgroundImage: `linear-gradient(${backdrop.angle}deg, ${backdrop.from} 0%, ${PALETTE.cream} 45%, ${backdrop.to} 100%)` }}
+      />
+      <TransitionSeries>
+        <TransitionSeries.Sequence durationInFrames={INTRO_FRAMES}>
+          <IntroScene reels={reels} backdrop={backdrop} />
+        </TransitionSeries.Sequence>
+        {reels.signs.map((sign, index) => (
+          <Fragment key={sign.sign}>
+            <TransitionSeries.Transition presentation={fade()} timing={TIMING} />
+            <TransitionSeries.Sequence durationInFrames={SIGN_FRAMES}>
+              <SignScene sign={sign} index={index} total={reels.signs.length} audience={reels.audience} backdrop={backdrop} />
+            </TransitionSeries.Sequence>
+          </Fragment>
+        ))}
+        <TransitionSeries.Transition presentation={fade()} timing={TIMING} />
+        <TransitionSeries.Sequence durationInFrames={OUTRO_FRAMES}>
+          <OutroScene reels={reels} />
+        </TransitionSeries.Sequence>
+      </TransitionSeries>
+      {reels.brand.enabled && reels.brand.handle && (
+        <div style={{ position: 'absolute', left: 80, right: 80, bottom: 420, display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: 1, opacity: reels.brand.opacity }}>@{reels.brand.handle}</span>
+        </div>
+      )}
+    </AbsoluteFill>
+  );
+}
