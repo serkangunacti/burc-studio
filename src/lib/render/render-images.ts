@@ -13,6 +13,8 @@ export async function renderSlideJpeg(templateVersion: string, props: SlideProps
     inputProps: props,
     frame: 0,
     signal: signal ?? null,
+    // Tek kişilik, ticari olmayan kullanım Remotion'un ücretsiz lisansına girer (spec §12).
+    licenseKey: 'free-license',
   });
   return still.blob({ format: 'jpeg', quality: JPEG_QUALITY });
 }
