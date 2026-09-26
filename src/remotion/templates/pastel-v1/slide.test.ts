@@ -1,0 +1,54 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import { SIGN_SLUGS } from '@/lib/zodiac/signs';
+import { LONGEST_BODY, SAMPLE_BRAND, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleSign } from '@/remotion/fixtures';
+import type { SlideProps } from '@/remotion/slide-types';
+import { getTemplate } from '@/remotion/templates';
+import { PastelSlide } from './slide';
+import { ZODIAC_PATHS } from './zodiac';
+
+const html = (props: SlideProps) => renderToStaticMarkup(createElement(PastelSlide, props));
+const count = (text: string, needle: string) => text.split(needle).length - 1;
+
+describe('pastel@1', () => {
+  it('kapak tarih, kitle, kanca ve 12 burç sembolünü içerir', () => {
+    const out = html(sampleProps(SAMPLE_COVER));
+    expect(out).toContain('26 EYLÜL 2026 CUMARTESİ');
+    expect(out).toContain('KADIN');
+    expect(out).toContain(SAMPLE_COVER.hook);
+    expect(count(out, 'data-sign=')).toBe(12);
+  });
+
+  it('burç slaytı adı, tarihleri, metinleri, puanları ve şansları gösterir', () => {
+    const out = html(sampleProps(sampleSign('koc')));
+    for (const text of ['GÜNLÜK BURÇ · KADIN', '26 EYLÜL', 'Koç', '21 Mart – 19 Nisan', 'Işıltılı ve cesur bir gün', 'Lila', 'Şanslı sayı']) {
+      expect(out).toContain(text);
+    }
+    expect(count(out, 'data-sign=')).toBe(1);
+    expect(count(out, 'data-star="full"')).toBe(12);
+    expect(count(out, 'data-star="empty"')).toBe(3);
+    expect(html(sampleProps(sampleSign('oglak', 'erkek')))).toContain('GÜNLÜK BURÇ · ERKEK');
+  });
+
+  it('filigran yalnızca açık ve kullanıcı adı varken görünür; kapanışta kullanıcı adı bir kez yazılır', () => {
+    expect(html(sampleProps(sampleSign()))).toContain('@burc.studio');
+    expect(html(sampleProps(sampleSign(), { brand: { ...SAMPLE_BRAND, enabled: false } }))).not.toContain('@burc.studio');
+    expect(html(sampleProps(sampleSign(), { brand: { ...SAMPLE_BRAND, handle: null } }))).not.toContain('data-slot="watermark"');
+    expect(count(html(sampleProps(SAMPLE_CTA)), '@burc.studio')).toBe(1);
+    expect(html(sampleProps(SAMPLE_CTA, { brand: { ...SAMPLE_BRAND, handle: null } }))).toContain('Yarın yeni yorumlarla buradayız');
+  });
+
+  it('yorum uzadıkça yazı küçülür; 3:4 formatta yükseklik 1440 olur', () => {
+    expect(html(sampleProps(sampleSign()))).toContain('font-size:35px');
+    expect(html(sampleProps({ ...sampleSign('yay'), body: LONGEST_BODY }))).toContain('font-size:32px');
+    expect(html(sampleProps({ ...sampleSign(), body: 'Kısa ve net bir gün.' }))).toContain('font-size:38px');
+    expect(html(sampleProps(sampleSign(), { format: '3x4' }))).toContain('height:1440px');
+  });
+
+  it('12 burcun çizimi var; şablon kaydı sürümle çözülür', () => {
+    expect(Object.keys(ZODIAC_PATHS).sort()).toEqual([...SIGN_SLUGS].sort());
+    expect(getTemplate('pastel@1').Slide).toBe(PastelSlide);
+    expect(() => getTemplate('yok@9')).toThrow('Bilinmeyen şablon: yok@9');
+  });
+});
