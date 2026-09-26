@@ -3,7 +3,7 @@ import type { ReelsProps } from '@/remotion/slide-types';
 import { getTemplate } from '@/remotion/templates';
 import { createStallWatchdog } from './stall-watchdog';
 
-export const REELS_STALLED = 'Video üretimi bir dakikadır ilerlemiyor ve durduruldu. Sekmeyi açık tutup tekrar dene.';
+export const REELS_STALLED = 'Video üretimi bir dakikadır ilerlemiyor ve durduruldu. Sayfayı yenileyip tekrar dene.';
 const STALL_TIMEOUT_MS = 60_000;
 
 export const REELS_UNSUPPORTED = "Bu tarayıcı video üretemiyor. Bilgisayarda Chrome ya da iPhone'da Safari 26 ve üstünü kullan.";
@@ -31,10 +31,18 @@ export async function renderReelsMp4(input: {
     stalled = true;
     controller.abort();
   });
+  // Kodlayıcı beklerken renderMediaOnWeb iptal sinyaline bakmıyor; askıda kalan üretimi beklemeden bırakırız.
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      'abort',
+      () => reject(stalled ? new Error(REELS_STALLED) : new DOMException('Video üretimi iptal edildi.', 'AbortError')),
+      { once: true },
+    );
+  });
   if (input.signal?.aborted) controller.abort();
   input.signal?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
-    const result = await renderMediaOnWeb({
+    const rendering = renderMediaOnWeb({
       composition: {
         id: 'reels',
         component: template.Reels,
@@ -59,8 +67,8 @@ export async function renderReelsMp4(input: {
       },
       // Tek kişilik, ticari olmayan kullanım Remotion'un ücretsiz lisansına girer (spec §12).
       licenseKey: 'free-license',
-    });
-    return await result.getBlob();
+    }).then((result) => result.getBlob());
+    return await Promise.race([rendering, aborted]);
   } catch (error) {
     if (stalled) throw new Error(REELS_STALLED);
     throw error;
