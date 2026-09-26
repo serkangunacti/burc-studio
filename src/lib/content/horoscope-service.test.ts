@@ -97,6 +97,18 @@ describe('generateHoroscopeSet', () => {
     expect(await db.select().from(readings)).toHaveLength(0);
     expect((await db.select().from(generationRuns))[0]).toMatchObject({ status: 'failed' });
   });
+
+  it('zaman bütçesi dolarsa beklemeden durur ve çalışmayı failed işaretler', async () => {
+    const hang = new MockLanguageModelV4({
+      doGenerate: ({ abortSignal }) => new Promise<never>((_, reject) => abortSignal?.addEventListener('abort', () => reject(abortSignal.reason))),
+    });
+    const started = Date.now();
+    await expect(
+      generateHoroscopeSet({ ...deps([spec(hang)]), timeoutMs: 1_000, budgetMs: 100 }, { date: DATE, audience: 'kadin', trigger: 'button', skipIfExists: false }),
+    ).rejects.toBeInstanceOf(AllProvidersFailedError);
+    expect(Date.now() - started).toBeLessThan(800);
+    expect((await db.select().from(generationRuns))[0]).toMatchObject({ status: 'failed' });
+  });
 });
 
 describe('rotateChain', () => {

@@ -13,7 +13,8 @@ async function main() {
   const chain = resolveProviderChain([], availableProviders(env), 'ollama-local');
   console.log(`${date} için yerel üretim başlıyor (${chain[0].model})…`);
   const results = await generateDailyPackage(
-    { db, chain, baseHashtags: settings.baseHashtags, timeoutMs: 600_000 },
+    // Deneme süresi undici'nin 300 s başlık zaman aşımının, toplam bütçe STALE_RUN_MS'in (10 dk) altında kalmalı.
+    { db, chain, baseHashtags: settings.baseHashtags, timeoutMs: 290_000, budgetMs: 540_000 },
     { date, items: settings.dailyPlan, trigger: 'local', skipIfExists: true },
   );
   for (const entry of results) {

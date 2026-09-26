@@ -34,6 +34,7 @@ export type RouterDeps = {
   onAttempt: (log: AttemptLog) => Promise<void>;
   now?: () => Date;
   timeoutMs?: number;
+  deadline?: number;
 };
 
 export type StructuredRequest<T> = {
@@ -109,11 +110,13 @@ export async function generateWithFailover<T>(deps: RouterDeps, request: Structu
     }
 
     for (let attempt = 1; attempt <= ATTEMPTS_PER_PROVIDER; attempt++) {
+      const remaining = (deps.deadline ?? Infinity) - Date.now();
+      if (remaining <= 0) throw new AllProvidersFailedError(attempts);
       const started = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(
         () => controller.abort(new DOMException('Zaman aşımı', 'TimeoutError')),
-        deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, remaining),
       );
       try {
         const result = await generateObject({

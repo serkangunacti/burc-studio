@@ -13,6 +13,8 @@ import { finishRun, getProviderUsage, logLlmCall, startRun } from './runs';
 import { AUDIENCES, type Audience, type RunTrigger } from './types';
 
 export const TEMPLATE_VERSION = 'pastel@1';
+// Rotalar maxDuration = 300 s ile çalışır; kayıt ve finishRun için pay bırakılır.
+const DEFAULT_BUDGET_MS = 240_000;
 
 export type GenerationDeps = {
   db: Db;
@@ -21,6 +23,7 @@ export type GenerationDeps = {
   spreadLoad?: boolean;
   now?: () => Date;
   timeoutMs?: number;
+  budgetMs?: number;
 };
 
 export type SetResult = { status: 'created'; postId: string; providers: ProviderId[] } | { status: 'skipped' } | { status: 'busy' };
@@ -37,10 +40,11 @@ export function rotateChain<T>(chain: readonly T[], offset: number): T[] {
   return [...chain.slice(start), ...chain.slice(0, start)];
 }
 
-function routerFor(deps: GenerationDeps, runId: string, chain: readonly ProviderSpec[] = deps.chain): RouterDeps {
+function routerFor(deps: GenerationDeps, runId: string, deadline: number, chain: readonly ProviderSpec[] = deps.chain): RouterDeps {
   const now = clock(deps);
   return {
     chain,
+    deadline,
     usage: (id) => getProviderUsage(deps.db, id, now()),
     onAttempt: (log) => logLlmCall(deps.db, runId, log, now()),
     now,
@@ -89,6 +93,7 @@ export async function generateHoroscopeSet(
   deps: GenerationDeps,
   input: { date: DateKey; audience: Audience; trigger: RunTrigger; skipIfExists: boolean },
 ): Promise<SetResult> {
+  const deadline = Date.now() + (deps.budgetMs ?? DEFAULT_BUDGET_MS);
   const key = { date: input.date, kind: 'horoscope' as const, audience: input.audience };
   if (input.skipIfExists && (await getCurrentPost(deps.db, key))) return { status: 'skipped' };
   const run = await startRun(deps.db, { ...key, trigger: input.trigger }, clock(deps)());
@@ -96,7 +101,7 @@ export async function generateHoroscopeSet(
 
   return withRun(deps, run.id, async () => {
     const chain = deps.spreadLoad ? rotateChain(deps.chain, AUDIENCES.indexOf(input.audience)) : deps.chain;
-    const router = routerFor(deps, run.id, chain);
+    const router = routerFor(deps, run.id, deadline, chain);
     const promptInput: HoroscopePromptInput = {
       dateKey: input.date,
       audience: input.audience,
@@ -114,10 +119,10 @@ export async function generateHoroscopeSet(
 
     const sources = new Map<SignSlug, Source>();
     for (const sign of check.entries.keys()) sources.set(sign, { providerId: batch.providerId, model: batch.model });
-    for (const failed of check.failedSigns) {
-      const { entry, source } = await generateSign(router, promptInput, failed.sign, failed.issues);
-      check.entries.set(failed.sign, entry);
-      sources.set(failed.sign, source);
+    const retried = await Promise.all(check.failedSigns.map((failed) => generateSign(router, promptInput, failed.sign, failed.issues)));
+    for (const { entry, source } of retried) {
+      check.entries.set(entry.sign, entry);
+      sources.set(entry.sign, source);
     }
 
     const created = await deps.db.transaction(async (tx) => {
@@ -148,6 +153,7 @@ export async function regenerateSign(
   deps: GenerationDeps,
   input: { date: DateKey; audience: Audience; sign: SignSlug },
 ): Promise<SetResult | { status: 'missing' }> {
+  const deadline = Date.now() + (deps.budgetMs ?? DEFAULT_BUDGET_MS);
   const key = { date: input.date, kind: 'horoscope' as const, audience: input.audience };
   const current = await getCurrentPost(deps.db, key);
   if (!current) return { status: 'missing' };
@@ -163,7 +169,7 @@ export async function regenerateSign(
     };
     const signIndex = SIGN_SLUGS.indexOf(input.sign);
     const signSlides = current.slides.filter((slide) => slide.type === 'sign');
-    const { entry, source } = await generateSign(routerFor(deps, run.id), promptInput, input.sign, [
+    const { entry, source } = await generateSign(routerFor(deps, run.id, deadline), promptInput, input.sign, [
       { field: 'yorum', message: 'Bu burç için daha önce yazılan metinden tamamen farklı bir açı seç.' },
     ]);
     const created = await deps.db.transaction(async (tx) => {

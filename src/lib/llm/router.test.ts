@@ -144,6 +144,16 @@ describe('generateWithFailover', () => {
     expect((error as AllProvidersFailedError).attempts.map((log) => log.status)).toEqual(['server_error', 'server_error']);
   });
 
+  it('zaman bütçesi dolunca kalan sağlayıcıları denemeden hata fırlatır', async () => {
+    const a = provider('gateway', [HANG]);
+    const b = provider('gemini', [{ n: 9 }]);
+    const d = deps([a.spec, b.spec]);
+    const error = await generateWithFailover({ ...d.value, timeoutMs: 1_000, deadline: Date.now() + 80 }, request).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AllProvidersFailedError);
+    expect(b.calls()).toBe(0);
+    expect(d.logs.map((log) => log.status)).toEqual(['timeout']);
+  });
+
   it('zincir boşsa yapılandırma hatası fırlatır', async () => {
     await expect(generateWithFailover(deps([]).value, request)).rejects.toBeInstanceOf(NoProvidersConfiguredError);
   });
