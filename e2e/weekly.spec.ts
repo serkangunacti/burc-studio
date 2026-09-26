@@ -33,7 +33,7 @@ test('haftalık gönderi 14 slayt ve haftalık dosya adlarıyla indirilir; en uz
   await expect(page).not.toHaveURL(new RegExp(id));
   expect(
     await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('[data-slot="body"]')].every((element) => element.scrollHeight <= element.clientHeight + 1),
+      [...document.querySelectorAll<HTMLElement>('[data-slot="text"]')].every((element) => element.scrollHeight <= element.clientHeight + 1),
     ),
   ).toBe(true);
 

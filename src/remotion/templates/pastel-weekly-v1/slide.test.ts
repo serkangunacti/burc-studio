@@ -30,8 +30,12 @@ describe('pastel-weekly@1', () => {
     for (const text of [WEEK, 'Koç', '21 Mart – 19 Nisan', 'Işıltılı ve cesur bir gün', 'Lila', 'Şanslı sayı']) expect(out).toContain(text);
     expect(out).toContain('font-size:28px');
     expect(out).not.toContain('data-star=');
-    expect(html(sampleProps({ ...sampleSign('koc'), dateLabel: WEEK, body: LONGEST_WEEKLY_BODY.slice(0, 740) }))).toContain('font-size:30px');
-    expect(html(sampleProps({ ...sampleSign('koc'), dateLabel: WEEK, body: LONGEST_WEEKLY_BODY.slice(0, 640) }))).toContain('font-size:32px');
+  });
+
+  it('yorum uzunluğuna göre yazı büyür; başlık ve yorum kartın ortasında durur', () => {
+    const size = (length: number) => html(sampleProps({ ...sampleSign('koc'), dateLabel: WEEK, body: LONGEST_WEEKLY_BODY.slice(0, length) })).match(/data-slot="body" style="[^"]*font-size:(\d+)px/)?.[1];
+    expect([600, 690, 770, 850].map(size)).toEqual(['34', '32', '30', '28']);
+    expect(html(sampleProps({ ...sampleSign('koc'), dateLabel: WEEK }))).toMatch(/data-slot="text" style="[^"]*justify-content:center/);
   });
 
   it('filigran ve kapanış günlük şablonla aynı marka öğelerini kullanır', () => {
