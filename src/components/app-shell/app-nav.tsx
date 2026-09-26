@@ -16,7 +16,7 @@ export function AppSidebar() {
   return (
     <aside className="hidden border-r border-sidebar-border bg-sidebar p-6 md:flex md:min-h-dvh md:flex-col md:gap-8">
       <Link href="/" className="font-heading text-2xl">
-        Burç Stüdyosu
+        kozmikarkan
       </Link>
       <nav aria-label="Ana menü" className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
