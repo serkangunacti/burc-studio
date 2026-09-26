@@ -42,6 +42,13 @@ describe('pastel@1', () => {
     expect(html(sampleProps(SAMPLE_CTA, { brand: { ...SAMPLE_BRAND, handle: null } }))).toContain('Yarın yeni yorumlarla buradayız');
   });
 
+  it('filigran ve kapanıştaki kullanıcı adının yanında Satürn işareti durur', () => {
+    const sign = html(sampleProps(sampleSign()));
+    expect(count(sign, 'data-mark="saturn"')).toBe(1);
+    expect(count(html(sampleProps(SAMPLE_CTA)), 'data-mark="saturn"')).toBe(1);
+    expect(html(sampleProps(sampleSign(), { brand: { ...SAMPLE_BRAND, enabled: false } }))).not.toContain('data-mark="saturn"');
+  });
+
   it('yorum uzadıkça yazı küçülür; 3:4 formatta yükseklik 1440 olur', () => {
     expect(html(sampleProps(sampleSign()))).toContain('font-size:35px');
     expect(html(sampleProps({ ...sampleSign('yay'), body: LONGEST_BODY }))).toContain('font-size:32px');

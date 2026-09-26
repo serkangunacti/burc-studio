@@ -20,6 +20,7 @@ describe('proxy matcher', () => {
     ['/_next/image', false],
     ['/robots.txt', false],
     ['/favicon.ico', false],
+    ['/icon.svg', false],
     ['/', true],
     ['/ayarlar', true],
     ['/api/cron/daily', true],

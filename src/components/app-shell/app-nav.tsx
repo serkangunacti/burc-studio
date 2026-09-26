@@ -3,6 +3,7 @@
 import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Logo } from '@/components/brand/logo';
 import { Dock, DockIcon } from '@/components/ui/dock';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS } from './nav-items';
@@ -15,8 +16,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   return (
     <aside className="hidden border-r border-sidebar-border bg-sidebar p-6 md:flex md:min-h-dvh md:flex-col md:gap-8">
-      <Link href="/" className="font-heading text-2xl">
-        kozmikarkan
+      <Link href="/" className="text-2xl">
+        <Logo planetFill="var(--sidebar)" />
       </Link>
       <nav aria-label="Ana menü" className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
