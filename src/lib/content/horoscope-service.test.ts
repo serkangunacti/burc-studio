@@ -109,6 +109,11 @@ describe('generateHoroscopeSet', () => {
     expect(Date.now() - started).toBeLessThan(800);
     expect((await db.select().from(generationRuns))[0]).toMatchObject({ status: 'failed' });
   });
+
+  it('ayarlardaki varsayılan formatla gönderi açar', async () => {
+    await generateHoroscopeSet({ ...deps([spec(createMockModel())]), format: '3x4' }, { date: DATE, audience: 'kadin', trigger: 'button', skipIfExists: false });
+    expect((await getCurrentPost(db, KEY))?.post.format).toBe('3x4');
+  });
 });
 
 describe('rotateChain', () => {

@@ -1,3 +1,4 @@
+import type { PostFormat } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { getSkySnapshot } from '@/lib/astro/sky';
 import type { DateKey } from '@/lib/date/istanbul';
@@ -24,6 +25,7 @@ export type GenerationDeps = {
   now?: () => Date;
   timeoutMs?: number;
   budgetMs?: number;
+  format?: PostFormat;
 };
 
 export type SetResult = { status: 'created'; postId: string; providers: ProviderId[] } | { status: 'skipped' } | { status: 'busy' };
@@ -134,7 +136,7 @@ export async function generateHoroscopeSet(
       return createPostVersion(tx, {
         ...key,
         templateVersion: TEMPLATE_VERSION,
-        format: '4x5',
+        format: deps.format ?? '4x5',
         cover: { hook: post.coverHook },
         caption: post.caption,
         hashtags: post.hashtags,

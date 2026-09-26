@@ -82,6 +82,19 @@ export function GenerationSettingsForm({ initial, providers }: { initial: Settin
         )}
       </fieldset>
 
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">Varsayılan gönderi formatı</legend>
+        {[
+          ['4x5', '4:5 dikey (1080×1350)'],
+          ['3x4', '3:4 dikey (1080×1440)'],
+        ].map(([value, text]) => (
+          <label key={value} className="flex items-center gap-2 text-sm">
+            <input type="radio" name="defaultFormat" value={value} defaultChecked={initial.defaultFormat === value} className="size-4 accent-primary" />
+            {text}
+          </label>
+        ))}
+      </fieldset>
+
       <div className="grid gap-4 sm:grid-cols-2">
         {[0, 1].map((index) => (
           <div key={index} className="space-y-2">
