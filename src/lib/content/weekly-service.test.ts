@@ -70,9 +70,9 @@ describe('haftalık üretim', () => {
     });
     const scripted: ProviderSpec = { ...mock, factory: () => model };
     await generateHoroscopeSet({ ...deps(), chain: [scripted] }, { date: MONDAY, audience: 'kadin', trigger: 'button', skipIfExists: false, kind: 'weekly' });
-    expect(prompts).toHaveLength(2);
-    expect(prompts[1]).toContain('Yalnızca şu burç için yaz: Boğa (boga)');
-    expect(prompts[1]).toMatch(/600-850 karakter olmalı \(şu an \d+\)/);
+    expect(prompts).toHaveLength(4);
+    expect(prompts[3]).toContain('Yalnızca şu burç için yaz: Boğa (boga)');
+    expect(prompts[3]).toMatch(/600-850 karakter olmalı \(şu an \d+\)/);
     const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' });
     expect(readings.every((row) => row.body.length >= 600)).toBe(true);
   });
@@ -101,10 +101,69 @@ describe('haftalık üretim', () => {
       { ...deps(), chain: [{ ...mock, factory: () => model }] },
       { date: MONDAY, audience: 'erkek', trigger: 'button', skipIfExists: false, kind: 'weekly' },
     );
-    expect(prompts).toHaveLength(2);
-    expect(prompts[1]).toContain('Yalnızca şu burç için yaz: Boğa (boga)');
-    expect(prompts[1]).toContain('Metinde \\"tarot\\" geçmemeli.');
+    expect(prompts).toHaveLength(4);
+    expect(prompts[3]).toContain('Yalnızca şu burç için yaz: Boğa (boga)');
+    expect(prompts[3]).toContain('Metinde \\"tarot\\" geçmemeli.');
     const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'erkek' });
     expect(readings.some((row) => /tarot/i.test(row.body))).toBe(false);
+  });
+
+  it('haftalık paketi 4 burçluk üç ayrı istekle sırayla ister ve birleştirir', async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        prompts.push(JSON.stringify(prompt));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(mockWeeklyBatch()) }],
+          finishReason: { unified: 'stop', raw: undefined },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 1, text: 1, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      },
+    });
+    await generateHoroscopeSet(
+      { ...deps(), chain: [{ ...mock, factory: () => model }] },
+      { date: MONDAY, audience: 'kadin', trigger: 'button', skipIfExists: false, kind: 'weekly' },
+    );
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).toContain('- Koç (koc');
+    expect(prompts[0]).not.toContain('- Aslan (aslan');
+    expect(prompts[1]).toContain('- Aslan (aslan');
+    expect(prompts[2]).toContain('- Balık (balik');
+    expect(await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' })).toHaveLength(12);
+  });
+
+  it('parçadaki burçların hepsi kurala uymasa da parçayı atmaz, burçları geri bildirimle tek tek yeniden ister', async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        const text = JSON.stringify(prompt);
+        prompts.push(text);
+        const single = text.match(/Yalnızca şu burç için yaz: [^()]*\(([a-z]+)\)/)?.[1];
+        const payload = single
+          ? { burc: mockWeeklyEntry(single as never) }
+          : { ...mockWeeklyBatch(), burclar: mockWeeklyBatch().burclar.map((entry) => ({ ...entry, baslik: `${entry.baslik} ve ötesinde seni bekleyen sürprizler` })) };
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload) }],
+          finishReason: { unified: 'stop', raw: undefined },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 1, text: 1, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      },
+    });
+    const result = await generateHoroscopeSet(
+      { ...deps(), chain: [{ ...mock, factory: () => model }] },
+      { date: MONDAY, audience: 'kadin', trigger: 'button', skipIfExists: false, kind: 'weekly' },
+    );
+    expect(result.status).toBe('created');
+    expect(prompts.filter((text) => text.includes('Yalnızca şu burç için yaz'))).toHaveLength(12);
+    expect(prompts.filter((text) => !text.includes('Yalnızca şu burç için yaz'))).toHaveLength(3);
+    expect(prompts.find((text) => text.includes('Yalnızca şu burç için yaz: Koç (koc)'))).toMatch(/baslik: 3-40 karakter olmalı/);
   });
 });

@@ -1,7 +1,7 @@
 import { describeWeekSkyTr, type WeekSky } from '@/lib/astro/week';
 import type { DateKey } from '@/lib/date/istanbul';
 import type { TarotCard } from '@/lib/tarot/deck';
-import { SIGNS, getSign, type SignSlug } from '@/lib/zodiac/signs';
+import { SIGN_SLUGS, getSign, type SignSlug } from '@/lib/zodiac/signs';
 import { LUCKY_COLOR_IDS } from './lucky-colors';
 import type { QualityIssue } from './quality';
 import type { Audience, RecentHeadline } from './types';
@@ -22,8 +22,8 @@ export const WEEKLY_INSTRUCTIONS = [
   '- Kadın ve erkek okurlara yazılan yorumlar bakış açısı ve örneklerle farklılaşsın; aşağılayıcı ya da klişe cinsiyet kalıplarına başvurma; "Koç kadını" gibi kalıplarla hitap etme.',
   '',
   'Biçim kuralları:',
-  '- "baslik": en fazla 40 karakter; burcun adını başlıkta tekrarlama, kartta zaten yazıyor.',
-  '- "yorum": 600–850 karakter arası TEK paragraf; satır sonu kullanma.',
+  '- "baslik": en fazla 40 karakter (4–6 kelime); burcun adını başlıkta tekrarlama, kartta zaten yazıyor.',
+  '- "yorum": 600–850 karakter arası (yaklaşık 90–120 kelime, 6–8 cümle) TEK paragraf; satır sonu kullanma. Kısa tut: 850 karakteri aşan yorum kabul edilmez.',
   '- "kisa": en fazla 140 karakter; haftanın özü.',
   '- "puanlar": ask, para ve saglik için haftalık 1–5 arası tam sayılar.',
   `- "sansliRenk": yalnızca şu kimliklerden biri: ${LUCKY_COLOR_IDS.join(', ')}.`,
@@ -65,17 +65,20 @@ function recentSection(recent: RecentHeadline[]): string {
   return ['Geçen hafta yazdıkların (tekrar etme):', ...recent.map((item) => `- ${getSign(item.sign).name}: ${item.headline} — ${item.short}`)].join('\n');
 }
 
-export function buildWeeklyBatchPrompt(input: WeeklyPromptInput): { instructions: string; prompt: string } {
+export function buildWeeklyBatchPrompt(
+  input: WeeklyPromptInput,
+  signs: readonly SignSlug[] = SIGN_SLUGS,
+): { instructions: string; prompt: string } {
   const prompt = [
     ...contextLines(input),
     'Burçlar:',
-    ...SIGNS.map((sign) => signLine(sign.slug, input.cards)),
+    ...signs.map((sign) => signLine(sign, input.cards)),
     '',
-    recentSection(input.recent),
+    recentSection(input.recent.filter((item) => signs.includes(item.sign))),
     '',
     'Her burç için bir haftalık yorum yaz ve şu JSON biçiminde yanıt ver:',
     `{"kapakKanca": "...", "caption": "...", "hashtagler": ["#..."], "burclar": [${ENTRY_SHAPE}]}`,
-    '"burclar" dizisinde 12 burcun her biri tam bir kez, yukarıdaki sırayla ve "burc" alanında parantez içindeki kimlikle yer almalı.',
+    `"burclar" dizisinde şu ${signs.length} burcun her biri tam bir kez, yukarıdaki sırayla ve "burc" alanında parantez içindeki kimlikle yer almalı.`,
   ].join('\n');
   return { instructions: WEEKLY_INSTRUCTIONS, prompt };
 }

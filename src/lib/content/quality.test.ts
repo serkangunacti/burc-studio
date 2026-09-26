@@ -95,7 +95,7 @@ describe('haftalık sınırlar', () => {
   it('haftalık yorumu 600–850 aralığında ve en fazla 3 emojiyle kabul eder', () => {
     const entry = mockWeeklyEntry('aslan');
     expect(checkHoroscopeEntry(entry, WEEKLY_LIMITS).issues).toEqual([]);
-    expect(checkHoroscopeEntry(entry).issues).toContainEqual({ field: 'yorum', message: expect.stringMatching(/^280-420 karakter olmalı/) });
+    expect(checkHoroscopeEntry(entry).entry!.body.length).toBeLessThanOrEqual(420);
     expect(checkHoroscopeEntry({ ...entry, yorum: entry.yorum.slice(0, 500) }, WEEKLY_LIMITS).issues[0].message).toMatch(/^600-850 karakter olmalı/);
     expect(checkSingleSign({ burc: entry }, 'aslan', WEEKLY_LIMITS).entry?.body.length).toBeGreaterThanOrEqual(600);
     expect(checkHoroscopeBatch(mockWeeklyBatch(), ['#burç'], WEEKLY_LIMITS).entries.size).toBe(12);
@@ -114,5 +114,38 @@ describe('haftalık yasaklı ifadeler', () => {
       field: 'yorum',
       message: 'Metinde "tarot" geçmemeli.',
     });
+  });
+});
+
+describe('parça halinde paket', () => {
+  it('yalnızca istenen burçları değerlendirir; yarısından fazlası eksikse reddeder; gönderi alanlarını istenirse arar', () => {
+    const signs = ['koc', 'boga', 'ikizler', 'yengec'] as const;
+    const full = mockWeeklyBatch();
+    const check = checkHoroscopeBatch(full, ['#burç'], WEEKLY_LIMITS, undefined, signs);
+    expect([...check.entries.keys()]).toEqual([...signs]);
+    expect(check.failedSigns).toEqual([]);
+    const partial = checkHoroscopeBatch({ ...full, burclar: full.burclar.slice(0, 1) }, ['#burç'], WEEKLY_LIMITS, undefined, signs);
+    expect(partial.failedSigns.map((failed) => failed.sign)).toEqual(['boga', 'ikizler', 'yengec']);
+    expect(batchIssues(partial).map((issue) => issue.field)).toContain('burclar');
+    const half = checkHoroscopeBatch({ ...full, burclar: full.burclar.slice(0, 2) }, ['#burç'], WEEKLY_LIMITS, undefined, signs);
+    expect(batchIssues(half)).toEqual([]);
+    const noPost = checkHoroscopeBatch({ ...full, caption: 'x' }, ['#burç'], WEEKLY_LIMITS, undefined, signs);
+    expect(batchIssues(noPost).map((issue) => issue.field)).toContain('caption');
+    expect(batchIssues(noPost, false)).toEqual([]);
+  });
+});
+
+describe('uzun yorumun cümle sınırında kısaltılması', () => {
+  it('sınırı aşan yorumdan sondaki cümleleri çıkarır; aralığa giremiyorsa ya da cümle sınırı yoksa reddeder', () => {
+    const entry = mockWeeklyEntry('aslan');
+    const long = `${entry.yorum} Hafta sonu için küçük bir kaçamak planlamak da iyi gelebilir. Pazar akşamı kendine sakin bir film gecesi yap. Yeni haftaya dinlenmiş ve umutlu girmek için telefonunu erkenden bir kenara bırak. Sevdiğin birine içten bir mesaj yazmak da gününü güzelleştirecek.`;
+    expect(long.length).toBeGreaterThan(850);
+    const { entry: trimmed, issues } = checkHoroscopeEntry({ ...entry, yorum: long }, WEEKLY_LIMITS);
+    expect(issues).toEqual([]);
+    expect(trimmed!.body.length).toBeLessThanOrEqual(850);
+    expect(long.startsWith(trimmed!.body.replace(/[.!?…✨\s]+$/u, ''))).toBe(true);
+    expect(trimmed!.body).toMatch(/[.!?…✨]$/u);
+    const oneSentence = 'Bu hafta '.repeat(110).trim();
+    expect(checkHoroscopeEntry({ ...entry, yorum: oneSentence }, WEEKLY_LIMITS).issues[0].message).toMatch(/^600-850 karakter olmalı/);
   });
 });

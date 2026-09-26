@@ -7,7 +7,15 @@ import { generateWithFailover, type RouterDeps } from '@/lib/llm/router';
 import { SIGN_SLUGS, getSign, type SignSlug } from '@/lib/zodiac/signs';
 import { horoscopeBatchSchema, horoscopeSingleSchema } from './horoscope-schema';
 import { specFor, type GeneratedKind, type SpecContext } from './generation-spec';
-import { batchIssues, checkHoroscopeBatch, checkSingleSign, type EntryLimits, type HoroscopeEntry, type QualityIssue } from './quality';
+import {
+  batchIssues,
+  checkHoroscopeBatch,
+  checkSingleSign,
+  type EntryLimits,
+  type HoroscopeEntry,
+  type HoroscopePostFields,
+  type QualityIssue,
+} from './quality';
 import { createPostVersion, getCurrentPost, getCurrentReadings, getRecentHeadlines, saveReadings, type NewReading } from './repository';
 import { finishRun, getProviderUsage, logLlmCall, startRun } from './runs';
 import { AUDIENCES, type Audience, type RunTrigger } from './types';
@@ -32,6 +40,10 @@ type Source = { providerId: ProviderId; model: string };
 
 function clock(deps: GenerationDeps): () => Date {
   return deps.now ?? (() => new Date());
+}
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
 }
 
 export function rotateChain<T>(chain: readonly T[], offset: number): T[] {
@@ -109,20 +121,35 @@ export async function generateHoroscopeSet(
       audience: input.audience,
       recent: await getRecentHeadlines(deps.db, key, input.date, spec.recentDays),
     });
-    const batch = await generateWithFailover(router, {
-      schema: horoscopeBatchSchema,
-      ...context.batchPrompt(),
-      validate: (value) => batchIssues(checkHoroscopeBatch(value, deps.baseHashtags, spec.limits, context.forbidden)),
-    });
-    const check = checkHoroscopeBatch(batch.value, deps.baseHashtags, spec.limits, context.forbidden);
-    const post = check.post;
-    if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
-
+    const entries = new Map<SignSlug, HoroscopeEntry>();
     const sources = new Map<SignSlug, Source>();
-    for (const sign of check.entries.keys()) sources.set(sign, { providerId: batch.providerId, model: batch.model });
-    const retried = await Promise.all(check.failedSigns.map((failed) => generateSign(router, context, failed.sign, failed.issues, spec.limits)));
+    const failedSigns: { sign: SignSlug; issues: QualityIssue[] }[] = [];
+    let post: HoroscopePostFields | null = null;
+    // Parçalar sırayla istenir: ücretsiz sağlayıcıların dakikalık token sınırı paralel isteklerle hemen dolar.
+    const chunked = spec.chunkSize < SIGN_SLUGS.length;
+    for (const [index, signs] of chunk(SIGN_SLUGS, spec.chunkSize).entries()) {
+      const batch = await generateWithFailover(router, {
+        schema: horoscopeBatchSchema,
+        ...context.batchPrompt(signs),
+        // Parçalı üretimde kurala uymayan burçlar parçayı düşürmez; tek burç istemiyle geri bildirimli olarak düzeltilir.
+        validate: (value) =>
+          batchIssues(checkHoroscopeBatch(value, deps.baseHashtags, spec.limits, context.forbidden, signs), index === 0, chunked ? signs.length : undefined),
+      });
+      const check = checkHoroscopeBatch(batch.value, deps.baseHashtags, spec.limits, context.forbidden, signs);
+      if (index === 0) {
+        post = check.post;
+        if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
+      }
+      for (const [sign, entry] of check.entries) {
+        entries.set(sign, entry);
+        sources.set(sign, { providerId: batch.providerId, model: batch.model });
+      }
+      failedSigns.push(...check.failedSigns);
+    }
+    if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
+    const retried = await Promise.all(failedSigns.map((failed) => generateSign(router, context, failed.sign, failed.issues, spec.limits)));
     for (const { entry, source } of retried) {
-      check.entries.set(entry.sign, entry);
+      entries.set(entry.sign, entry);
       sources.set(entry.sign, source);
     }
 
@@ -131,7 +158,7 @@ export async function generateHoroscopeSet(
         tx,
         key,
         SIGN_SLUGS.map((sign) =>
-          toNewReading(check.entries.get(sign) as HoroscopeEntry, sources.get(sign) as Source, run.id, spec.promptVersion, context.tarotCardId(sign)),
+          toNewReading(entries.get(sign) as HoroscopeEntry, sources.get(sign) as Source, run.id, spec.promptVersion, context.tarotCardId(sign)),
         ),
       );
       return createPostVersion(tx, {

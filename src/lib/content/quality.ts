@@ -4,8 +4,6 @@ import { mergeHashtags } from './hashtags';
 import type { HoroscopeBatchRaw, HoroscopeEntryRaw, HoroscopeSingleRaw } from './horoscope-schema';
 import { LUCKY_COLOR_IDS, normalizeLuckyColor, type LuckyColorId } from './lucky-colors';
 
-export const MAX_FAILED_SIGNS = 6;
-
 export type QualityIssue = { field: string; message: string };
 export type TextLimit = { min: number; max: number; maxEmoji: number };
 export type EntryLimits = { baslik: TextLimit; yorum: TextLimit; kisa: TextLimit };
@@ -67,6 +65,20 @@ function textIssues(field: string, text: string, limits: TextLimit): QualityIssu
   return issues;
 }
 
+// Modeller karakter saymada zayıf; sınırı aşan metinden sondaki tam cümleler çıkarılır. Aralığa girmiyorsa metin olduğu gibi kalır.
+function fitToSentences(text: string, limit: TextLimit): string {
+  const trimmed = text.trim();
+  if (graphemeLength(trimmed) <= limit.max) return trimmed;
+  const sentences = trimmed.match(/[^.!?…]+[.!?…]+[^\p{L}\p{N}]*/gu) ?? [];
+  for (let count = sentences.length - 1; count > 0; count--) {
+    const candidate = sentences.slice(0, count).join('').trim();
+    const length = graphemeLength(candidate);
+    if (length < limit.min) break;
+    if (length <= limit.max) return candidate;
+  }
+  return trimmed;
+}
+
 function scoreIssues(raw: HoroscopeEntryRaw): QualityIssue[] {
   return (['ask', 'para', 'saglik'] as const).flatMap((key) => {
     const value = raw.puanlar[key];
@@ -83,12 +95,13 @@ export function checkHoroscopeEntry(
 ): { sign: SignSlug | null; entry: HoroscopeEntry | null; issues: QualityIssue[] } {
   const sign = normalizeSignName(raw.burc);
   const luckyColor = normalizeLuckyColor(raw.sansliRenk);
+  const body = fitToSentences(raw.yorum, limits.yorum);
   const issues: QualityIssue[] = [
     ...(sign ? [] : [{ field: 'burc', message: `Tanınmayan burç adı: "${raw.burc}".` }]),
     ...textIssues('baslik', raw.baslik, limits.baslik),
-    ...textIssues('yorum', raw.yorum, limits.yorum),
+    ...textIssues('yorum', body, limits.yorum),
     ...textIssues('kisa', raw.kisa, limits.kisa),
-    ...forbiddenIssues(sign, `${raw.baslik} ${raw.yorum} ${raw.kisa}`, forbidden),
+    ...forbiddenIssues(sign, `${raw.baslik} ${body} ${raw.kisa}`, forbidden),
     ...(looksTurkish(`${raw.baslik} ${raw.yorum} ${raw.kisa}`) ? [] : [{ field: 'yorum', message: 'Metin Türkçe görünmüyor.' }]),
     ...scoreIssues(raw),
     ...(luckyColor ? [] : [{ field: 'sansliRenk', message: `Şu kimliklerden biri olmalı: ${LUCKY_COLOR_IDS.join(', ')}.` }]),
@@ -103,7 +116,7 @@ export function checkHoroscopeEntry(
     entry: {
       sign,
       headline: raw.baslik.trim(),
-      body: raw.yorum.trim(),
+      body,
       short: raw.kisa.trim(),
       scores: { love: raw.puanlar.ask, money: raw.puanlar.para, health: raw.puanlar.saglik },
       luckyColor,
@@ -128,12 +141,13 @@ export function checkHoroscopeBatch(
   baseHashtags: readonly string[],
   limits: EntryLimits = DAILY_LIMITS,
   forbidden?: ForbiddenPhrases,
+  signs: readonly SignSlug[] = SIGN_SLUGS,
 ): BatchCheck {
   const entries = new Map<SignSlug, HoroscopeEntry>();
   const issuesBySign = new Map<SignSlug, QualityIssue[]>();
   for (const item of raw.burclar) {
     const { sign, entry, issues } = checkHoroscopeEntry(item, limits, forbidden);
-    if (!sign || entries.has(sign)) continue;
+    if (!sign || !signs.includes(sign) || entries.has(sign)) continue;
     if (entry) {
       entries.set(sign, entry);
       issuesBySign.delete(sign);
@@ -141,7 +155,7 @@ export function checkHoroscopeBatch(
       issuesBySign.set(sign, issues);
     }
   }
-  const failedSigns = SIGN_SLUGS.filter((sign) => !entries.has(sign)).map((sign) => ({
+  const failedSigns = signs.filter((sign) => !entries.has(sign)).map((sign) => ({
     sign,
     issues: issuesBySign.get(sign) ?? [{ field: 'burc', message: 'Bu burç yanıtta yok.' }],
   }));
@@ -157,10 +171,12 @@ export function checkHoroscopeBatch(
   return { entries, failedSigns, post, postIssues };
 }
 
-export function batchIssues(check: BatchCheck): QualityIssue[] {
+// Varsayılan olarak istenen burçların yarısından fazlası geçersizse yanıt bütünüyle reddedilir; azı tek tek yeniden istenir.
+export function batchIssues(check: BatchCheck, requirePost = true, maxFailed?: number): QualityIssue[] {
+  const requested = check.entries.size + check.failedSigns.length;
   return [
-    ...check.postIssues,
-    ...(check.failedSigns.length > MAX_FAILED_SIGNS
+    ...(requirePost ? check.postIssues : []),
+    ...(check.failedSigns.length > (maxFailed ?? Math.floor(requested / 2))
       ? [{ field: 'burclar', message: `${check.failedSigns.length} burç geçersiz ya da eksik.` }]
       : []),
   ];
