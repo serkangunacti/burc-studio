@@ -71,6 +71,8 @@ export function PostWorkspace({
       return;
     }
     if (response?.ok) {
+      // Sunucu boşlukları kırpıp hashtagleri normalleştirdi ve fark bulmadı; taslak kayıtlı sürüme döner.
+      setDraft(createDraft(source));
       toast.info('Değişiklik yok.');
       return;
     }

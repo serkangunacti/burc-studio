@@ -118,3 +118,16 @@ test('her slayt sağ üst köşesindeki butonla tek başına JPEG olarak indiril
   await page.getByLabel('Caption').fill('Kaydedilmemiş değişiklik varken tek slayt indirilemez.');
   await expect(page.getByRole('button', { name: 'Kapak slaytını indir' })).toBeDisabled();
 });
+
+test('yalnızca boşluk eklenen kayıt sürüm açmaz ve indirmeyi kilitli bırakmaz', async ({ page }) => {
+  await login(page);
+  const id = await freshPost(page);
+  await page.goto(`/gonderi/${id}`);
+  const caption = page.getByLabel('Caption');
+  await caption.fill(`${await caption.inputValue()}   `);
+  await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
+  await expect(page.getByText('Değişiklik yok.')).toBeVisible();
+  await expect(page.getByText('Kaydedilmemiş değişiklikler var.')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Kapak slaytını indir' })).toBeEnabled();
+  await expect(page).toHaveURL(new RegExp(id));
+});
