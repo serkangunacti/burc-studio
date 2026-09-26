@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AnimatedListItem } from '@/components/ui/animated-list';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
@@ -11,7 +12,7 @@ import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { AUDIENCE_LABELS, type Audience } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
 
-type Item = { kind: 'horoscope'; audience: Audience; ready: boolean };
+type Item = { kind: 'horoscope'; audience: Audience; ready: boolean; postId: string | null };
 type LogEntry = { id: number; text: string; tone: 'info' | 'success' | 'error' };
 
 const label = (audience: Audience) => `${AUDIENCE_LABELS[audience]} burç yorumları`;
@@ -67,7 +68,14 @@ export function DailyPackagePanel({ date, items }: { date: DateKey; items: Item[
           {items.map((item) => (
             <li key={item.audience} className="flex items-center justify-between rounded-xl border px-4 py-3">
               <span className="text-sm font-medium">{label(item.audience)}</span>
-              <Badge variant={item.ready ? 'secondary' : 'outline'}>{item.ready ? 'Hazır' : 'Bekliyor'}</Badge>
+              <span className="flex items-center gap-2">
+                {item.postId && (
+                  <Link href={`/gonderi/${item.postId}`} className={buttonVariants({ variant: 'link', size: 'sm' })}>
+                    Gönderiyi aç
+                  </Link>
+                )}
+                <Badge variant={item.ready ? 'secondary' : 'outline'}>{item.ready ? 'Hazır' : 'Bekliyor'}</Badge>
+              </span>
             </li>
           ))}
         </ul>
