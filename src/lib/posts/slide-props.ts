@@ -1,3 +1,4 @@
+import { weekLabelTr } from '@/lib/astro/week';
 import type { PostRow } from '@/lib/content/repository';
 import { getLuckyColor } from '@/lib/content/lucky-colors';
 import type { Audience, ReadingAudience, ReadingKind } from '@/lib/content/types';
@@ -27,12 +28,21 @@ export function brandFromSettings(settings: Settings): BrandProps {
   return { handle: settings.instagramHandle, ...settings.watermark };
 }
 
+// Haftalık gönderiler tarih yerine pazartesi–pazar aralığını taşır.
+function coverDateLabel(post: Pick<PostRow, 'date' | 'kind'>): string {
+  return upper(post.kind === 'weekly' ? weekLabelTr(post.date) : formatDateLongTr(post.date));
+}
+
+function signDateLabel(post: Pick<PostRow, 'date' | 'kind'>): string {
+  return upper(post.kind === 'weekly' ? weekLabelTr(post.date) : formatDateShortTr(post.date));
+}
+
 export function buildCoverProps(post: PostRow, brand: BrandProps): SlideProps {
   return {
     format: post.format,
     brand,
     variant: variantFor(post),
-    slide: { type: 'cover', audience: audienceOf(post), dateLabel: upper(formatDateLongTr(post.date)), hook: post.cover.hook },
+    slide: { type: 'cover', audience: audienceOf(post), dateLabel: coverDateLabel(post), hook: post.cover.hook },
   };
 }
 
@@ -54,7 +64,7 @@ export function buildSlideProps(detail: PostDetail, brand: BrandProps): SlidePro
       slide: {
         type: 'sign',
         audience,
-        dateLabel: upper(formatDateShortTr(post.date)),
+        dateLabel: signDateLabel(post),
         sign: sign.slug,
         signName: sign.name,
         dateRange: sign.dateRange,

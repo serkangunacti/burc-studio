@@ -4,6 +4,7 @@ import { getCurrentReadings } from '@/lib/content/repository';
 import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
 import { editPost, validatePostEdit } from './edit';
+import { editLimitsFor } from './edit-schema';
 import { getPostDetail, getPostVersions } from './repository';
 
 const KEY = { date: '2026-09-26', kind: 'horoscope' as const, audience: 'kadin' as const };
@@ -39,6 +40,21 @@ describe('validatePostEdit', () => {
       },
     });
     expect(validatePostEdit({ hashtags: ['###'] })).toEqual({ ok: false, errors: { hashtags: 'Hashtag yalnızca harf, rakam ve alt çizgi içerebilir.' } });
+  });
+});
+
+describe('haftalık gönderi düzenleme', () => {
+  it('haftalık yorumda 850 karaktere kadar metni kabul eder, günlükte etmez', async () => {
+    const weekly = await seedPost(db, { date: '2026-09-28', kind: 'weekly', audience: 'kadin' });
+    const edit = (body: string) => ({ signs: [{ sign: 'aslan' as const, headline: 'Başlık', body, short: 'Kısa metin' }] });
+    expect((await editPost(db, weekly.id, edit('a'.repeat(800)))).status).toBe('created');
+    expect(await editPost(db, weekly.id, edit('a'.repeat(900)))).toEqual({
+      status: 'invalid',
+      errors: { 'aslan.body': 'En fazla 850 karakter olmalı (şu an 900).' },
+    });
+    expect((await editPost(db, postId, edit('a'.repeat(800)))).status).toBe('invalid');
+    expect(editLimitsFor('weekly').body).toBe(850);
+    expect(editLimitsFor('horoscope').body).toBe(420);
   });
 });
 

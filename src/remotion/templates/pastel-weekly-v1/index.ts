@@ -1,0 +1,1 @@
+export { PastelWeeklySlide } from './slide';

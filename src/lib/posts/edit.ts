@@ -2,7 +2,7 @@ import type { Db } from '@/db/types';
 import { MAX_HASHTAGS, normalizeHashtag } from '@/lib/content/hashtags';
 import { PostConflictError, createPostVersion, getCurrentPost, saveReadings, type NewReading, type PostRow } from '@/lib/content/repository';
 import { graphemeLength } from '@/lib/text/turkish';
-import { EDIT_LIMITS, type PostEdit } from './edit-schema';
+import { EDIT_LIMITS, editLimitsFor, type EditLimits, type PostEdit } from './edit-schema';
 import { getPostDetail } from './repository';
 
 export type EditErrors = Record<string, string>;
@@ -19,11 +19,14 @@ function checkText(errors: EditErrors, field: string, value: string, max: number
   else if (length > max) errors[field] = `En fazla ${max} karakter olmalı (şu an ${length}).`;
 }
 
-export function validatePostEdit(edit: PostEdit): { ok: true; value: PostEdit } | { ok: false; errors: EditErrors } {
+export function validatePostEdit(
+  edit: PostEdit,
+  limits: EditLimits = EDIT_LIMITS,
+): { ok: true; value: PostEdit } | { ok: false; errors: EditErrors } {
   const errors: EditErrors = {};
-  if (edit.coverHook !== undefined) checkText(errors, 'coverHook', edit.coverHook, EDIT_LIMITS.coverHook);
+  if (edit.coverHook !== undefined) checkText(errors, 'coverHook', edit.coverHook, limits.coverHook);
   if (edit.caption !== undefined) {
-    checkText(errors, 'caption', edit.caption, EDIT_LIMITS.caption);
+    checkText(errors, 'caption', edit.caption, limits.caption);
     if (edit.caption.includes('#')) errors.caption = 'Caption hashtag içermemeli; hashtagleri ayrı alana yaz.';
   }
   let hashtags: string[] | undefined;
@@ -40,9 +43,9 @@ export function validatePostEdit(edit: PostEdit): { ok: true; value: PostEdit } 
     }
   }
   for (const sign of edit.signs ?? []) {
-    checkText(errors, `${sign.sign}.headline`, sign.headline, EDIT_LIMITS.headline);
-    checkText(errors, `${sign.sign}.body`, sign.body, EDIT_LIMITS.body);
-    checkText(errors, `${sign.sign}.short`, sign.short, EDIT_LIMITS.short);
+    checkText(errors, `${sign.sign}.headline`, sign.headline, limits.headline);
+    checkText(errors, `${sign.sign}.body`, sign.body, limits.body);
+    checkText(errors, `${sign.sign}.short`, sign.short, limits.short);
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
@@ -62,11 +65,11 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 }
 
 export async function editPost(db: Db, postId: string, edit: PostEdit, now: Date = new Date()): Promise<EditResult> {
-  const checked = validatePostEdit(edit);
-  if (!checked.ok) return { status: 'invalid', errors: checked.errors };
   const detail = await getPostDetail(db, postId);
   if (!detail) return { status: 'not-found' };
   const { post } = detail;
+  const checked = validatePostEdit(edit, editLimitsFor(post.kind));
+  if (!checked.ok) return { status: 'invalid', errors: checked.errors };
   const key = { date: post.date, kind: post.kind, audience: post.audience };
   const stale = async (): Promise<EditResult> => ({ status: 'stale', currentId: (await getCurrentPost(db, key))?.post.id ?? null });
   if (!post.isCurrent) return stale();

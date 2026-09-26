@@ -53,6 +53,15 @@ describe('buildSlideProps', () => {
   });
 });
 
+describe('haftalık gönderi verisi', () => {
+  it('kapak ve burç slaytlarında tarih yerine hafta aralığını yazar', async () => {
+    const post = await seedPost(db, { date: '2026-09-28', kind: 'weekly', audience: 'erkek' });
+    const props = buildSlideProps((await getPostDetail(db, post.id))!, BRAND);
+    expect(props[0].slide).toMatchObject({ type: 'cover', dateLabel: '28 EYLÜL – 4 EKİM' });
+    expect(props[1].slide).toMatchObject({ type: 'sign', dateLabel: '28 EYLÜL – 4 EKİM' });
+  });
+});
+
 describe('variantFor', () => {
   it('aynı günün gönderileri birbirinden, ardışık günler de birbirinden farklı zemin alır', () => {
     const day = (date: string, kind: 'horoscope' | 'tarot' | 'special', audience: 'kadin' | 'erkek' | 'genel') => variantFor({ date, kind, audience }) % 7;
