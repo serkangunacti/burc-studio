@@ -14,3 +14,13 @@ export function ReelsWatermark({ brand }: { brand: BrandProps }) {
     </div>
   );
 }
+
+export function ReelsHandle({ brand }: { brand: BrandProps }) {
+  if (!brand.handle) return <>Yarın yeni yorumlarla buradayız</>;
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <SaturnMark size={58} color={PALETTE.plum} strokeWidth={5.5} starColor={PALETTE.gold} />
+      <span>@{brand.handle}</span>
+    </span>
+  );
+}

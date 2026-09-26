@@ -3,6 +3,7 @@ import type { ReelsProps } from '@/remotion/slide-types';
 import { HEADING_FONT } from '../pastel-v1/fonts';
 import { AUDIENCE_INK, CARD_SHADOW, PALETTE } from '../pastel-v1/tokens';
 import { enter } from './motion';
+import { ReelsHandle } from './watermark';
 
 const ACTIONS = [
   { emoji: '🔖', title: 'Kaydet', hint: 'Yarın yeniden bakmak için' },
@@ -41,7 +42,7 @@ export function OutroScene({ reels }: { reels: ReelsProps }) {
         </div>
       ))}
       <div style={{ ...enter(frame, fps, 30), marginTop: 20, fontSize: 44, fontWeight: 700 }}>
-        {reels.brand.handle ? `@${reels.brand.handle}` : 'Yarın yeni yorumlarla buradayız'}
+        <ReelsHandle brand={reels.brand} />
       </div>
     </AbsoluteFill>
   );
