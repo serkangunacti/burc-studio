@@ -428,3 +428,24 @@ Her faz kendi ayrıntılı planıyla (writing-plans) ve TDD ile uygulanır. Her 
 1. `~/burc-studio` oluşturulur, `gh repo create burc-studio --private` çalıştırılır. Bu spec `docs/superpowers/specs/2026-09-25-burc-studio-design.md` olarak commit'lenir.
 2. `superpowers:writing-plans` ile Faz 0 ve 1 için TDD adımlı ayrıntılı plan yazılır. Sen planı inceler ve yürütme yöntemini seçersin (subagent-driven ya da inline).
 3. Fazlar sırayla uygulanır. Her faz sonunda doğrulanıp sana gösterilir.
+
+## Durum (27.09.2026)
+
+**Canlıda:**
+- **Günlük üretim:** Günlük burç ve günlük tarot, her gün kadın ve erkek için; toplam 4 gönderi.
+- **Pazartesi:** Haftalık yorumlar da eklenir; toplam 6 gönderi.
+- **Çıktılar:** Her gönderi için JPEG carousel, tek tek slayt indirme, ZIP ve paylaşım, 59 sn müzikli Reels.
+- **Sayfalar:** Arşiv (tür, kitle ve durum süzgeçleri), sürümler, düzenleme, tek burcu yeniden üretme, tarot kartlarını yeniden çekme.
+- **Marka:** kozmikarkan logosu (Satürn halkası) ve @kozmikarkan filigranı.
+
+**Spec'ten bilerek sapılanlar:**
+- **Reels müziği:** Müzik kütüphanesi ve yükleme yerine kodla üretilen, gönderiye özel telifsiz ambient müzik kullanılıyor (`src/lib/music`). Gerekçe: paylaşım ajanlara devredilecek; manuel adım ve lisans riski olmamalı.
+- **Reels süresi:** 59 sn ve 12 burç.
+- **Sağlayıcı zinciri:** Tamamen ücretsiz ve uzak API'ler: Gemini → Gemini Lite → Groq → Mistral → Cohere → OrcaRouter → OpenRouter → NVIDIA. Yerel model kullanılmaz.
+- **Tarot şeması:** Tarot, günlük burç şemasını kullanır; puan ve şans alanları üretilir ama gösterilmez.
+- **Haftalık üretim:** Haftalık yorumlar 4 burçluk üç parça hâlinde üretilir. Uzun yorumlar cümle sınırında kısaltılır.
+
+**Yapılmayan, isteğe bağlı işler:**
+- **Özel gündem (§1.6, Faz 5):** Gökyüzü takvimi, özel günler ve serbest konu.
+- **Slayt MP4'leri (§3 AnimatedSlide):** Her slaytın animasyonlu MP4 hâli.
+- **Instagram'a otomatik paylaşım:** Kapsam dışı. Hesap ajanlara bağlanacak.
