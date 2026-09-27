@@ -28,12 +28,19 @@ describe('handleGenerate', () => {
     expect((await handleGenerate(post(body), deps())).status).toBe(400);
   });
 
+  it('tarot üretir; tek burcun kartı yeniden çekilebilir', async () => {
+    expect((await handleGenerate(post({ date: TODAY, audience: 'erkek', kind: 'tarot' }), deps())).status).toBe(200);
+    const redraw = await handleRegenerateSign(post({ date: TODAY, audience: 'erkek', sign: 'koc', kind: 'tarot', redrawCard: true }), deps());
+    expect(redraw.status).toBe(200);
+    expect(await redraw.json()).toMatchObject({ status: 'created' });
+  });
+
   it('haftalık üretim yalnızca pazartesi tarihinde kabul edilir', async () => {
     const monday = await handleGenerate(post({ date: '2026-09-21', audience: 'kadin', kind: 'weekly' }), deps());
     expect(monday.status).toBe(200);
     expect(await monday.json()).toMatchObject({ status: 'created' });
     expect((await handleGenerate(post({ date: '2026-09-22', audience: 'kadin', kind: 'weekly' }), deps())).status).toBe(400);
-    expect((await handleGenerate(post({ date: '2026-09-21', audience: 'kadin', kind: 'tarot' }), deps())).status).toBe(400);
+    expect((await handleGenerate(post({ date: '2026-09-21', audience: 'kadin', kind: 'ozel' }), deps())).status).toBe(400);
     expect((await handleRegenerateSign(post({ date: '2026-09-21', audience: 'kadin', sign: 'koc', kind: 'weekly' }), deps())).status).toBe(200);
   });
 

@@ -198,7 +198,7 @@ export async function generateHoroscopeSet(
 
 export async function regenerateSign(
   deps: GenerationDeps,
-  input: { date: DateKey; audience: Audience; sign: SignSlug; kind?: GeneratedKind },
+  input: { date: DateKey; audience: Audience; sign: SignSlug; kind?: GeneratedKind; redrawCard?: boolean },
 ): Promise<SetResult | { status: 'missing' }> {
   const spec = specFor(input.kind ?? 'horoscope');
   const deadline = Date.now() + (deps.budgetMs ?? DEFAULT_BUDGET_MS);
@@ -210,7 +210,10 @@ export async function regenerateSign(
 
   return withRun(deps, run.id, async () => {
     const keptCards = new Map(
-      (await getCurrentReadings(deps.db, key)).flatMap((row) => (row.meta.tarotCardId ? [[row.sign, row.meta.tarotCardId] as const] : [])),
+      (await getCurrentReadings(deps.db, key)).flatMap((row) =>
+        // Kart yeniden çekilecekse hedef burcun kartı bırakılır; yenisi diğer 11 kartın dışından çekilir.
+        row.meta.tarotCardId && !(input.redrawCard && row.sign === input.sign) ? [[row.sign, row.meta.tarotCardId] as const] : [],
+      ),
     );
     const context = spec.context({
       date: input.date,
