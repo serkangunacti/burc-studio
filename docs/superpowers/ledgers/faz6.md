@@ -1,3 +1,6 @@
 Task 1: Ruling: Hobby Blob ayda 2.000 yükleme işlemiyle sınırlı (aşılırsa 30 gün kilit); günde ~80 JPEG bunu aşar — JPEG'ler Neon'da (media_files, bytea) tutulur ve /api/media ile sunulur, Blob yalnız Reels MP4 (ayda ~150 işlem) — maliyet: Neon'da en fazla ~3 günlük görsel (~60 MB), bakım cron'u siler
 Task 1: Ruling: carousel parçaları sondan başa paylaşılır (3/3 08:30, 2/3 08:33, 1/3 08:36) — profil ve akışta en üstte Koç–Yengeç parçası görünsün — maliyet: yok
 Task 1: pastel@1 kapağına isteğe bağlı partLabel eklendi; alan yokken çıktı aynı (render-chain altın hash'leri değişmedi), yalnız dosya hash'i dondurma manifestinde güncellendi
+Task 5: Ruling: kuyruk tüketicisi planlanan saatten önce gelen teslimi saatine erteler — sahte ya da erken teslim erken paylaşım yaptıramaz — maliyet: yok
+Task 5: Ruling: Instagram/Telegram anahtarları env yerine Ayarlar'dan girilir, INTEGRATIONS_KEY ile AES-GCM şifreli (integrations tablosu); Instagram anahtarı bakım cron'unda 20 gün kala yenilenir — maliyet: INTEGRATIONS_KEY kaybolursa anahtarlar yeniden girilir
+Task 6: minor (deferred): E2E generate.spec ilk testi ~%50 kararsız (main'de de) — PGlite soket sunucusu tek motor; paralel 4 üretimden biri takılıyor. Canlı Neon'da paralel üretimler 47–52 sn'de başarılı (generation_runs, 26–27.09)

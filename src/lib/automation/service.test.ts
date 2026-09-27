@@ -49,7 +49,7 @@ function harness(db: Db, now: Date) {
     const response = instagram(url.pathname, params);
     return Response.json(response.body, { status: response.status ?? 200 });
   });
-  const enqueue = vi.fn(async () => undefined);
+  const enqueue = vi.fn<AutomationDeps['enqueue']>(async () => undefined);
   const deps: AutomationDeps = {
     db,
     appUrl: 'https://app.test',

@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { getDb } from '@/db/client';
+import { getIntegration } from '@/lib/automation/repository';
 import { getUsageSummary } from '@/lib/content/runs';
 import { availableProviders } from '@/lib/llm/providers';
 import { getSettings } from '@/lib/settings/repository';
+import { AutomationSettingsForm } from './automation-form';
+import { Connections } from './connections';
 import { GenerationSettingsForm } from './generation-form';
 import { SettingsForm } from './settings-form';
 import { UsageTable } from './usage-table';
@@ -13,7 +16,12 @@ export const metadata: Metadata = { title: 'Ayarlar' };
 export default async function SettingsPage() {
   await connection();
   const db = getDb();
-  const [settings, usage] = await Promise.all([getSettings(db), getUsageSummary(db, 7)]);
+  const [settings, usage, telegram, instagram] = await Promise.all([
+    getSettings(db),
+    getUsageSummary(db, 7),
+    getIntegration(db, 'telegram'),
+    getIntegration(db, 'instagram'),
+  ]);
   const providers = availableProviders(process.env).map(({ id, label, model, dailyCap }) => ({ id, label, model, dailyCap }));
   return (
     <section className="mx-auto max-w-4xl space-y-12">
@@ -25,6 +33,16 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         <h2 className="font-heading text-2xl">İçerik üretimi</h2>
         <GenerationSettingsForm initial={settings} providers={providers} />
+      </div>
+      <div className="space-y-6">
+        <h2 className="font-heading text-2xl">Otomatik paylaşım</h2>
+        <Connections
+          status={{
+            telegram: telegram && { username: telegram.account.username, chatLinked: settings.automation.telegramChatId !== null },
+            instagram: instagram && { username: instagram.account.username, expiresAt: instagram.expiresAt?.toISOString() ?? null },
+          }}
+        />
+        <AutomationSettingsForm initial={settings.automation} />
       </div>
       <div className="space-y-4">
         <h2 className="font-heading text-2xl">Sağlayıcı kullanımı</h2>

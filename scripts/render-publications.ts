@@ -3,6 +3,7 @@ import { put } from '@vercel/blob';
 import { closeDb, getDb } from '../src/db/client';
 import { missingPosts, renderDay } from '../src/lib/automation/render-job';
 import { isDateKey, istanbulDateKey } from '../src/lib/date/istanbul';
+import { getSettings } from '../src/lib/settings/repository';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 
@@ -31,6 +32,11 @@ async function main() {
   const date = values.date ?? istanbulDateKey();
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
   const db = getDb();
+  if (!(await getSettings(db)).automation.enabled) {
+    log('Otomatik paylaşım kapalı; bugün hazırlık yapılmadı.');
+    await closeDb();
+    return;
+  }
 
   // Günlük üretim cron'u ±1 saat oynayabilir; gönderiler tamamlanana kadar beklenir.
   const deadline = Date.now() + Number(values['wait-minutes']) * 60_000;

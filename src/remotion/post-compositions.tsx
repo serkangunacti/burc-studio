@@ -1,6 +1,6 @@
+import { Audio } from '@remotion/media';
 import { staticFile, type CalculateMetadataFunction } from 'remotion';
 import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from './reels';
-import { withMusic } from './reels-music';
 import { FORMAT_SIZES, SLIDE_FPS, type ReelsProps, type SlideProps } from './slide-types';
 import { getTemplate } from './templates';
 
@@ -14,8 +14,13 @@ export function PostSlide({ templateVersion, props }: PostSlideProps) {
 }
 
 export function PostReels({ templateVersion, reels, musicFile }: PostReelsProps) {
-  const Reels = withMusic(getTemplate(templateVersion).Reels);
-  return <Reels {...reels} musicSrc={musicFile ? staticFile(musicFile) : null} />;
+  const { Reels } = getTemplate(templateVersion);
+  return (
+    <>
+      <Reels {...reels} />
+      {musicFile && <Audio src={staticFile(musicFile)} />}
+    </>
+  );
 }
 
 export const postSlideMetadata: CalculateMetadataFunction<PostSlideProps> = ({ props }) => ({
