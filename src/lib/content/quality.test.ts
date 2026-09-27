@@ -149,3 +149,25 @@ describe('uzun yorumun cümle sınırında kısaltılması', () => {
     expect(checkHoroscopeEntry({ ...entry, yorum: oneSentence }, WEEKLY_LIMITS).issues[0].message).toMatch(/^600-850 karakter olmalı/);
   });
 });
+
+describe('cümle sınırı tespiti', () => {
+  it('sıra sayısı, saat ve ondalıktaki noktayı cümle sonu saymaz; açılış tırnağını önceki cümleye katmaz', () => {
+    const entry = mockWeeklyEntry('aslan');
+    const head = entry.yorum.replace(/ ✨$/, '.');
+    const ordinal = `${head} Çarşamba günü Güneş 7. evini aydınlatırken saat 20.00 sularında içindeki sesi dinle, sevdiklerinle uzun bir sohbete otur, ertelediğin küçük işleri tek tek bitir, evini biraz toparla ve hafta sonuna doğru kendine yepyeni, heyecan verici bir hedef koy.`;
+    expect(ordinal.length).toBeGreaterThan(850);
+    const fitted = checkHoroscopeEntry({ ...entry, yorum: ordinal }, WEEKLY_LIMITS).entry!.body;
+    expect(fitted.endsWith('7.')).toBe(false);
+    expect(fitted).toBe(head);
+    const quote = `${head} Hafta sonu kendine şunu söyle: "Kendine inan." Bu cümle sana güç verecek, sevdiklerinle geçireceğin zaman da seni besleyecek ve pazar akşamı sakin ve uzun bir yürüyüşle zihnini güzelce toparlayıp yeni haftaya hazır, umutlu ve enerjik başlayacaksın.`;
+    expect(quote.length).toBeGreaterThan(850);
+    expect(checkHoroscopeEntry({ ...entry, yorum: quote }, WEEKLY_LIMITS).entry!.body.endsWith('"')).toBe(false);
+  });
+});
+
+describe('yasaklı ifadenin alanı', () => {
+  it('kart adı başlıktaysa uyarı başlık alanına verilir', () => {
+    const entry = { ...mockWeeklyEntry('aslan'), baslik: 'Kupa Ası haftası' };
+    expect(checkHoroscopeEntry(entry, WEEKLY_LIMITS, () => ['Kupa Ası']).issues).toContainEqual({ field: 'baslik', message: 'Metinde "Kupa Ası" geçmemeli.' });
+  });
+});

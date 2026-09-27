@@ -35,8 +35,12 @@ function scaleSemitones(degree: number): number {
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
-export function musicSeed(reels: { variant: number; audience: 'kadin' | 'erkek' }): number {
-  return reels.variant * 2 + (reels.audience === 'erkek' ? 1 : 0);
+// Gönderiye özgü tohum: aynı gönderi hep aynı müziği alır. Zemin varyantı tek başına yetmez
+// (pazar günlük ile pazartesi haftalık aynı varyanta denk gelir); tarih etiketi de karışır.
+export function musicSeed(reels: { variant: number; audience: 'kadin' | 'erkek'; dateLabel: string }): number {
+  let hash = 0x811c9dc5;
+  for (const char of `${reels.dateLabel}|${reels.audience}|${reels.variant}`) hash = Math.imul(hash ^ char.codePointAt(0)!, 0x01000193) >>> 0;
+  return hash;
 }
 
 export function composeAmbient(seed: number, durationSeconds: number): Score {

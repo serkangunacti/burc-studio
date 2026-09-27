@@ -37,8 +37,12 @@ describe('composeAmbient', () => {
     }
   });
 
-  it('tohum gönderinin zemin varyantından ve kitlesinden gelir', () => {
-    expect(musicSeed({ variant: 20722, audience: 'kadin' })).not.toBe(musicSeed({ variant: 20722, audience: 'erkek' }));
-    expect(musicSeed({ variant: 20722, audience: 'kadin' })).toBe(musicSeed({ variant: 20722, audience: 'kadin' }));
+  it('tohum gönderiye özgüdür: kitle, tarih etiketi ve zemin varyantı ayırt eder', () => {
+    const daily = { variant: 20724, audience: 'kadin' as const, dateLabel: '27 EYLÜL 2026 PAZAR' };
+    expect(musicSeed(daily)).toBe(musicSeed({ ...daily }));
+    expect(musicSeed(daily)).not.toBe(musicSeed({ ...daily, audience: 'erkek' }));
+    expect(musicSeed(daily)).not.toBe(musicSeed({ ...daily, variant: 20725 }));
+    // Pazar günlük ile pazartesi haftalık aynı zemin varyantına denk gelir; müzikleri yine farklı olmalı.
+    expect(musicSeed(daily)).not.toBe(musicSeed({ ...daily, dateLabel: '28 EYLÜL – 4 EKİM' }));
   });
 });

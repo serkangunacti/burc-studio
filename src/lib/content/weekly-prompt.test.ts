@@ -30,6 +30,7 @@ describe('haftalık prompt', () => {
     expect(prompt).toContain('- Akrep (akrep');
     expect(prompt).not.toContain('- Koç (koc');
     expect(prompt).toContain('"burclar" dizisinde şu 4 burcun her biri tam bir kez');
+    expect(prompt).toContain('"kapakKanca" ve "caption" 12 burcun tamamını kapsayan haftalık gönderi içindir');
   });
 
   it('tek burç promptu yalnızca o burcu ve kartını ister', () => {
