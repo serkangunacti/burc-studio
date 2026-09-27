@@ -71,4 +71,14 @@ describe('paylaşım planı', () => {
   it('eksik gönderi için satır üretmez', () => {
     expect(planPublications('2026-09-29', [DAILY[1]], automation).every((item) => item.postId === 'he')).toBe(true);
   });
+
+  it('TikTok açıksa her gönderinin Reels videosunu aynı saat ve açıklamayla TikTok için de planlar', () => {
+    const plan = planPublications('2026-09-29', DAILY, { ...automation, tiktok: { enabled: true } });
+    expect(plan).toHaveLength(20);
+    const tiktok = plan.filter((item) => item.format === 'tiktok');
+    const reels = plan.filter((item) => item.format === 'reels');
+    expect(tiktok.map(({ postId, part, scheduledAt, caption }) => ({ postId, part, scheduledAt, caption }))).toEqual(
+      reels.map(({ postId, part, scheduledAt, caption }) => ({ postId, part, scheduledAt, caption })),
+    );
+  });
 });

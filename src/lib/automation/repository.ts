@@ -131,12 +131,17 @@ export async function claimForPublishing(db: Db, id: string, now = new Date()): 
   return row ?? null;
 }
 
-// Instagram videoyu işlerken satır onaya geri bırakılır; kuyruğun sonraki teslimi aynı container ile sürer.
-export async function releaseForRetry(db: Db, id: string, igContainerId: string | null): Promise<void> {
-  await db.update(publications).set({ status: 'approved', igContainerId, updatedAt: new Date() }).where(eq(publications.id, id));
+// Instagram ya da TikTok medyayı işlerken satır onaya geri bırakılır; kuyruğun sonraki teslimi kayıtlı kimlikle sürer.
+export async function releaseForRetry(db: Db, id: string): Promise<void> {
+  await db.update(publications).set({ status: 'approved', updatedAt: new Date() }).where(eq(publications.id, id));
 }
 
-export async function markPublished(db: Db, id: string, result: { igContainerId: string; igMediaId: string | null; permalink: string | null }, now = new Date()) {
+export async function markPublished(
+  db: Db,
+  id: string,
+  result: { igContainerId?: string; igMediaId?: string | null; remoteId?: string; permalink: string | null },
+  now = new Date(),
+) {
   await db
     .update(publications)
     .set({ status: 'published', ...result, error: null, publishedAt: now, updatedAt: now })
@@ -182,6 +187,11 @@ export async function saveIntegration(db: Db, values: Omit<IntegrationRow, 'upda
     .insert(integrations)
     .values({ ...values, updatedAt: now })
     .onConflictDoUpdate({ target: integrations.id, set: { ...values, updatedAt: now } });
+}
+
+// TikTok gönderisi Buffer'da oluşturulur oluşturulmaz kimliği yazılır; yarıda kalan deneme ikinci gönderi açmasın.
+export async function setRemoteId(db: Db, id: string, remoteId: string): Promise<void> {
+  await db.update(publications).set({ remoteId, updatedAt: new Date() }).where(eq(publications.id, id));
 }
 
 // Instagram carousel parçası gönderilmeden önce container kimliği yazılır; yarıda kalan deneme yeniden paylaşmasın.

@@ -4,6 +4,8 @@ import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
 import { missingPosts, renderDay, type Renderers } from './render-job';
 import { approveDay, listPublications } from './repository';
+import { saveSettings } from '@/lib/settings/repository';
+import { DEFAULT_SETTINGS } from '@/lib/settings/schema';
 
 const DATE = '2026-09-29';
 let db: Db;
@@ -67,5 +69,30 @@ describe('günün render işi', () => {
     const result = await renderDay(db, DATE, renderers);
     expect(result.failures).toEqual(['horoscope-kadin: kodlayıcı çöktü']);
     expect(result.rendered).toHaveLength(7);
+  });
+
+  it('TikTok, Reels videosunu yeniden çizmeden kullanır; sonradan açılınca mevcut videoyu alır', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    await saveSettings(db, { automation: { ...DEFAULT_SETTINGS.automation, tiktok: { enabled: true } } });
+    const renderers = fakeRenderers();
+    await renderDay(db, DATE, renderers);
+    expect(renderers.videos).toHaveBeenCalledTimes(1);
+    const rows = await listPublications(db, DATE);
+    const url = `https://blob.example/${DATE}-horoscope-kadin.mp4`;
+    expect(rows.filter((row) => row.format !== 'carousel').map((row) => [row.format, row.media.videoUrl])).toEqual([
+      ['reels', url],
+      ['tiktok', url],
+    ]);
+  });
+
+  it('TikTok sonradan açılırsa yalnız TikTok satırını ekler, videoyu yeniden çizmez', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    await renderDay(db, DATE, fakeRenderers());
+    await saveSettings(db, { automation: { ...DEFAULT_SETTINGS.automation, tiktok: { enabled: true } } });
+    const renderers = fakeRenderers();
+    const result = await renderDay(db, DATE, renderers);
+    expect(result.rendered).toEqual(['horoscope-kadin-tiktok-0']);
+    expect(renderers.videos).not.toHaveBeenCalled();
+    expect(renderers.stills).not.toHaveBeenCalled();
   });
 });

@@ -62,6 +62,7 @@ export function planPublications(date: DateKey, posts: readonly PlannablePost[],
         caption: `${partHeading(part)}\n\n${caption}`,
       }),
     );
-    return [...carousels, { ...base, format: 'reels', part: 0, scheduledAt: istanbulInstant(date, slot.reels), caption }];
+    const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, slot.reels), caption };
+    return [...carousels, { ...video, format: 'reels' }, ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const }] : [])];
   });
 }

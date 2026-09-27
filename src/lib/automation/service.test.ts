@@ -10,6 +10,7 @@ import { approveDay, getIntegration, getPublication, listPublications, saveInteg
 import { encryptSecret, telegramWebhookSecret } from './secrets';
 import {
   automationStatus,
+  connectBuffer,
   connectInstagram,
   connectTelegram,
   describeStatus,
@@ -25,7 +26,7 @@ const DATE = '2026-09-29';
 const KEY = randomBytes(32).toString('base64');
 const CHAT = 5550001;
 
-type Call = { host: 'telegram' | 'instagram'; path: string; params: Record<string, unknown> };
+type Call = { host: 'telegram' | 'instagram' | 'buffer'; path: string; params: Record<string, unknown> };
 
 function harness(db: Db, now: Date) {
   const calls: Call[] = [];
@@ -35,6 +36,13 @@ function harness(db: Db, now: Date) {
     if (params.fields === 'status_code') return { body: { status_code: 'FINISHED' } };
     if (params.fields === 'permalink') return { body: { permalink: 'https://www.instagram.com/p/abc/' } };
     return { body: {} };
+  });
+  const buffer = vi.fn((query: string): unknown => {
+    if (query.includes('createPost')) return { data: { createPost: { post: { id: 'buf-1' } } } };
+    if (query.includes('account')) return { data: { account: { organizations: [{ id: 'org' }] } } };
+    if (query.includes('channels(')) return { data: { channels: [{ id: 'tt-1', name: 'kozmikarkan', displayName: null, service: 'tiktok' }] } };
+    if (query.includes('channel(')) return { data: { channel: { id: 'tt-1', name: 'kozmikarkan', displayName: null, isQueuePaused: false } } };
+    return { data: { post: { id: 'buf-1', status: 'sent', externalLink: 'https://www.tiktok.com/@kozmikarkan/video/9', error: null } } };
   });
   const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -51,6 +59,11 @@ function harness(db: Db, now: Date) {
               ? { url: 'https://app.test/api/telegram/webhook', pending_update_count: 0 }
               : true;
       return Response.json({ ok: true, result });
+    }
+    if (url.host === 'api.buffer.com') {
+      const payload = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+      calls.push({ host: 'buffer', path: payload.query.match(/(createPost|post|channels|channel|account)\b/)?.[1] ?? '', params: payload.variables });
+      return Response.json(buffer(payload.query));
     }
     const params = Object.fromEntries(init?.body instanceof URLSearchParams ? init.body : url.searchParams);
     delete params.access_token;
@@ -69,7 +82,7 @@ function harness(db: Db, now: Date) {
     enqueue,
     deleteVideosBefore: vi.fn(async () => 2),
   };
-  return { deps, calls, instagram, enqueue, telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
+  return { deps, calls, instagram, buffer, enqueue, bufferCalls: () => calls.filter((call) => call.host === 'buffer'), telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
 }
 
 async function connectAll(db: Db) {
@@ -283,6 +296,7 @@ describe('durum', () => {
     expect(status).toEqual({
       telegram: { username: 'kozmikarkan_bot', chatLinked: true, webhookOk: true, pendingUpdates: 0, lastError: null },
       instagram: { username: 'kozmikarkan', expiresAt: '2026-11-20T00:00:00.000Z', publishing: { ok: true, used: 3, total: 100 } },
+      tiktok: null,
     });
     expect(igCalls()[0]).toMatchObject({ path: '/v25.0/1784/content_publishing_limit', params: { fields: 'quota_usage,config' } });
     expect(describeStatus(status)).toContain('Paylaşım izni ✅ · son 24 saatte 3/100 paylaşım');
@@ -290,5 +304,65 @@ describe('durum', () => {
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Insufficient permission', code: 10 } } }));
     await handleTelegramUpdate(deps, { message: { chat: { id: CHAT }, text: '/durum' } });
     expect(String(telegramCalls().at(-1)?.params.text)).toContain('Paylaşım izni ❌ Insufficient permission');
+  });
+});
+
+describe('TikTok (Buffer)', () => {
+  async function seedTikTokDay() {
+    await connectAll(db);
+    const { deps } = harness(db, new Date('2026-09-29T00:00:00Z'));
+    expect(await connectBuffer(deps, 'BUFFER-KEY')).toEqual({ channel: 'kozmikarkan' });
+    const post = await seedPost(db, { date: DATE, kind: 'tarot', audience: 'erkek' });
+    const settings = await getSettings(db);
+    for (const item of planPublications(DATE, [post], settings.automation).filter((entry) => entry.format !== 'carousel')) {
+      await savePublication(db, DATE, item, { videoUrl: 'https://blob.test/r.mp4' });
+    }
+    await approveDay(db, DATE);
+    return (await listPublications(db, DATE)).find((row) => row.format === 'tiktok')!;
+  }
+
+  it('bağlanınca TikTok kanalını kaydeder, anahtarı şifreler ve TikTok paylaşımını açar', async () => {
+    const tiktok = await seedTikTokDay();
+    expect(tiktok.scheduledAt.toISOString()).toBe('2026-09-29T19:00:00.000Z');
+    expect(await getIntegration(db, 'buffer')).toMatchObject({ account: { id: 'tt-1', username: 'kozmikarkan' } });
+    expect((await getIntegration(db, 'buffer'))?.secretEncrypted).not.toContain('BUFFER-KEY');
+    expect((await getSettings(db)).automation.tiktok.enabled).toBe(true);
+  });
+
+  it('saatinde videoyu Buffer ile hemen paylaşır; işlenirken bekler, gönderilince bağlantıyı kaydeder ve bir kez paylaşır', async () => {
+    const tiktok = await seedTikTokDay();
+    const { deps, buffer, bufferCalls } = harness(db, new Date('2026-09-29T19:00:05Z'));
+    buffer
+      .mockImplementationOnce(() => ({ data: { createPost: { post: { id: 'buf-1' } } } }))
+      .mockImplementationOnce(() => ({ data: { post: { id: 'buf-1', status: 'sending', externalLink: null, error: null } } }));
+    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 60 });
+    expect(bufferCalls()[0].params).toMatchObject({
+      input: { channelId: 'tt-1', text: tiktok.caption, mode: 'shareNow', assets: [{ video: { url: 'https://blob.test/r.mp4' } }] },
+    });
+    expect(await getPublication(db, tiktok.id)).toMatchObject({ status: 'approved', remoteId: 'buf-1' });
+
+    expect(await publishPublication(deps, tiktok.id)).toBe('published');
+    expect(bufferCalls().filter((call) => call.path === 'createPost')).toHaveLength(1);
+    expect(await getPublication(db, tiktok.id)).toMatchObject({ status: 'published', permalink: 'https://www.tiktok.com/@kozmikarkan/video/9' });
+    expect(await publishPublication(deps, tiktok.id)).toBe('ignored');
+  });
+
+  it('Buffer hata bildirirse paylaşımı başarısız yapar ve uyarır', async () => {
+    const tiktok = await seedTikTokDay();
+    const { deps, buffer, telegramCalls } = harness(db, new Date('2026-09-29T19:00:05Z'));
+    buffer
+      .mockImplementationOnce(() => ({ data: { createPost: { post: { id: 'buf-1' } } } }))
+      .mockImplementationOnce(() => ({ data: { post: { id: 'buf-1', status: 'error', externalLink: null, error: { message: 'Video could not be fetched' } } } }));
+    expect(await publishPublication(deps, tiktok.id)).toBe('failed');
+    expect((await getPublication(db, tiktok.id))?.error).toBe('TikTok (Buffer): Video could not be fetched');
+    expect(telegramCalls().some((call) => String(call.params.text).includes('❌ Paylaşılamadı · Erkek tarot TikTok'))).toBe(true);
+  });
+
+  it('durum raporunda TikTok kanalını gösterir', async () => {
+    await seedTikTokDay();
+    const { deps } = harness(db, new Date('2026-09-29T00:00:00Z'));
+    const status = await automationStatus(deps);
+    expect(status.tiktok).toEqual({ channel: 'kozmikarkan', enabled: true, ok: true, error: null });
+    expect(describeStatus(status)).toContain('TikTok (Buffer): kozmikarkan · ✅');
   });
 });

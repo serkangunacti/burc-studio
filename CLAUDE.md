@@ -28,8 +28,11 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
   3. Telegram onay mesajı gider (`/api/telegram/webhook`).
   4. Onaylananlar Vercel Queues'a (`instagram-publish`) gecikmeli bırakılır.
   5. Tüketici `/api/queues/publish` Instagram Graph API v25 ile paylaşır.
+  6. TikTok'a yalnızca Reels videosu gider: Buffer GraphQL API (`src/lib/buffer/`) ile `shareNow`, durum `sent` olana kadar izlenir.
+     - Buffer API anahtarı Ayarlar'dan girilir.
+     - `automation.tiktok.enabled` ile açılıp kapanır.
 - **Bakım:** `/api/cron/maintenance` 00:30 TSİ'de çalışır. Onaysızları düşürür, 3 günlük medyayı siler, Instagram anahtarını yeniler.
-- **Kod:** `src/lib/automation/` (plan, carousel, repository, service, day-message, http, runtime), `src/lib/instagram/`, `src/lib/telegram/`.
+- **Kod:** `src/lib/automation/` (plan, carousel, repository, service, day-message, http, runtime), `src/lib/instagram/`, `src/lib/telegram/`, `src/lib/buffer/`.
 - **Arayüz:** Ayarlar → "Otomatik paylaşım" (bağlantılar ve saatler), `/paylasimlar` sayfası.
 - **Sırlar:**
   - Vercel: `AUTOMATION_SECRET`, `INTEGRATIONS_KEY` (Secret), `BLOB_READ_WRITE_TOKEN`.

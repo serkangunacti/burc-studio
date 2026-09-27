@@ -31,6 +31,8 @@ export const automationSchema = z.object({
   // TSİ saatleri; haftalık satırı yalnız pazartesi kullanılır.
   schedule: z.object({ horoscope: audienceSlotsSchema, tarot: audienceSlotsSchema, weekly: audienceSlotsSchema }),
   partGapMinutes: z.number().int().min(1).max(30),
+  // TikTok'a (Buffer üzerinden) yalnız Reels videoları, Reels saatinde paylaşılır.
+  tiktok: z.object({ enabled: z.boolean() }),
 });
 export type AutomationSettings = z.infer<typeof automationSchema>;
 
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
       weekly: { kadin: { carousel: '10:30', reels: '17:00' }, erkek: { carousel: '11:30', reels: '18:00' } },
     },
     partGapMinutes: 3,
+    tiktok: { enabled: false },
   },
 };
 

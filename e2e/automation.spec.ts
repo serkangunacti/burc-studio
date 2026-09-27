@@ -4,6 +4,8 @@ import { login } from './helpers';
 test('paylaşım saatleri kaydedilir; bağlantı kartları kurulum adımını gösterir', async ({ page }) => {
   await login(page, '/ayarlar');
   await expect(page.getByText("Telegram'da @BotFather'a /newbot yaz")).toBeVisible();
+  await expect(page.getByLabel('Buffer API anahtarı')).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'TikTok paylaşımı' })).not.toBeChecked();
   await page.getByLabel('Erkek tarot Reels saati').fill('23:15');
   await page.getByRole('button', { name: 'Paylaşım ayarlarını kaydet' }).click();
   await expect(page.getByText('Paylaşım saatleri kaydedildi.')).toBeVisible();

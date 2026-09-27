@@ -19,13 +19,14 @@ function formFrom(overrides: Record<string, string> = {}): FormData {
 describe('otomasyon formu', () => {
   it('saatleri ve açık/kapalı durumunu yamaya çevirir, sohbet kaydına dokunmaz', () => {
     const current = { ...DEFAULT_SETTINGS.automation, telegramChatId: 7 };
-    const result = parseAutomationForm(formFrom({ 'tarot.erkek.reels': '23:15', enabled: 'false', partGapMinutes: '5' }), current);
+    const result = parseAutomationForm(formFrom({ 'tarot.erkek.reels': '23:15', enabled: 'false', partGapMinutes: '5', tiktokEnabled: 'true' }), current);
     expect(result).toEqual({
       ok: true,
       patch: {
         automation: {
           enabled: false,
           partGapMinutes: 5,
+          tiktok: { enabled: true },
           schedule: { ...current.schedule, tarot: { ...current.schedule.tarot, erkek: { carousel: '13:30', reels: '23:15' } } },
         },
       },

@@ -54,21 +54,28 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
       const detail = await getPostDetail(db, post.id);
       if (!detail) throw new Error('Gönderi bulunamadı');
       const parts = new Map(splitCarousel(buildSlideProps(detail, brand)).map((entry) => [entry.part, entry.slides]));
+      // TikTok, Reels ile aynı videoyu paylaşır; video bir kez çizilir.
+      let videoUrl = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media.videoUrl;
+      const renderVideo = async () => {
+        const reels = buildReelsProps(detail, brand);
+        videoUrl = await renderers.renderReels({
+          templateVersion: post.templateVersion,
+          reels,
+          musicSeed: musicSeed(reels),
+          name: `${date}-${post.kind}-${post.audience}`,
+        });
+        return videoUrl;
+      };
       for (const item of pending) {
         if (item.format === 'carousel') {
           const slides = parts.get(item.part as 1 | 2 | 3);
           if (!slides) throw new Error(`Carousel parçası yok: ${item.part}`);
           const images = await renderers.renderStills(post.templateVersion, slides);
           await savePublication(db, date, item, { images });
+        } else if (item.format === 'reels') {
+          await savePublication(db, date, item, { videoUrl: await renderVideo() });
         } else {
-          const reels = buildReelsProps(detail, brand);
-          const videoUrl = await renderers.renderReels({
-            templateVersion: post.templateVersion,
-            reels,
-            musicSeed: musicSeed(reels),
-            name: `${date}-${post.kind}-${post.audience}`,
-          });
-          await savePublication(db, date, item, { videoUrl });
+          await savePublication(db, date, item, { videoUrl: videoUrl ?? (await renderVideo()) });
         }
         result.rendered.push(slotKey(item));
       }

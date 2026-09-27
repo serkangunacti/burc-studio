@@ -20,6 +20,7 @@ function row(overrides: Partial<PublicationRow>): PublicationRow {
     media: { imageIds: ['img-1'] },
     igContainerId: null,
     igMediaId: null,
+    remoteId: null,
     permalink: null,
     error: null,
     attempts: 0,
@@ -77,6 +78,14 @@ describe('günlük onay mesajı', () => {
     expect(parseDayAction('a:2026-09-29')).toEqual({ action: 'approve', date: '2026-09-29' });
     expect(parseDayAction(`s:${POST}:r`)).toEqual({ action: 'skip', postId: POST, format: 'reels' });
     expect(parseDayAction(`u:${POST}:c`)).toEqual({ action: 'undo', postId: POST, format: 'carousel' });
+    expect(parseDayAction(`s:${POST}:t`)).toEqual({ action: 'skip', postId: POST, format: 'tiktok' });
     for (const bad of ['a:2026-13-40', `s:${POST}:x`, 's:abc:c', '', undefined]) expect(parseDayAction(bad)).toBeNull();
+  });
+
+  it('TikTok grubunu kendi satırı ve düğmesiyle gösterir', () => {
+    const tiktok = row({ postId: OTHER, audience: 'erkek', kind: 'tarot', format: 'tiktok', part: 0, scheduledAt: new Date('2026-09-29T19:00:00Z'), media: { videoUrl: 'https://blob/v.mp4' } });
+    const { html, keyboard } = buildDayMessage('2026-09-29', [...ROWS, tiktok], { mediaUrl });
+    expect(html).toContain('22:00 🕒 Erkek tarot · TikTok · <a href="https://blob/v.mp4">izle</a>');
+    expect(keyboard.at(-1)).toEqual([{ text: '🚫 22:00 Erkek tarot TikTok', callback_data: `s:${OTHER}:t` }]);
   });
 });

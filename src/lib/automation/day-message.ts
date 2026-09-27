@@ -15,7 +15,8 @@ const STATUS_ICONS: Record<PublicationStatus, string> = {
   expired: '⌛',
   failed: '❌',
 };
-const FORMAT_CODES: Record<PublicationFormat, string> = { carousel: 'c', reels: 'r' };
+const FORMAT_CODES: Record<PublicationFormat, string> = { carousel: 'c', reels: 'r', tiktok: 't' };
+const FORMAT_NAMES: Record<PublicationFormat, string> = { carousel: 'carousel', reels: 'Reels', tiktok: 'TikTok' };
 
 export type PublicationGroup = { postId: string; kind: string; audience: string; format: PublicationFormat; rows: PublicationRow[]; status: PublicationStatus };
 
@@ -46,12 +47,12 @@ export function groupPublications(rows: readonly PublicationRow[]): PublicationG
 }
 
 function groupTitle(group: PublicationGroup): string {
-  const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : 'Reels';
+  const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : FORMAT_NAMES[group.format];
   return `${AUDIENCE_LABELS[group.audience]} ${KIND_LABELS[group.kind]} · ${format}`;
 }
 
 export function groupLabel(group: Pick<PublicationGroup, 'audience' | 'kind' | 'format'>): string {
-  return `${AUDIENCE_LABELS[group.audience]} ${KIND_SHORT[group.kind]} ${group.format === 'carousel' ? 'carousel' : 'Reels'}`;
+  return `${AUDIENCE_LABELS[group.audience]} ${KIND_SHORT[group.kind]} ${FORMAT_NAMES[group.format]}`;
 }
 
 function groupLinks(group: PublicationGroup, mediaUrl: (id: string) => string): string {
@@ -106,7 +107,7 @@ export type DayAction = { action: 'approve'; date: DateKey } | { action: 'skip' 
 export function parseDayAction(data: string | undefined): DayAction | null {
   const [action, target, code] = (data ?? '').split(':');
   if (action === 'a' && isDateKey(target)) return { action: 'approve', date: target };
-  const format = code === 'c' ? 'carousel' : code === 'r' ? 'reels' : null;
+  const format = (Object.keys(FORMAT_CODES) as PublicationFormat[]).find((candidate) => FORMAT_CODES[candidate] === code) ?? null;
   if ((action === 's' || action === 'u') && format && /^[0-9a-f-]{36}$/.test(target ?? '')) {
     return { action: action === 's' ? 'skip' : 'undo', postId: target, format };
   }

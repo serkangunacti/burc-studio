@@ -22,8 +22,9 @@ export function parseAutomationForm(
     enabled: formData.get('enabled') === 'true',
     schedule,
     partGapMinutes: Number(formData.get('partGapMinutes')),
+    tiktok: { enabled: formData.get('tiktokEnabled') === 'true' },
   });
   if (!parsed.success) return { ok: false, error: 'Saatler SS:DD biçiminde, parça arası 1–30 dakika olmalı.' };
-  const { enabled, schedule: nextSchedule, partGapMinutes } = parsed.data;
-  return { ok: true, patch: { automation: { enabled, schedule: nextSchedule, partGapMinutes } } };
+  const { enabled, schedule: nextSchedule, partGapMinutes, tiktok } = parsed.data;
+  return { ok: true, patch: { automation: { enabled, schedule: nextSchedule, partGapMinutes, tiktok } } };
 }
