@@ -12,7 +12,8 @@ import { SignScene } from './sign-scene';
 
 const TIMING = linearTiming({ durationInFrames: TRANSITION_FRAMES });
 
-export function PastelReels(reels: ReelsProps) {
+// Başlık yalnız giriş sahnesinde değişir; haftalık Reels aynı sahneleri "Haftalık" başlığıyla kullanır.
+export function PastelReels({ title, ...reels }: ReelsProps & { title?: string }) {
   const backdrop = BACKDROPS[backdropIndex(reels.variant)];
   return (
     <AbsoluteFill
@@ -37,7 +38,7 @@ export function PastelReels(reels: ReelsProps) {
       />
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={INTRO_FRAMES}>
-          <IntroScene reels={reels} backdrop={backdrop} />
+          <IntroScene reels={reels} backdrop={backdrop} title={title} />
         </TransitionSeries.Sequence>
         {reels.signs.map((sign, index) => (
           <Fragment key={sign.sign}>

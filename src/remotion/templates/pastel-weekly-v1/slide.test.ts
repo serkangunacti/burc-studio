@@ -1,7 +1,11 @@
+import { Thumbnail } from '@remotion/player';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { LONGEST_WEEKLY_BODY, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleSign } from '@/remotion/fixtures';
+import type { AnyZodObject } from 'remotion';
+import { LONGEST_WEEKLY_BODY, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleReels, sampleSign } from '@/remotion/fixtures';
+import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from '@/remotion/reels';
+import type { ReelsProps } from '@/remotion/slide-types';
 import type { SlideProps } from '@/remotion/slide-types';
 import { getTemplate } from '@/remotion/templates';
 import { PastelWeeklySlide } from './slide';
@@ -41,5 +45,27 @@ describe('pastel-weekly@1', () => {
   it('filigran ve kapanış günlük şablonla aynı marka öğelerini kullanır', () => {
     expect(count(html(sampleProps({ ...sampleSign(), dateLabel: WEEK })), 'data-mark="saturn"')).toBe(1);
     expect(count(html(sampleProps(SAMPLE_CTA)), 'data-mark="saturn"')).toBe(1);
+  });
+
+  it('burç adı kuyruklu harflerin tarih satırına binmeyeceği satır yüksekliğiyle yazılır', () => {
+    expect(html(sampleProps({ ...sampleSign('oglak'), dateLabel: WEEK }))).toMatch(/data-slot="sign-name" style="[^"]*line-height:1.25/);
+  });
+
+  it('haftalık Reels girişinde "Haftalık" başlığı ve hafta aralığı yer alır', () => {
+    const reels = { ...sampleReels('erkek'), dateLabel: WEEK };
+    const intro = renderToStaticMarkup(
+      createElement(Thumbnail<AnyZodObject, ReelsProps>, {
+        component: getTemplate('pastel-weekly@1').Reels,
+        inputProps: reels,
+        frameToDisplay: 40,
+        durationInFrames: reelsDurationInFrames(reels.signs.length),
+        fps: REELS_FPS,
+        compositionWidth: REELS_SIZE.width,
+        compositionHeight: REELS_SIZE.height,
+      }),
+    );
+    expect(intro).toContain('Haftalık');
+    expect(intro).not.toContain('Günlük');
+    expect(intro).toContain(WEEK);
   });
 });

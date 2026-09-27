@@ -18,8 +18,8 @@ import { PastelReels } from './reels';
 // Seçilen karelerin işaretlemesi, eski gönderilerin Reels'inin aynı çizildiğini bu halkalarla birlikte kanıtlar.
 const FRAMES = [0, 40, 100, 190, 1000, 1700, 1769];
 const GOLDEN: Record<string, string> = {
-  kadin: 'c3f16107dd08ef3b70c80a1425756d8965fb79af268226d13798877ee0c0200a',
-  erkek: '2eb43a7fb75cc4b650e6362a448f09e59d8cf05fd6a483381d1cfe3f8a505e7c',
+  kadin: '3e2b3b13a957f97d744a91ba01d35a1c8124d1c07aecc3e34feafd4839da9f24',
+  erkek: '8f0df30de1ce7c9632c3e6756f2ff0a968134222c4cad715e0d7358ace213867',
 };
 
 describe('pastel@1 Reels çizim zinciri', () => {
@@ -45,6 +45,8 @@ describe('pastel@1 Reels çizim zinciri', () => {
       ).join('\n');
       expect(markup).toContain('data-mark="saturn"');
       expect(markup).toContain('Koç');
+      // Kuyruklu harfler (ç, ğ, ş, g, y) tarih satırına binmesin.
+      expect(markup).toMatch(/data-slot="sign-name" style="[^"]*line-height:1.25/);
       actual[audience] = createHash('sha256').update(markup).digest('hex');
     }
     expect(actual).toEqual(GOLDEN);

@@ -12,7 +12,7 @@ const RING_RADIUS = 300;
 const GLYPH = 64;
 const RING_BOX = RING_RADIUS * 2 + GLYPH * 2;
 
-export function IntroScene({ reels, backdrop }: { reels: ReelsProps; backdrop: Backdrop }) {
+export function IntroScene({ reels, backdrop, title = 'Günlük' }: { reels: ReelsProps; backdrop: Backdrop; title?: string }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const ink = AUDIENCE_INK[reels.audience];
@@ -20,7 +20,7 @@ export function IntroScene({ reels, backdrop }: { reels: ReelsProps; backdrop: B
   return (
     <AbsoluteFill style={{ padding: '260px 80px 500px', alignItems: 'center' }}>
       <div style={{ ...enter(frame, fps, 0), fontSize: 30, fontWeight: 700, letterSpacing: 6, color: PALETTE.plumSoft }}>{reels.dateLabel}</div>
-      <div style={{ ...enter(frame, fps, 6), marginTop: 36, fontFamily: HEADING_FONT, fontSize: 76, fontWeight: 500, color: ink }}>Günlük</div>
+      <div style={{ ...enter(frame, fps, 6), marginTop: 36, fontFamily: HEADING_FONT, fontSize: 76, fontWeight: 500, color: ink }}>{title}</div>
       <div style={{ ...enter(frame, fps, 10), fontFamily: HEADING_FONT, fontSize: 108, fontWeight: 600, lineHeight: 1.02, textAlign: 'center' }}>
         Burç Yorumları
       </div>

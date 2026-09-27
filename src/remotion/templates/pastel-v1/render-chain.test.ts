@@ -12,10 +12,10 @@ import { PastelSlide } from './slide';
 // Arşivdeki gönderiler bu zincirden yeniden çizilir: gönderi → slayt verisi (renk tablosu, burç verisi, zemin
 // varyantı, tarih biçimi) → şablon. Zincirin herhangi bir halkası değişirse eski gönderiler farklı görünür.
 const GOLDEN: Record<string, string> = {
-  'kadin-4x5': 'da90f61cbe77fbb848512f0f1276227ec35433a809c1a205d3ac42dfac860a6a',
-  'kadin-3x4': '4dc7485479b33cead67869cbbb6fdb9ba1b40e351ac66d5937b4918db293a848',
-  'erkek-4x5': 'c5d6fdc36ff1a35baaf3e092d9ded051ae2795e68a2ff51d234dbdea92ec9953',
-  'erkek-3x4': '55e226b1b3b81adadc24a7c3bafc800b36228f50a42085d319532ccc13c76346',
+  'kadin-4x5': '40148cd8571807812911bbf0a43f5dc5eb8cefffe0ca543c44ea21d0c52fd336',
+  'kadin-3x4': 'd13d1489da4b325510bc35f99ce694ff49018e4e36d3b9895787b6dbdab2f240',
+  'erkek-4x5': '7756582ce16e43367bf6c1d7abbb6a2967d1bbbe2d41b727ced16e67cf7c06be',
+  'erkek-3x4': '232c5810cd2793c2647a6c1e0f176f5d2853e4a9d4924e38ef37d9206b53ab02',
 };
 
 describe('pastel@1 çizim zinciri', () => {

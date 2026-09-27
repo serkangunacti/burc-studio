@@ -1,8 +1,10 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { addDays, istanbulDateKey } from '../src/lib/date/istanbul';
 import { LONGEST_WEEKLY_BODY } from '../src/remotion/fixtures';
 import { downloadPostZip, login } from './helpers';
 import { jpegSize } from './jpeg';
+import { mp4Info } from './mp4';
 
 // Üretim en fazla 7 gün geriye izin verir; en yakın pazartesi (bugün pazartesiyse bugün) her zaman bu aralıktadır.
 function lastMonday(): string {
@@ -18,13 +20,12 @@ async function weeklyPost(page: Page, audience: 'kadin' | 'erkek'): Promise<stri
   return ((await response.json()) as { postId: string }).postId;
 }
 
-test('haftalık gönderi 14 slayt ve haftalık dosya adlarıyla indirilir; en uzun yorum sığar; Reels sunulmaz', async ({ page }) => {
+test('haftalık gönderi 14 slayt ve haftalık dosya adlarıyla indirilir; en uzun yorum sığar', async ({ page }) => {
   await login(page);
   const id = await weeklyPost(page, 'kadin');
   await page.goto(`/gonderi/${id}`);
   await expect(page.getByRole('heading', { name: 'Kadın haftalık yorumlar' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Slayt \d+:/ })).toHaveCount(14);
-  await expect(page.getByRole('heading', { name: 'Reels videosu' })).toHaveCount(0);
 
   await page.getByRole('button', { name: /^Slayt 10: Yay/ }).click();
   await page.getByLabel('Yorum', { exact: true }).fill(LONGEST_WEEKLY_BODY);
@@ -70,4 +71,18 @@ test('pazartesi olmayan gün için haftalık üretim reddedilir', async ({ page 
   await login(page);
   const response = await page.request.post('/api/generate', { data: { date: addDays(MONDAY, 1), audience: 'kadin', kind: 'weekly' } });
   expect(response.status()).toBe(400);
+});
+
+test('haftalık gönderinin müzikli Reels videosu haftalık dosya adıyla üretilir', async ({ page }) => {
+  test.setTimeout(600_000);
+  await login(page);
+  const id = await weeklyPost(page, 'erkek');
+  await page.goto(`/gonderi/${id}`);
+  await expect(page.getByRole('heading', { name: 'Reels videosu' })).toBeVisible();
+  await page.getByRole('button', { name: "Reels'i hazırla" }).click();
+  await expect(page.getByRole('button', { name: 'MP4 indir' })).toBeVisible({ timeout: 540_000 });
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'MP4 indir' }).click()]);
+  expect(download.suggestedFilename()).toBe(`${MONDAY}_erkek-haftalik_reels.mp4`);
+  const info = mp4Info(new Uint8Array(await readFile(await download.path())));
+  expect(info).toMatchObject({ width: 1080, height: 1920, hasAudio: true });
 });
