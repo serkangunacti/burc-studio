@@ -31,7 +31,7 @@ const SPARKLE_LAYOUTS = [
   ],
 ];
 
-function Background({ index, element }: { index: number; element: Element | null }) {
+export function Background({ index, element }: { index: number; element: Element | null }) {
   const backdrop = BACKDROPS[index];
   const tint = element ? ELEMENT_TINTS[element] : PALETTE.cream;
   const sparkles = SPARKLE_LAYOUTS[index % SPARKLE_LAYOUTS.length];

@@ -10,9 +10,9 @@ import { PostConflictError } from './repository';
 export type HttpDeps = GenerationDeps & { today: DateKey };
 
 const audienceSchema = z.enum(['kadin', 'erkek']);
-const kindSchema = z.enum(['horoscope', 'weekly']).optional();
+const kindSchema = z.enum(['horoscope', 'tarot', 'weekly']).optional();
 const generateSchema = z.object({ date: z.string(), audience: audienceSchema, kind: kindSchema, force: z.boolean().optional() });
-const signSchema = z.object({ date: z.string(), audience: audienceSchema, kind: kindSchema, sign: z.enum(SIGN_SLUGS) });
+const signSchema = z.object({ date: z.string(), audience: audienceSchema, kind: kindSchema, sign: z.enum(SIGN_SLUGS), redrawCard: z.boolean().optional() });
 
 const BAD_REQUEST = () => Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
 const BUSY = () => Response.json({ error: 'Bu içerik şu anda üretiliyor.' }, { status: 409 });

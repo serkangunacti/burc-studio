@@ -69,6 +69,8 @@ export function GenerationSettingsForm({ initial, providers }: { initial: Settin
         {[
           ['horoscope:kadin', 'Kadın burç yorumları'],
           ['horoscope:erkek', 'Erkek burç yorumları'],
+          ['tarot:kadin', 'Kadın tarot yorumları'],
+          ['tarot:erkek', 'Erkek tarot yorumları'],
         ].map(([value, text]) => (
           <label key={value} className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="dailyPlan" value={value} defaultChecked={planned.has(value)} className="size-4 accent-primary" />

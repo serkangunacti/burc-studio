@@ -29,7 +29,11 @@ export type SignSlideData = {
   scores: { love: number; money: number; health: number };
   luckyColor: { name: string; hex: string };
   luckyNumber: number;
+  // Yalnız tarot gönderilerinde: burca çekilen günün kartı.
+  tarotCard?: TarotCardRef;
 };
+
+export type TarotCardRef = { id: string; name: string };
 
 export type CtaSlideData = { type: 'cta'; audience: Audience };
 
@@ -48,6 +52,7 @@ export type ReelsSign = {
   scores: { love: number; money: number; health: number };
   luckyColor: { name: string; hex: string };
   luckyNumber: number;
+  tarotCard?: TarotCardRef;
 };
 
 export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number };

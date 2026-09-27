@@ -1,10 +1,14 @@
 import { Composition } from 'remotion';
+import { TAROT_DECK } from '@/lib/tarot/deck';
+import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import { LONGEST_BODY, LONGEST_SHORT, LONGEST_WEEKLY_BODY, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleReels, sampleSign } from './fixtures';
 import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from './reels';
 import { FORMAT_SIZES, SLIDE_FPS, type SlideProps } from './slide-types';
 import { PastelSlide } from './templates/pastel-v1';
 import { PastelReels } from './templates/pastel-v1-reels';
+import { PastelTarotReels, PastelTarotSlide } from './templates/pastel-tarot-v1';
 import { PastelWeeklyReels, PastelWeeklySlide } from './templates/pastel-weekly-v1';
+import { TarotDeckSheet } from './tarot/deck-sheet';
 
 const SAMPLES: { id: string; props: SlideProps }[] = [
   { id: 'Kapak', props: sampleProps(SAMPLE_COVER) },
@@ -20,6 +24,14 @@ const WEEKLY_SAMPLES: { id: string; props: SlideProps }[] = [
   { id: 'Haftalik-Kapak', props: sampleProps({ ...SAMPLE_COVER, dateLabel: WEEK, hook: 'Bu hafta yıldızlar sana yeni bir kapı açıyor ✨' }, { variant: 6 }) },
   { id: 'Haftalik-Burc-EnUzun', props: sampleProps({ ...sampleSign('yay'), dateLabel: WEEK, body: LONGEST_WEEKLY_BODY }, { variant: 6 }) },
   { id: 'Haftalik-Erkek-EnUzun-3x4', props: sampleProps({ ...sampleSign('kova', 'erkek'), dateLabel: WEEK, body: LONGEST_WEEKLY_BODY }, { variant: 9, format: '3x4' }) },
+];
+
+const TAROT_REFS = SIGN_SLUGS.map((_, index) => ({ id: TAROT_DECK[index * 6 + 1].id, name: TAROT_DECK[index * 6 + 1].name }));
+const TAROT_SAMPLES: { id: string; props: SlideProps }[] = [
+  { id: 'Tarot-Kapak', props: sampleProps({ ...SAMPLE_COVER, hook: 'Kartlar bugün sana ne fısıldıyor? 🔮' }, { variant: 1 }) },
+  { id: 'Tarot-Burc', props: sampleProps({ ...sampleSign('oglak'), tarotCard: { id: 'yildiz', name: 'Yıldız' } }, { variant: 1 }) },
+  { id: 'Tarot-Burc-EnUzun', props: sampleProps({ ...sampleSign('yay'), headline: 'Çığır açan, güçlü bir gün geçireceksin 🌕', body: LONGEST_BODY, tarotCard: { id: 'tilsim-kralice', name: 'Tılsım Kraliçesi' } }, { variant: 4 }) },
+  { id: 'Tarot-Burc-3x4', props: sampleProps({ ...sampleSign('balik', 'erkek'), body: LONGEST_BODY, tarotCard: { id: 'degnek-sovalye', name: 'Değnek Şövalyesi' } }, { variant: 5, format: '3x4' }) },
 ];
 
 export function RemotionRoot() {
@@ -76,6 +88,28 @@ export function RemotionRoot() {
         height={REELS_SIZE.height}
         defaultProps={{ ...sampleReels('erkek'), dateLabel: WEEK, variant: 9 }}
       />
+      {TAROT_SAMPLES.map(({ id, props }) => (
+        <Composition
+          key={id}
+          id={id}
+          component={PastelTarotSlide}
+          durationInFrames={1}
+          fps={SLIDE_FPS}
+          width={FORMAT_SIZES[props.format].width}
+          height={FORMAT_SIZES[props.format].height}
+          defaultProps={props}
+        />
+      ))}
+      <Composition
+        id="Reels-Tarot"
+        component={PastelTarotReels}
+        durationInFrames={reelsDurationInFrames(12)}
+        fps={REELS_FPS}
+        width={REELS_SIZE.width}
+        height={REELS_SIZE.height}
+        defaultProps={{ ...sampleReels('kadin'), variant: 1, signs: sampleReels('kadin').signs.map((sign, index) => ({ ...sign, tarotCard: TAROT_REFS[index] })) }}
+      />
+      <Composition id="Tarot-Deste" component={TarotDeckSheet} durationInFrames={1} fps={SLIDE_FPS} width={2300} height={1660} />
     </>
   );
 }

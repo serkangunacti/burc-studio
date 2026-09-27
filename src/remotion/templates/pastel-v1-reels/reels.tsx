@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, type ComponentProps, type ComponentType } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { linearTiming, TransitionSeries } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
@@ -12,8 +12,13 @@ import { SignScene } from './sign-scene';
 
 const TIMING = linearTiming({ durationInFrames: TRANSITION_FRAMES });
 
-// Başlık yalnız giriş sahnesinde değişir; haftalık Reels aynı sahneleri "Haftalık" başlığıyla kullanır.
-export function PastelReels({ title, ...reels }: ReelsProps & { title?: string }) {
+// Haftalık ve tarot Reels aynı akışı kendi giriş başlıkları ve burç sahneleriyle kullanır.
+export function PastelReels({
+  title,
+  heading,
+  SignSceneComponent = SignScene,
+  ...reels
+}: ReelsProps & { title?: string; heading?: string; SignSceneComponent?: ComponentType<ComponentProps<typeof SignScene>> }) {
   const backdrop = BACKDROPS[backdropIndex(reels.variant)];
   return (
     <AbsoluteFill
@@ -38,13 +43,13 @@ export function PastelReels({ title, ...reels }: ReelsProps & { title?: string }
       />
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={INTRO_FRAMES}>
-          <IntroScene reels={reels} backdrop={backdrop} title={title} />
+          <IntroScene reels={reels} backdrop={backdrop} title={title} heading={heading} />
         </TransitionSeries.Sequence>
         {reels.signs.map((sign, index) => (
           <Fragment key={sign.sign}>
             <TransitionSeries.Transition presentation={fade()} timing={TIMING} />
             <TransitionSeries.Sequence durationInFrames={SIGN_FRAMES}>
-              <SignScene sign={sign} index={index} total={reels.signs.length} audience={reels.audience} backdrop={backdrop} brand={reels.brand} />
+              <SignSceneComponent sign={sign} index={index} total={reels.signs.length} audience={reels.audience} backdrop={backdrop} brand={reels.brand} />
             </TransitionSeries.Sequence>
           </Fragment>
         ))}

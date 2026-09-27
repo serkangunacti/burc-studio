@@ -8,10 +8,10 @@ const DIR = path.join(process.cwd(), 'src/remotion/templates/pastel-v1-reels');
 // pastel@1 Reels'i yayımlanmış videolarda kullanılıyor; değişiklik yeni klasörde (pastel-v2-reels) yapılır.
 const FROZEN: Record<string, string> = {
   'index.ts': '6aa9b89ca0a4778fe369ecaf224c2f9bdfe522ad52811415a7728edcced48676',
-  'intro-scene.tsx': '63ba8b135a0124b5b38c35f10f220aabaed3cc478f3e4e25112b060e1e6de521',
+  'intro-scene.tsx': '36f5395267d3be01e8f87ca09a049fc7129e122e34d12c46bb853f84e025b89b',
   'motion.ts': 'd618b1315a8aab163e8c5048db466b3180e9d34e28ab48a63c00811a46db89e7',
   'outro-scene.tsx': 'ff8245710635722bbb0f619766eadab0e7b36919bb6db9c1eab628031e128e98',
-  'reels.tsx': '1a059c19815a9cd872a3fc2d14959af836cf522772d232fbb291eec871cb0f09',
+  'reels.tsx': '47ea3fa496ad1420b1c0214b7c06327e987f6029c5706e0329fb57a83f180a38',
   'sign-scene.tsx': 'bbae85433c81f10d97730e22ed1a4fd35b32b38bce480983e3e9766fdc382514',
   'watermark.tsx': 'ee27e93c472f617d13a137672ed4f59c0dac43240e0d63bdf13b9228d284b0ac',
 };

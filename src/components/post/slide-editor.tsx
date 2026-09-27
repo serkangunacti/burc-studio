@@ -63,14 +63,27 @@ export function SlideEditor({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>{slide.signName}</CardTitle>
-        <RegenerateSignButton
-          date={post.date}
-          audience={post.audience}
-          kind={post.kind}
-          sign={slide.sign}
-          name={slide.signName}
-          onRegenerated={onRegenerated}
-        />
+        <div className="flex flex-wrap gap-1">
+          {post.kind === 'tarot' && (
+            <RegenerateSignButton
+              date={post.date}
+              audience={post.audience}
+              kind={post.kind}
+              sign={slide.sign}
+              name={slide.signName}
+              onRegenerated={onRegenerated}
+              redrawCard
+            />
+          )}
+          <RegenerateSignButton
+            date={post.date}
+            audience={post.audience}
+            kind={post.kind}
+            sign={slide.sign}
+            name={slide.signName}
+            onRegenerated={onRegenerated}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <CharField

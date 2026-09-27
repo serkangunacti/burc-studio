@@ -1,6 +1,6 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Shuffle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
@@ -16,11 +16,14 @@ export function RegenerateSignButton({
   sign,
   name,
   kind = 'horoscope',
+  redrawCard = false,
   onRegenerated,
 }: {
   date: DateKey;
   audience: Audience;
   kind?: ReadingKind;
+  // Tarot: burcun kartı diğer 11 kartın dışından yeniden çekilir ve yorum yeniden yazılır.
+  redrawCard?: boolean;
   sign: SignSlug;
   name: string;
   onRegenerated?: (postId: string) => void;
@@ -33,18 +36,18 @@ export function RegenerateSignButton({
       type="button"
       variant="ghost"
       size="sm"
-      aria-label={`${name} yorumunu yeniden üret`}
+      aria-label={redrawCard ? `${name}: kartı yeniden çek` : `${name} yorumunu yeniden üret`}
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
           const response = await fetch('/api/generate/sign', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ date, audience, sign, kind }),
+            body: JSON.stringify({ date, audience, sign, kind, redrawCard }),
           });
           const data = (await response.json().catch(() => ({}))) as { error?: string; postId?: string };
           if (response.ok) {
-            toast.success(`${name} yorumu yenilendi.`);
+            toast.success(redrawCard ? `${name} için yeni kart çekildi.` : `${name} yorumu yenilendi.`);
             if (onRegenerated && data.postId) onRegenerated(data.postId);
             else router.refresh();
           } else {
@@ -53,8 +56,12 @@ export function RegenerateSignButton({
         })
       }
     >
-      <RefreshCw className={cn('size-4', pending && 'animate-spin')} aria-hidden />
-      Yeniden üret
+      {redrawCard ? (
+        <Shuffle className={cn('size-4', pending && 'animate-pulse')} aria-hidden />
+      ) : (
+        <RefreshCw className={cn('size-4', pending && 'animate-spin')} aria-hidden />
+      )}
+      {redrawCard ? 'Kartı yeniden çek' : 'Yeniden üret'}
     </Button>
   );
 }
