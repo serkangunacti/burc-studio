@@ -43,7 +43,7 @@ test('tek burcun kartı yeniden çekilir; tüm kartlar yeniden çekilir', async 
   await page.goto(`/gonderi/${id}`);
   const before = await cardOfSlide(page, 6);
   await page.getByRole('button', { name: /^Slayt 6: Aslan/ }).click();
-  await page.getByRole('button', { name: 'Aslan kartını yeniden çek' }).click();
+  await page.getByRole('button', { name: 'Aslan: kartı yeniden çek' }).click();
   await expect(page).not.toHaveURL(new RegExp(id));
   await expect(page.getByRole('heading', { name: 'Erkek tarot yorumları' })).toBeVisible();
   await expect.poll(() => cardOfSlide(page, 6)).not.toBe(before);
@@ -76,4 +76,16 @@ test('tarot gönderisinin müzikli Reels videosu tarot dosya adıyla üretilir',
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'MP4 indir' }).click()]);
   expect(download.suggestedFilename()).toBe(`${TODAY}_kadin-tarot_reels.mp4`);
   expect(mp4Info(new Uint8Array(await readFile(await download.path())))).toMatchObject({ width: 1080, height: 1920, hasAudio: true });
+});
+
+test('tüm kartları yeniden çekerken bağlantı koparsa hata gösterilir ve düğme yeniden kullanılabilir', async ({ page }) => {
+  await login(page);
+  const id = await tarotPost(page, 'kadin');
+  await page.goto(`/gonderi/${id}`);
+  await page.route('**/api/generate', (route) => route.abort('internetdisconnected'));
+  page.once('dialog', (dialog) => void dialog.accept());
+  const button = page.getByRole('button', { name: 'Tüm kartları yeniden çek' });
+  await button.click();
+  await expect(page.getByText('Kartlar yeniden çekilemedi; bağlantını kontrol et.')).toBeVisible();
+  await expect(button).toBeEnabled();
 });

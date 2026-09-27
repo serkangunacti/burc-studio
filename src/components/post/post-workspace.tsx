@@ -63,9 +63,13 @@ export function PostWorkspace({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ date: post.date, audience: post.audience, kind: 'tarot', force: true }),
-    });
-    const data = (await response.json().catch(() => ({}))) as { postId?: string; error?: string };
+    }).catch(() => null);
     setRedrawing(false);
+    if (!response) {
+      toast.error('Kartlar yeniden çekilemedi; bağlantını kontrol et.');
+      return;
+    }
+    const data = (await response.json().catch(() => ({}))) as { postId?: string; error?: string };
     if (response.ok && data.postId) {
       toast.success('Yeni kartlar çekildi.');
       openPost(data.postId);

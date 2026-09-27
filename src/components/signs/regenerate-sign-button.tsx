@@ -36,7 +36,7 @@ export function RegenerateSignButton({
       type="button"
       variant="ghost"
       size="sm"
-      aria-label={redrawCard ? `${name} kartını yeniden çek` : `${name} yorumunu yeniden üret`}
+      aria-label={redrawCard ? `${name}: kartı yeniden çek` : `${name} yorumunu yeniden üret`}
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
