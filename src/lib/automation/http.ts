@@ -5,7 +5,7 @@ import { isDateKey } from '@/lib/date/istanbul';
 import { isPostId } from '@/lib/posts/repository';
 import { getMediaFile } from './repository';
 import { telegramWebhookSecret } from './secrets';
-import { handleTelegramUpdate, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
+import { automationStatus, handleTelegramUpdate, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
 
 const readySchema = z.object({ date: z.string().refine(isDateKey), failures: z.array(z.string()).max(50).default([]) });
 
@@ -51,4 +51,10 @@ export async function handleMedia(id: string, deps: Pick<AutomationDeps, 'db'>):
 export async function handleMaintenanceCron(request: Request, deps: AutomationDeps & { cronSecret: string | undefined }): Promise<Response> {
   if (!isAuthorizedCronRequest(request.headers, deps.cronSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
   return Response.json({ ok: true, ...(await runMaintenance(deps)) });
+}
+
+// Salt okunur tanı: bağlantılar, webhook ve Instagram paylaşım izni.
+export async function handleStatus(request: Request, deps: AutomationDeps & { cronSecret: string | undefined }): Promise<Response> {
+  if (!isAuthorizedCronRequest(request.headers, deps.cronSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
+  return Response.json(await automationStatus(deps));
 }

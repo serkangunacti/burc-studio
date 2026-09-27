@@ -132,13 +132,17 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     if (command === '/start') {
       if (chatId === null) {
         await saveSettings(deps.db, { automation: { telegramChatId: from } });
-        await client.sendMessage(from, '✅ Bağlandı. Her sabah günün paylaşımlarını onayına buraya göndereceğim.\n\n/bugun ile bugünün planını istediğin zaman görebilirsin.');
+        await client.sendMessage(from, '✅ Bağlandı. Her sabah günün paylaşımlarını onayına buraya göndereceğim.\n\n/bugun ile bugünün planını, /durum ile bağlantıların durumunu istediğin zaman görebilirsin.');
       } else if (chatId === from) {
         await client.sendMessage(from, 'Zaten bağlıyız ✨ /bugun ile bugünün planını görebilirsin.');
       }
       return;
     }
     if (from !== chatId) return;
+    if (command === '/durum') {
+      await client.sendMessage(from, describeStatus(await automationStatus(deps)));
+      return;
+    }
     if (command === '/bugun') {
       const result = await sendDayPlan(deps, istanbulDateKey(deps.now()));
       if (!result.sent && result.reason) await client.sendMessage(from, escapeHtml(result.reason));
@@ -263,6 +267,15 @@ export async function connectTelegram(deps: AutomationDeps, token: string): Prom
 
 export async function connectInstagram(deps: AutomationDeps, token: string): Promise<{ username: string | null }> {
   const account = await fetchInstagramAccount(token, deps.fetch);
+  await createInstagramClient({ token, userId: account.id, fetch: deps.fetch })
+    .publishingLimit()
+    .catch((error: unknown) => {
+      throw new InstagramError(
+        `Anahtarda paylaşım izni (instagram_business_content_publish) yok ya da doğrulanamadı: ${error instanceof Error ? error.message : String(error)}`,
+        null,
+        false,
+      );
+    });
   await saveIntegration(deps.db, {
     id: 'instagram',
     secretEncrypted: encryptSecret(token, deps.integrationsKey),
@@ -270,6 +283,52 @@ export async function connectInstagram(deps: AutomationDeps, token: string): Pro
     expiresAt: new Date(deps.now().getTime() + INSTAGRAM_TOKEN_LIFETIME_MS),
   });
   return { username: account.username };
+}
+
+export type AutomationStatus = {
+  telegram: { username: string | null; chatLinked: boolean; webhookOk: boolean; pendingUpdates: number; lastError: string | null } | null;
+  instagram: { username: string | null; expiresAt: string | null; publishing: { ok: true; used: number; total: number } | { ok: false; error: string } } | null;
+};
+
+export async function automationStatus(deps: AutomationDeps): Promise<AutomationStatus> {
+  const [telegramRow, instagramRow, settings] = await Promise.all([getIntegration(deps.db, 'telegram'), getIntegration(deps.db, 'instagram'), getSettings(deps.db)]);
+  let telegram: AutomationStatus['telegram'] = null;
+  if (telegramRow) {
+    const info = await createTelegramClient(decryptSecret(telegramRow.secretEncrypted, deps.integrationsKey), deps.fetch).getWebhookInfo();
+    telegram = {
+      username: telegramRow.account.username,
+      chatLinked: settings.automation.telegramChatId !== null,
+      webhookOk: info.url === `${deps.appUrl}/api/telegram/webhook`,
+      pendingUpdates: info.pending_update_count,
+      lastError: info.last_error_message ?? null,
+    };
+  }
+  let instagram: AutomationStatus['instagram'] = null;
+  if (instagramRow) {
+    const publishing = await (await loadInstagram(deps))
+      .publishingLimit()
+      .then((limit) => ({ ok: true as const, ...limit }))
+      .catch((error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }));
+    instagram = { username: instagramRow.account.username, expiresAt: instagramRow.expiresAt?.toISOString() ?? null, publishing };
+  }
+  return { telegram, instagram };
+}
+
+export function describeStatus(status: AutomationStatus): string {
+  const lines = ['<b>🔧 Otomasyon durumu</b>'];
+  const { telegram, instagram } = status;
+  lines.push(telegram ? `Telegram: @${escapeHtml(telegram.username ?? '?')} · webhook ${telegram.webhookOk ? '✅' : '❌'}${telegram.lastError ? ` (${escapeHtml(telegram.lastError)})` : ''}` : 'Telegram: ❌ bağlı değil');
+  if (!instagram) lines.push('Instagram: ❌ bağlı değil');
+  else {
+    const until = instagram.expiresAt ? new Date(instagram.expiresAt).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }) : '?';
+    lines.push(`Instagram: @${escapeHtml(instagram.username ?? '?')} · anahtar ${until} tarihine kadar`);
+    lines.push(
+      instagram.publishing.ok
+        ? `Paylaşım izni ✅ · son 24 saatte ${instagram.publishing.used}/${instagram.publishing.total} paylaşım`
+        : `Paylaşım izni ❌ ${escapeHtml(instagram.publishing.error)}`,
+    );
+  }
+  return lines.join('\n');
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };
