@@ -9,8 +9,10 @@ import { planPublications } from './plan';
 import { approveDay, getIntegration, getPublication, listPublications, saveIntegration, savePublication } from './repository';
 import { encryptSecret, telegramWebhookSecret } from './secrets';
 import {
+  automationStatus,
   connectInstagram,
   connectTelegram,
+  describeStatus,
   handleTelegramUpdate,
   publishPublication,
   RetryLater,
@@ -40,7 +42,14 @@ function harness(db: Db, now: Date) {
       const method = url.pathname.split('/').pop()!;
       const params = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       calls.push({ host: 'telegram', path: method, params });
-      const result = method === 'getMe' ? { id: 42, username: 'kozmikarkan_bot' } : method === 'sendMessage' ? { message_id: 77 } : true;
+      const result =
+        method === 'getMe'
+          ? { id: 42, username: 'kozmikarkan_bot' }
+          : method === 'sendMessage'
+            ? { message_id: 77 }
+            : method === 'getWebhookInfo'
+              ? { url: 'https://app.test/api/telegram/webhook', pending_update_count: 0 }
+              : true;
       return Response.json({ ok: true, result });
     }
     const params = Object.fromEntries(init?.body instanceof URLSearchParams ? init.body : url.searchParams);
@@ -253,5 +262,33 @@ describe('bakım', () => {
     instagram.mockImplementationOnce(() => ({ body: { user_id: '1784', username: 'kozmikarkan' } }));
     expect(await connectInstagram(deps, 'IGAA')).toEqual({ username: 'kozmikarkan' });
     expect(await getIntegration(db, 'instagram')).toMatchObject({ account: { id: '1784', username: 'kozmikarkan' } });
+  });
+
+  it('paylaşım izni olmayan Instagram anahtarını bağlamaz', async () => {
+    const { deps, instagram } = harness(db, new Date('2026-09-29T00:00:00Z'));
+    instagram
+      .mockImplementationOnce(() => ({ body: { user_id: '1784', username: 'kozmikarkan' } }))
+      .mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Insufficient permission', code: 10 } } }));
+    await expect(connectInstagram(deps, 'IGAA')).rejects.toThrow('paylaşım izni');
+    expect(await getIntegration(db, 'instagram')).toBeNull();
+  });
+});
+
+describe('durum', () => {
+  it('webhook, sohbet kaydı ve paylaşım kotasını raporlar; /durum komutu aynı raporu gönderir', async () => {
+    await connectAll(db);
+    const { deps, instagram, telegramCalls, igCalls } = harness(db, new Date('2026-09-29T00:00:00Z'));
+    instagram.mockImplementationOnce(() => ({ body: { data: [{ quota_usage: 3, config: { quota_total: 100 } }] } }));
+    const status = await automationStatus(deps);
+    expect(status).toEqual({
+      telegram: { username: 'kozmikarkan_bot', chatLinked: true, webhookOk: true, pendingUpdates: 0, lastError: null },
+      instagram: { username: 'kozmikarkan', expiresAt: '2026-11-20T00:00:00.000Z', publishing: { ok: true, used: 3, total: 100 } },
+    });
+    expect(igCalls()[0]).toMatchObject({ path: '/v25.0/1784/content_publishing_limit', params: { fields: 'quota_usage,config' } });
+    expect(describeStatus(status)).toContain('Paylaşım izni ✅ · son 24 saatte 3/100 paylaşım');
+
+    instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Insufficient permission', code: 10 } } }));
+    await handleTelegramUpdate(deps, { message: { chat: { id: CHAT }, text: '/durum' } });
+    expect(String(telegramCalls().at(-1)?.params.text)).toContain('Paylaşım izni ❌ Insufficient permission');
   });
 });

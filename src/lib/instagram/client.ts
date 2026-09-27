@@ -46,6 +46,11 @@ export function createInstagramClient(input: { token: string; userId: string; fe
       get<{ status_code: ContainerStatus }>(containerId, { fields: 'status_code' }).then((body) => body.status_code),
     publish: (containerId: string) => post<{ id: string }>(`${input.userId}/media_publish`, { creation_id: containerId }).then((body) => body.id),
     permalink: (mediaId: string) => get<{ permalink?: string }>(mediaId, { fields: 'permalink' }).then((body) => body.permalink ?? null),
+    // Yalnız instagram_business_content_publish izniyle çalışır; bağlanırken izin denetimi olarak da kullanılır.
+    publishingLimit: () =>
+      get<{ data?: { quota_usage?: number; config?: { quota_total?: number } }[] }>(`${input.userId}/content_publishing_limit`, {
+        fields: 'quota_usage,config',
+      }).then((body) => ({ used: body.data?.[0]?.quota_usage ?? 0, total: body.data?.[0]?.config?.quota_total ?? 100 })),
   };
 }
 

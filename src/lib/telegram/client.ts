@@ -30,6 +30,7 @@ export function createTelegramClient(token: string, fetchImpl: Fetch = fetch) {
 
   return {
     getMe: () => call<{ id: number; username: string }>('getMe', {}),
+    getWebhookInfo: () => call<{ url: string; pending_update_count: number; last_error_message?: string }>('getWebhookInfo', {}),
     setWebhook: (url: string, secret: string) =>
       call<boolean>('setWebhook', { url, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
     sendMessage: (chatId: number, html: string, options: { keyboard?: InlineKeyboard; silent?: boolean } = {}) =>
