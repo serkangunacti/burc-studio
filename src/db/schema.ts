@@ -150,7 +150,7 @@ export const postSlides = pgTable(
   (t) => [primaryKey({ columns: [t.postId, t.position] })],
 );
 
-export const PUBLICATION_FORMATS = ['carousel', 'reels'] as const;
+export const PUBLICATION_FORMATS = ['carousel', 'reels', 'tiktok'] as const;
 export type PublicationFormat = (typeof PUBLICATION_FORMATS)[number];
 export const PUBLICATION_STATUSES = ['ready', 'approved', 'publishing', 'published', 'skipped', 'expired', 'failed'] as const;
 export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
@@ -159,7 +159,7 @@ export type PublicationMedia = { imageIds?: string[]; videoUrl?: string };
 export const publicationFormatEnum = pgEnum('publication_format', PUBLICATION_FORMATS);
 export const publicationStatusEnum = pgEnum('publication_status', PUBLICATION_STATUSES);
 
-// Carousel'ler Instagram'ın 10 görsel sınırı yüzünden üç parça (part 1–3) hâlinde paylaşılır; Reels'te part 0.
+// Carousel'ler Instagram'ın 10 görsel sınırı yüzünden üç parça (part 1–3) hâlinde paylaşılır; Reels ve TikTok'ta part 0.
 export const publications = pgTable(
   'publications',
   {
@@ -176,6 +176,8 @@ export const publications = pgTable(
     media: jsonb('media').$type<PublicationMedia>().notNull(),
     igContainerId: text('ig_container_id'),
     igMediaId: text('ig_media_id'),
+    // TikTok paylaşımının Buffer gönderi kimliği.
+    remoteId: text('remote_id'),
     permalink: text('permalink'),
     error: text('error'),
     attempts: integer('attempts').notNull().default(0),
@@ -209,7 +211,7 @@ export const mediaFiles = pgTable(
   (t) => [uniqueIndex('media_files_position_uq').on(t.publicationId, t.position)],
 );
 
-export const INTEGRATION_IDS = ['instagram', 'telegram'] as const;
+export const INTEGRATION_IDS = ['instagram', 'telegram', 'buffer'] as const;
 export type IntegrationId = (typeof INTEGRATION_IDS)[number];
 export type IntegrationAccount = { id: string; username: string | null };
 

@@ -1,4 +1,5 @@
 import type { Db } from '@/db/types';
+import { BufferError, createBufferClient, type BufferClient } from '@/lib/buffer/client';
 import { istanbulDateKey, type DateKey } from '@/lib/date/istanbul';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
@@ -18,6 +19,7 @@ import {
   saveIntegration,
   setContainer,
   setGroupSkipped,
+  setRemoteId,
   setTelegramMessageId,
   type PublicationRow,
 } from './repository';
@@ -48,6 +50,9 @@ export class RetryLater extends Error {
 const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
+const TIKTOK_POLL_SECONDS = 60;
+// TikTok videoyu işlerken Buffer "sending"de kalır; ~30 dakika beklenir.
+const MAX_TIKTOK_ATTEMPTS = 30;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
 const MAX_PROCESSING_ATTEMPTS = 20;
 const MAX_TRANSIENT_ATTEMPTS = 5;
@@ -62,6 +67,12 @@ async function loadTelegram(deps: AutomationDeps): Promise<{ client: TelegramCli
   if (!integration) return null;
   const settings = await getSettings(deps.db);
   return { client: createTelegramClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch), chatId: settings.automation.telegramChatId };
+}
+
+async function loadBuffer(deps: AutomationDeps): Promise<{ client: BufferClient; channelId: string }> {
+  const integration = await getIntegration(deps.db, 'buffer');
+  if (!integration) throw new Error('TikTok (Buffer) bağlı değil. Ayarlar → Otomatik paylaşım bölümünden Buffer API anahtarını gir.');
+  return { client: createBufferClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch), channelId: integration.account.id };
 }
 
 async function loadInstagram(deps: AutomationDeps): Promise<InstagramClient> {
@@ -193,8 +204,50 @@ async function createContainer(deps: AutomationDeps, instagram: InstagramClient,
 }
 
 export type PublishOutcome = 'published' | 'failed' | 'ignored';
+type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?: string; permalink: string | null; silent?: boolean };
 
-// Kuyruk tüketicisi: onaylı paylaşımı Instagram'a gönderir. Aynı mesaj iki kez gelse de bir kez paylaşır.
+async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
+  const instagram = await loadInstagram(deps);
+  let containerId = row.igContainerId;
+  if (containerId) {
+    const status = await instagram.containerStatus(containerId);
+    // Önceki deneme paylaşıp sonucu yazamadan düştüyse ikinci kez yayınlanmaz.
+    if (status === 'PUBLISHED') return { igContainerId: containerId, igMediaId: null, permalink: null, silent: true };
+    if (status === 'EXPIRED') containerId = null;
+  }
+  if (!containerId) {
+    containerId = await createContainer(deps, instagram, row);
+    await setContainer(deps.db, row.id, containerId);
+  }
+  const status = await instagram.containerStatus(containerId);
+  if (status === 'IN_PROGRESS') {
+    if (row.attempts >= MAX_PROCESSING_ATTEMPTS) throw new Error('Instagram medyayı zamanında işleyemedi');
+    await releaseForRetry(deps.db, row.id);
+    throw new RetryLater(REELS_POLL_SECONDS, 'Instagram medyayı işliyor');
+  }
+  if (status !== 'FINISHED') throw new Error(`Instagram medyayı işleyemedi (${status})`);
+  const mediaId = await instagram.publish(containerId);
+  const permalink = await instagram.permalink(mediaId).catch(() => null);
+  return { igContainerId: containerId, igMediaId: mediaId, permalink };
+}
+
+async function publishToTikTok(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
+  const buffer = await loadBuffer(deps);
+  let remoteId = row.remoteId;
+  if (!remoteId) {
+    if (!row.media.videoUrl) throw new Error('TikTok videosu yok');
+    remoteId = await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl });
+    await setRemoteId(deps.db, row.id, remoteId);
+  }
+  const post = await buffer.client.post(remoteId);
+  if (post.status === 'sent') return { remoteId, permalink: post.externalLink };
+  if (post.status === 'error') throw new Error(`TikTok (Buffer): ${post.error ?? 'bilinmeyen hata'}`);
+  if (row.attempts >= MAX_TIKTOK_ATTEMPTS) throw new Error('TikTok paylaşımı zamanında tamamlanmadı');
+  await releaseForRetry(deps.db, row.id);
+  throw new RetryLater(TIKTOK_POLL_SECONDS, 'TikTok paylaşımı sürüyor');
+}
+
+// Kuyruk tüketicisi: onaylı paylaşımı Instagram'a ya da TikTok'a gönderir. Aynı mesaj iki kez gelse de bir kez paylaşır.
 export async function publishPublication(deps: AutomationDeps, id: string): Promise<PublishOutcome> {
   const now = deps.now();
   const current = await getPublication(deps.db, id);
@@ -208,39 +261,19 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
     return 'ignored';
   }
 
-  let containerId = row.igContainerId;
   try {
-    const instagram = await loadInstagram(deps);
-    if (containerId) {
-      const status = await instagram.containerStatus(containerId);
-      if (status === 'PUBLISHED') {
-        await markPublished(deps.db, id, { igContainerId: containerId, igMediaId: null, permalink: null }, now);
-        await refreshDayMessage(deps, row.date);
-        return 'published';
-      }
-      if (status === 'EXPIRED') containerId = null;
+    const { silent, ...result } = row.format === 'tiktok' ? await publishToTikTok(deps, row) : await publishToInstagram(deps, row);
+    await markPublished(deps.db, id, result, deps.now());
+    if (!silent) {
+      const link = result.permalink ? ` · <a href="${escapeHtml(result.permalink)}">gör</a>` : '';
+      await notify(deps, `📤 Paylaşıldı · ${escapeHtml(publicationLabel(row))}${link}`, true);
     }
-    if (!containerId) {
-      containerId = await createContainer(deps, instagram, row);
-      await setContainer(deps.db, id, containerId);
-    }
-    const status = await instagram.containerStatus(containerId);
-    if (status === 'IN_PROGRESS') {
-      if (row.attempts >= MAX_PROCESSING_ATTEMPTS) throw new Error('Instagram medyayı zamanında işleyemedi');
-      await releaseForRetry(deps.db, id, containerId);
-      throw new RetryLater(REELS_POLL_SECONDS, 'Instagram medyayı işliyor');
-    }
-    if (status !== 'FINISHED') throw new Error(`Instagram medyayı işleyemedi (${status})`);
-    const mediaId = await instagram.publish(containerId);
-    const permalink = await instagram.permalink(mediaId).catch(() => null);
-    await markPublished(deps.db, id, { igContainerId: containerId, igMediaId: mediaId, permalink }, deps.now());
-    await notify(deps, `📤 Paylaşıldı · ${escapeHtml(publicationLabel(row))}${permalink ? ` · <a href="${escapeHtml(permalink)}">gör</a>` : ''}`, true);
     await refreshDayMessage(deps, row.date);
     return 'published';
   } catch (error) {
     if (error instanceof RetryLater) throw error;
-    if (error instanceof InstagramError && error.retryable && row.attempts < MAX_TRANSIENT_ATTEMPTS) {
-      await releaseForRetry(deps.db, id, containerId);
+    if ((error instanceof InstagramError || error instanceof BufferError) && error.retryable && row.attempts < MAX_TRANSIENT_ATTEMPTS) {
+      await releaseForRetry(deps.db, id);
       throw new RetryLater(120 * row.attempts, error.message);
     }
     const message = error instanceof Error ? error.message : String(error);
@@ -288,10 +321,16 @@ export async function connectInstagram(deps: AutomationDeps, token: string): Pro
 export type AutomationStatus = {
   telegram: { username: string | null; chatLinked: boolean; webhookOk: boolean; pendingUpdates: number; lastError: string | null } | null;
   instagram: { username: string | null; expiresAt: string | null; publishing: { ok: true; used: number; total: number } | { ok: false; error: string } } | null;
+  tiktok: { channel: string | null; enabled: boolean; ok: boolean; error: string | null } | null;
 };
 
 export async function automationStatus(deps: AutomationDeps): Promise<AutomationStatus> {
-  const [telegramRow, instagramRow, settings] = await Promise.all([getIntegration(deps.db, 'telegram'), getIntegration(deps.db, 'instagram'), getSettings(deps.db)]);
+  const [telegramRow, instagramRow, bufferRow, settings] = await Promise.all([
+    getIntegration(deps.db, 'telegram'),
+    getIntegration(deps.db, 'instagram'),
+    getIntegration(deps.db, 'buffer'),
+    getSettings(deps.db),
+  ]);
   let telegram: AutomationStatus['telegram'] = null;
   if (telegramRow) {
     const info = await createTelegramClient(decryptSecret(telegramRow.secretEncrypted, deps.integrationsKey), deps.fetch).getWebhookInfo();
@@ -311,7 +350,15 @@ export async function automationStatus(deps: AutomationDeps): Promise<Automation
       .catch((error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }));
     instagram = { username: instagramRow.account.username, expiresAt: instagramRow.expiresAt?.toISOString() ?? null, publishing };
   }
-  return { telegram, instagram };
+  let tiktok: AutomationStatus['tiktok'] = null;
+  if (bufferRow) {
+    const checked = await (await loadBuffer(deps)).client
+      .channel(bufferRow.account.id)
+      .then((channel) => ({ ok: !channel.isQueuePaused, error: channel.isQueuePaused ? "Buffer'da kanal kuyruğu duraklatılmış" : null }))
+      .catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    tiktok = { channel: bufferRow.account.username, enabled: settings.automation.tiktok.enabled, ...checked };
+  }
+  return { telegram, instagram, tiktok };
 }
 
 export function describeStatus(status: AutomationStatus): string {
@@ -328,7 +375,26 @@ export function describeStatus(status: AutomationStatus): string {
         : `Paylaşım izni ❌ ${escapeHtml(instagram.publishing.error)}`,
     );
   }
+  const { tiktok } = status;
+  lines.push(
+    tiktok
+      ? `TikTok (Buffer): ${escapeHtml(tiktok.channel ?? '?')} · ${tiktok.ok ? '✅' : `❌ ${escapeHtml(tiktok.error ?? '')}`}${tiktok.enabled ? '' : ' · paylaşım kapalı'}`
+      : 'TikTok (Buffer): ❌ bağlı değil',
+  );
   return lines.join('\n');
+}
+
+export async function connectBuffer(deps: AutomationDeps, apiKey: string): Promise<{ channel: string }> {
+  const [channel] = await createBufferClient(apiKey, deps.fetch).tiktokChannels();
+  if (!channel) throw new BufferError("Buffer hesabında bağlı TikTok kanalı bulunamadı. Önce Buffer'da TikTok'u bağla.", false);
+  await saveIntegration(deps.db, {
+    id: 'buffer',
+    secretEncrypted: encryptSecret(apiKey, deps.integrationsKey),
+    account: { id: channel.id, username: channel.name },
+    expiresAt: null,
+  });
+  await saveSettings(deps.db, { automation: { tiktok: { enabled: true } } });
+  return { channel: channel.name };
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };

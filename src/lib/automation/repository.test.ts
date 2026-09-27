@@ -17,6 +17,7 @@ import {
   releaseForRetry,
   savePublication,
   saveIntegration,
+  setContainer,
   setGroupSkipped,
 } from './repository';
 
@@ -91,7 +92,8 @@ describe('paylaşım kayıtları', () => {
     const reels = rows[3];
     await approveDay(db, DATE);
     await claimForPublishing(db, reels.id);
-    await releaseForRetry(db, reels.id, 'c-1');
+    await setContainer(db, reels.id, 'c-1');
+    await releaseForRetry(db, reels.id);
     const again = await claimForPublishing(db, reels.id);
     expect(again?.igContainerId).toBe('c-1');
     await markPublished(db, reels.id, { igContainerId: 'c-1', igMediaId: 'm-1', permalink: 'https://instagram.com/p/x' });

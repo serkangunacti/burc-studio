@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/db/client';
 import { requireSession } from '@/lib/auth/require-session';
 import { automationDeps } from '@/lib/automation/runtime';
-import { connectInstagram, connectTelegram } from '@/lib/automation/service';
+import { connectBuffer, connectInstagram, connectTelegram } from '@/lib/automation/service';
+import { BufferError } from '@/lib/buffer/client';
 import { InstagramError } from '@/lib/instagram/client';
 import { parseAutomationForm } from '@/lib/settings/automation-form';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
@@ -47,6 +48,20 @@ export async function connectInstagramAction(_prev: ConnectState, formData: Form
     return { status: 'connected', username, at: Date.now() };
   } catch (error) {
     if (error instanceof InstagramError) return { status: 'error', error: `Instagram anahtarı doğrulanamadı: ${error.message}` };
+    throw error;
+  }
+}
+
+export async function connectBufferAction(_prev: ConnectState, formData: FormData): Promise<ConnectState> {
+  await requireSession();
+  const token = String(formData.get('token') ?? '').trim();
+  if (token.length < 20) return { status: 'error', error: "Buffer API anahtarı çok kısa görünüyor; Buffer → Settings → API'den tamamını kopyala." };
+  try {
+    const { channel } = await connectBuffer(automationDeps(), token);
+    revalidatePath('/ayarlar');
+    return { status: 'connected', username: channel, at: Date.now() };
+  } catch (error) {
+    if (error instanceof BufferError) return { status: 'error', error: `Buffer bağlantısı kurulamadı: ${error.message}` };
     throw error;
   }
 }

@@ -445,6 +445,11 @@ Plan: `docs/superpowers/plans/2026-09-27-faz-6-otomasyon.md`.
   | Erkek haftalık (pazartesi) | 11:30 | 18:00 |
 - **Medya:** JPEG'ler Neon'da (`media_files`, `/api/media/:id`), Reels Vercel Blob'da. İkisi de 3 gün sonra bakım cron'unda silinir.
 - **Anahtarlar:** Telegram ve Instagram anahtarları Ayarlar'dan girilir ve `INTEGRATIONS_KEY` ile şifrelenir. Instagram anahtarı 20 gün kala kendiliğinden yenilenir.
+- **TikTok (27.09.2026):**
+  - Yalnızca Reels videoları, Instagram Reels saatinde, aynı açıklamayla Buffer üzerinden paylaşılır (Buffer API, ücretsiz plan).
+  - Kendi TikTok uygulaması seçilmedi, çünkü TikTok uygulama incelemesi kişisel kullanım uygulamalarını reddediyor.
+  - Aynı Telegram onayına dahildir.
+  - Paylaşım saatinde Buffer'a "şimdi paylaş" gönderilir, sonuç izlenir.
 - **Güvenceler:** Onaysız paylaşım yapılmaz. Aynı paylaşım iki kez gönderilmez. Planlanan saatten önce paylaşım yapılmaz. Gün içinde onaylanmayanlar ertesi gece "süresi doldu" olur.
 
 ## Onaydan sonra (Superpowers akışı)

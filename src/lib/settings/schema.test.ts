@@ -60,6 +60,7 @@ describe('ayar birleştirme', () => {
           weekly: { kadin: { carousel: '10:30', reels: '17:00' }, erkek: { carousel: '11:30', reels: '18:00' } },
         },
         partGapMinutes: 3,
+        tiktok: { enabled: false },
       },
     });
   });
