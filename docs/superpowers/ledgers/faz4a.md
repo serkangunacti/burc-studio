@@ -1,0 +1,25 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-09-26-faz-4a-reels.md
+Setup: Ruling: `faz-4a-reels` dalı; kullanıcı Reels kararlarını verdi (her carousel'e ayrı, Reels'e özel dikey sahne, müziksiz) ve teknik işleri Claude'a bıraktı; plan incelemesi için beklenmedi — maliyet: kapsam farkı Task 4 onayında yakalanır.
+Pre-flight: T1→T2/T3 ReelsProps, reelsDurationInFrames, REELS_SIZE, sampleReels, LONGEST_SHORT — tutarlı.
+Pre-flight: T2→T3 getTemplate(v).Reels, PastelReels — tutarlı.
+Pre-flight: Ruling: H.264 kodlama Playwright Chromium 153'te güvenli bağlamda destekli (probe: avc1.640028 true); localhost güvenli bağlam — E2E gerçek render yapabilir.
+Task 1: complete (commits 4afe407..b38880b, tests: npm test -- --maxWorkers=2 →    Duration  26.04s (tests 90%, import 9%, transform 1%))
+Task 2: complete (commits b38880b..8527620, tests: npm test -- --maxWorkers=2 →    Duration  26.65s (tests 90%, import 9%, transform 1%))
+Task 3: visual: gerçek içerikli Reels (kadın/erkek) Chromium'da ~45 sn'de üretildi, 1080×1920, 30 fps, 58,97 sn. Bulunan ve düzeltilen: (1) girişte burç çemberi render'da kayboluyordu (SVG'lere doğrudan position/transform + inset:0) → carousel'de çalışan yapı: konumlu div içinde SVG, dönüş div'de; (2) burç sahnesi üstte toplanıyordu → dikey ortalandı; (3) kapanışta kullanıcı adı ikinci kez filigran olarak çıkıyordu → filigran yalnız giriş ve burç sahnelerinde; (4) girişte çember filigrana yakındı → alt boşluk 500 px; (5) düşük bit hızında (1,25 Mbps) soluklaşan 'şanslı renk' satırı kapanışta hayalet iz bırakıyordu → videoBitrate 5 Mbps + keyframeIntervalInSeconds 1 (iz kayboldu, dosya ~13,8 MB)
+Task 3: Ruling: plandaki render-reels'e videoBitrate/keyframeIntervalInSeconds eklendi (görsel kontrolde bulunan kodlayıcı izi) — maliyet: dosya ~9 → ~14 MB
+Task 3: finding: kayıt çalıştırmasında Reels render'ı %0'da 9,9 dk askıda kaldı (eşzamanlı ffmpeg ile donanım kodlayıcı çakışması olası); 3 tekrarda 3/3 geçti (~47 sn). Kullanıcı tarafında sonsuz bekleme olmasın diye 60 sn ilerlemesizlikte iptal eden bekçi eklendi (stall-watchdog RED→GREEN)
+Task 3: fixed bekçi eklenirken açılan yarış — render başlamadan (font beklerken) basılan İptal yok sayılıyordu (iptal E2E'si kayıt çalıştırmasında düştü); önceden iptal edilmiş sinyal kontrolü eklendi, 3/3 geçti
+Task 3: complete (commits 8527620..25006ba, tests: sh -c 'npm test -- --maxWorkers=2 && npm run test:e2e' →   26 passed (1.4m))
+Task 4: design change (kullanıcı): logo B (Satürn halkası) seçildi — ortak SaturnMark bileşeni; sitede başlık/giriş logosu ve icon.svg sekme simgesi (proxy dışı, girişsiz 200); kart ve Reels filigranında işaret + @kozmikarkan, kapanışta yıldızlı işaret. pastel@1 yerinde değişti (production: 3 gönderi, 0 indirme — doğrulandı); dondurma manifesti ve altın özetler güncellendi. Testler RED→GREEN (proxy icon.svg, filigran işareti, Reels filigranı, giriş logosu). E2E: bir çalıştırmada 1 test düştü (ayrıntı yakalanmadı), sonraki iki çalıştırma 26/26 — kararsız, izleniyor
+Task 4: user: Reels onayı logo/filigran isteğiyle birlikte ('Sayfa adını filigrana yazmamışsın…logo…kartlara ve reelslara eklemelisin'); ardından 'devam et'. Reels kapanışına da yıldızlı logo (ReelsHandle RED→GREEN). pastel-v1-reels dondurma manifesti eklendi
+Task 4: complete (commits 25006ba..72e538f, tests: sh -c 'npm test -- --maxWorkers=2 && npm run test:e2e' →   26 passed (1.3m))
+Final review: code-reviewer (fable) — Critical 0, Important 2, Minor 4; karar: düzeltmelerle birleştirilebilir
+Final: fixed askıda kalan kodlayıcıda iptal/bekçi etkisizdi (renderMediaOnWeb sinyale bakmıyor) — render iptal sözüyle yarıştırıldı, bekçi mesajı "Sayfayı yenileyip tekrar dene" — render-reels.test.ts 2 test RED(zaman aşımı)→GREEN, suite 284/284, e2e 26/26
+Final: fixed Reels dondurma manifesti klasör dışı zamanlama/SaturnMark/burç verisini korumuyordu — pastel-v1-reels/render-chain.test.ts altın hash (7 kare × 2 kitle); SIGN_FRAMES 150→151 ve SaturnMark halka yolu mutasyonlarıyla düştüğü görüldü, suite 284/284
+Final: minor (deferred): Reels yatay güvenli alan 80–1000 px (plan 80–960); kısa metin kartının sağ kenarı Instagram buton sütununa giriyor, metin ~950'de kalıyor
+Final: minor (deferred): kenar çubuğu logosunda ekran okuyucu "kozmikarkan logosu kozmikarkan" okuyor; yazının yanında işaret aria-hidden olmalı
+Final: minor (deferred): Ayarlar'daki filigran önizlemesi Satürn işaretini göstermiyor
+Final: minor (deferred): canRenderMediaOnWeb 5 Mbps bit hızıyla denetlenmiyor
+Final: Ruling: Reels indirme/paylaşımı gönderiyi "indirildi" yapmıyor — planda yok; kullanıcı durumu elle ya da ZIP ile değiştirebilir — maliyet: arşiv durumu eksik görünebilir
+Final: Ruling: haftalık/tarot gönderilerinde Reels paneli 0 burçla açılırdı — bu türler henüz canlı değil; haftalık planında Reels yalnız günlükte gösteriliyor — maliyet: yok
+Final: Ruling: Safari 26/iOS kodlaması yalnız Chromium'da doğrulandı — kullanıcıdan iPhone denemesi istenecek — maliyet: iPhone'da Reels üretilemezse Mac'ten indirilir
