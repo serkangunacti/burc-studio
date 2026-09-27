@@ -1,0 +1,47 @@
+name: Paylaşımları hazırla
+
+# Her sabah günün gönderilerini carousel parçaları ve Reels olarak çizer, Telegram onayına gönderir.
+on:
+  schedule:
+    # 06:07 TSİ; günlük üretim cron'u 05:00–05:59 TSİ arasında çalışır, betik eksik gönderiyi bekler.
+    - cron: '7 3 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Tarih (YYYY-AA-GG, boşsa bugün)'
+        required: false
+      force:
+        description: 'Onaylanmamış hazır paylaşımları yeniden çiz'
+        type: boolean
+        default: false
+
+concurrency:
+  group: render-publications
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - run: npx remotion browser ensure
+      - name: Çiz ve onaya gönder
+        run: node --import tsx scripts/render-publications.ts ${{ inputs.date && format('--date {0}', inputs.date) || '' }} ${{ inputs.force && '--force' || '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
+          APP_URL: https://burc-studio.vercel.app

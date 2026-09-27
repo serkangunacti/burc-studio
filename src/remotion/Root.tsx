@@ -1,4 +1,5 @@
 import { Composition } from 'remotion';
+import { PostReels, PostSlide, postReelsMetadata, postSlideMetadata } from './post-compositions';
 import { TAROT_DECK } from '@/lib/tarot/deck';
 import { SIGN_SLUGS } from '@/lib/zodiac/signs';
 import { LONGEST_BODY, LONGEST_SHORT, LONGEST_WEEKLY_BODY, SAMPLE_COVER, SAMPLE_CTA, sampleProps, sampleReels, sampleSign } from './fixtures';
@@ -108,6 +109,26 @@ export function RemotionRoot() {
         width={REELS_SIZE.width}
         height={REELS_SIZE.height}
         defaultProps={{ ...sampleReels('kadin'), variant: 1, signs: sampleReels('kadin').signs.map((sign, index) => ({ ...sign, tarotCard: TAROT_REFS[index] })) }}
+      />
+      <Composition
+        id="Post-Slide"
+        component={PostSlide}
+        durationInFrames={1}
+        fps={SLIDE_FPS}
+        width={FORMAT_SIZES['4x5'].width}
+        height={FORMAT_SIZES['4x5'].height}
+        defaultProps={{ templateVersion: 'pastel@1', props: sampleProps(SAMPLE_COVER) }}
+        calculateMetadata={postSlideMetadata}
+      />
+      <Composition
+        id="Post-Reels"
+        component={PostReels}
+        durationInFrames={reelsDurationInFrames(12)}
+        fps={REELS_FPS}
+        width={REELS_SIZE.width}
+        height={REELS_SIZE.height}
+        defaultProps={{ templateVersion: 'pastel@1', reels: sampleReels('kadin'), musicFile: null }}
+        calculateMetadata={postReelsMetadata}
       />
       <Composition id="Tarot-Deste" component={TarotDeckSheet} durationInFrames={1} fps={SLIDE_FPS} width={2300} height={1660} />
     </>

@@ -209,15 +209,15 @@ export const mediaFiles = pgTable(
   (t) => [uniqueIndex('media_files_position_uq').on(t.publicationId, t.position)],
 );
 
-export const instagramAuth = pgTable(
-  'instagram_auth',
-  {
-    id: smallint('id').primaryKey().default(1),
-    userId: text('user_id').notNull(),
-    username: text('username'),
-    tokenEncrypted: text('token_encrypted').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [check('instagram_auth_singleton', sql`${t.id} = 1`)],
-);
+export const INTEGRATION_IDS = ['instagram', 'telegram'] as const;
+export type IntegrationId = (typeof INTEGRATION_IDS)[number];
+export type IntegrationAccount = { id: string; username: string | null };
+
+// Instagram ve Telegram anahtarları Ayarlar'dan girilir; INTEGRATIONS_KEY ile şifreli saklanır.
+export const integrations = pgTable('integrations', {
+  id: text('id').$type<IntegrationId>().primaryKey(),
+  secretEncrypted: text('secret_encrypted').notNull(),
+  account: jsonb('account').$type<IntegrationAccount>().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

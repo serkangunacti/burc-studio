@@ -1,13 +1,11 @@
 CREATE TYPE "public"."publication_format" AS ENUM('carousel', 'reels');--> statement-breakpoint
 CREATE TYPE "public"."publication_status" AS ENUM('ready', 'approved', 'publishing', 'published', 'skipped', 'expired', 'failed');--> statement-breakpoint
-CREATE TABLE "instagram_auth" (
-	"id" smallint PRIMARY KEY DEFAULT 1 NOT NULL,
-	"user_id" text NOT NULL,
-	"username" text,
-	"token_encrypted" text NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "instagram_auth_singleton" CHECK ("instagram_auth"."id" = 1)
+CREATE TABLE "integrations" (
+	"id" text PRIMARY KEY NOT NULL,
+	"secret_encrypted" text NOT NULL,
+	"account" jsonb NOT NULL,
+	"expires_at" timestamp with time zone,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "media_files" (

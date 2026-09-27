@@ -1,0 +1,190 @@
+import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { integrations, mediaFiles, publications, type IntegrationId, type PublicationFormat, type PublicationMedia } from '@/db/schema';
+import type { Db } from '@/db/types';
+import type { DateKey } from '@/lib/date/istanbul';
+import type { PlannedPublication } from './plan';
+
+export type PublicationRow = typeof publications.$inferSelect;
+export type IntegrationRow = typeof integrations.$inferSelect;
+export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string };
+
+// Yayın hattında kalan satır yeniden çizimle ezilmez: onaylanmış ya da paylaşılmış içerik sessizce değişmesin.
+const REPLACEABLE = ['ready', 'failed'] as const;
+// Sonuç yazılmadan düşen bir paylaşım bu süreden sonra yeniden sahiplenilebilir.
+const PUBLISH_LEASE_MS = 10 * 60_000;
+
+export async function savePublication(
+  db: Db,
+  date: DateKey,
+  planned: PlannedPublication,
+  media: RenderedMedia,
+): Promise<PublicationRow | null> {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(publications)
+      .where(
+        and(
+          eq(publications.date, date),
+          eq(publications.kind, planned.kind),
+          eq(publications.audience, planned.audience),
+          eq(publications.format, planned.format),
+          eq(publications.part, planned.part),
+        ),
+      );
+    if (existing && !(REPLACEABLE as readonly string[]).includes(existing.status)) return null;
+    const values = {
+      postId: planned.postId,
+      scheduledAt: planned.scheduledAt,
+      caption: planned.caption,
+      status: 'ready' as const,
+      media: 'videoUrl' in media ? { videoUrl: media.videoUrl } : {},
+      error: null,
+      igContainerId: null,
+      updatedAt: new Date(),
+    };
+    const [row] = existing
+      ? await tx.update(publications).set(values).where(eq(publications.id, existing.id)).returning()
+      : await tx
+          .insert(publications)
+          .values({ ...values, date, kind: planned.kind, audience: planned.audience, format: planned.format, part: planned.part })
+          .returning();
+    if (!('images' in media)) return row;
+    await tx.delete(mediaFiles).where(eq(mediaFiles.publicationId, row.id));
+    const inserted = await tx
+      .insert(mediaFiles)
+      .values(media.images.map((data, position) => ({ publicationId: row.id, position, contentType: 'image/jpeg', data })))
+      .returning({ id: mediaFiles.id, position: mediaFiles.position });
+    const imageIds = inserted.sort((a, b) => a.position - b.position).map((file) => file.id);
+    const [withMedia] = await tx
+      .update(publications)
+      .set({ media: { imageIds } satisfies PublicationMedia })
+      .where(eq(publications.id, row.id))
+      .returning();
+    return withMedia;
+  });
+}
+
+export async function listPublications(db: Db, date: DateKey): Promise<PublicationRow[]> {
+  return db
+    .select()
+    .from(publications)
+    .where(eq(publications.date, date))
+    .orderBy(asc(publications.scheduledAt), asc(publications.part));
+}
+
+export async function getPublication(db: Db, id: string): Promise<PublicationRow | null> {
+  const [row] = await db.select().from(publications).where(eq(publications.id, id));
+  return row ?? null;
+}
+
+export async function approveDay(db: Db, date: DateKey, now = new Date()): Promise<PublicationRow[]> {
+  return db
+    .update(publications)
+    .set({ status: 'approved', approvedAt: now, updatedAt: now })
+    .where(and(eq(publications.date, date), eq(publications.status, 'ready')))
+    .returning();
+}
+
+// Atlanan grup geri alınırsa gün onaylanmışsa yeniden onaya, değilse hazıra döner; onaya dönenler kuyruğa yeniden girer.
+export async function setGroupSkipped(
+  db: Db,
+  input: { postId: string; format: PublicationFormat; skipped: boolean },
+  now = new Date(),
+): Promise<PublicationRow[]> {
+  const group = and(eq(publications.postId, input.postId), eq(publications.format, input.format));
+  if (input.skipped) {
+    return db
+      .update(publications)
+      .set({ status: 'skipped', updatedAt: now })
+      .where(and(group, inArray(publications.status, ['ready', 'approved'])))
+      .returning();
+  }
+  const [target] = await db.select({ date: publications.date }).from(publications).where(group).limit(1);
+  if (!target) return [];
+  const [approved] = await db
+    .select({ id: publications.id })
+    .from(publications)
+    .where(and(eq(publications.date, target.date), inArray(publications.status, ['approved', 'publishing', 'published'])))
+    .limit(1);
+  return db
+    .update(publications)
+    .set(approved ? { status: 'approved', approvedAt: now, updatedAt: now } : { status: 'ready', updatedAt: now })
+    .where(and(group, eq(publications.status, 'skipped')))
+    .returning();
+}
+
+export async function claimForPublishing(db: Db, id: string, now = new Date()): Promise<PublicationRow | null> {
+  const [row] = await db
+    .update(publications)
+    .set({ status: 'publishing', attempts: sql`${publications.attempts} + 1`, updatedAt: now })
+    .where(
+      and(
+        eq(publications.id, id),
+        or(
+          eq(publications.status, 'approved'),
+          and(eq(publications.status, 'publishing'), lt(publications.updatedAt, new Date(now.getTime() - PUBLISH_LEASE_MS))),
+        ),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+// Instagram videoyu işlerken satır onaya geri bırakılır; kuyruğun sonraki teslimi aynı container ile sürer.
+export async function releaseForRetry(db: Db, id: string, igContainerId: string | null): Promise<void> {
+  await db.update(publications).set({ status: 'approved', igContainerId, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+export async function markPublished(db: Db, id: string, result: { igContainerId: string; igMediaId: string | null; permalink: string | null }, now = new Date()) {
+  await db
+    .update(publications)
+    .set({ status: 'published', ...result, error: null, publishedAt: now, updatedAt: now })
+    .where(eq(publications.id, id));
+}
+
+export async function markFailed(db: Db, id: string, error: string): Promise<void> {
+  await db.update(publications).set({ status: 'failed', error, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+export async function setTelegramMessageId(db: Db, date: DateKey, messageId: number): Promise<void> {
+  await db.update(publications).set({ telegramMessageId: messageId }).where(eq(publications.date, date));
+}
+
+// Gün bitmeden onaylanmayan paylaşımlar bir daha sorulmaz.
+export async function expireUnapproved(db: Db, before: DateKey): Promise<number> {
+  const rows = await db
+    .update(publications)
+    .set({ status: 'expired', updatedAt: new Date() })
+    .where(and(lt(publications.date, before), eq(publications.status, 'ready')))
+    .returning({ id: publications.id });
+  return rows.length;
+}
+
+export async function deleteMediaBefore(db: Db, before: Date): Promise<number> {
+  const rows = await db.delete(mediaFiles).where(lt(mediaFiles.createdAt, before)).returning({ id: mediaFiles.id });
+  return rows.length;
+}
+
+export async function getMediaFile(db: Db, id: string): Promise<{ contentType: string; data: Uint8Array } | null> {
+  const [row] = await db.select({ contentType: mediaFiles.contentType, data: mediaFiles.data }).from(mediaFiles).where(eq(mediaFiles.id, id));
+  return row ?? null;
+}
+
+export async function getIntegration(db: Db, id: IntegrationId): Promise<IntegrationRow | null> {
+  const [row] = await db.select().from(integrations).where(eq(integrations.id, id));
+  return row ?? null;
+}
+
+export async function saveIntegration(db: Db, values: Omit<IntegrationRow, 'updatedAt'>): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(integrations)
+    .values({ ...values, updatedAt: now })
+    .onConflictDoUpdate({ target: integrations.id, set: { ...values, updatedAt: now } });
+}
+
+// Instagram carousel parçası gönderilmeden önce container kimliği yazılır; yarıda kalan deneme yeniden paylaşmasın.
+export async function setContainer(db: Db, id: string, igContainerId: string): Promise<void> {
+  await db.update(publications).set({ igContainerId, updatedAt: new Date() }).where(eq(publications.id, id));
+}

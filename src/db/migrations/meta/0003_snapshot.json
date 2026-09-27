@@ -1,5 +1,5 @@
 {
-  "id": "25008ee6-e539-482a-827c-0d9a7767eefb",
+  "id": "49881a17-7717-4658-a931-50f0746f1346",
   "prevId": "8e21bb9f-5515-44c7-885c-7caac1320dab",
   "version": "7",
   "dialect": "postgresql",
@@ -113,32 +113,25 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.instagram_auth": {
-      "name": "instagram_auth",
+    "public.integrations": {
+      "name": "integrations",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "smallint",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": 1
+          "notNull": true
         },
-        "user_id": {
-          "name": "user_id",
+        "secret_encrypted": {
+          "name": "secret_encrypted",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "username": {
-          "name": "username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "token_encrypted": {
-          "name": "token_encrypted",
-          "type": "text",
+        "account": {
+          "name": "account",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
@@ -146,7 +139,7 @@
           "name": "expires_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -161,12 +154,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "instagram_auth_singleton": {
-          "name": "instagram_auth_singleton",
-          "value": "\"instagram_auth\".\"id\" = 1"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.llm_calls": {
