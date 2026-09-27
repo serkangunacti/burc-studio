@@ -5,6 +5,7 @@ import { FORMAT_SIZES, SLIDE_FPS, type SlideProps } from './slide-types';
 import { PastelSlide } from './templates/pastel-v1';
 import { PastelReels } from './templates/pastel-v1-reels';
 import { PastelWeeklyReels, PastelWeeklySlide } from './templates/pastel-weekly-v1';
+import { TarotDeckSheet } from './tarot/deck-sheet';
 
 const SAMPLES: { id: string; props: SlideProps }[] = [
   { id: 'Kapak', props: sampleProps(SAMPLE_COVER) },
@@ -76,6 +77,7 @@ export function RemotionRoot() {
         height={REELS_SIZE.height}
         defaultProps={{ ...sampleReels('erkek'), dateLabel: WEEK, variant: 9 }}
       />
+      <Composition id="Tarot-Deste" component={TarotDeckSheet} durationInFrames={1} fps={SLIDE_FPS} width={2300} height={1660} />
     </>
   );
 }
