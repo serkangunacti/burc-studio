@@ -4,7 +4,7 @@ import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from './reels';
 import { FORMAT_SIZES, SLIDE_FPS, type SlideProps } from './slide-types';
 import { PastelSlide } from './templates/pastel-v1';
 import { PastelReels } from './templates/pastel-v1-reels';
-import { PastelWeeklySlide } from './templates/pastel-weekly-v1';
+import { PastelWeeklyReels, PastelWeeklySlide } from './templates/pastel-weekly-v1';
 
 const SAMPLES: { id: string; props: SlideProps }[] = [
   { id: 'Kapak', props: sampleProps(SAMPLE_COVER) },
@@ -67,6 +67,15 @@ export function RemotionRoot() {
           defaultProps={reels}
         />
       ))}
+      <Composition
+        id="Reels-Haftalik"
+        component={PastelWeeklyReels}
+        durationInFrames={reelsDurationInFrames(12)}
+        fps={REELS_FPS}
+        width={REELS_SIZE.width}
+        height={REELS_SIZE.height}
+        defaultProps={{ ...sampleReels('erkek'), dateLabel: WEEK, variant: 9 }}
+      />
     </>
   );
 }
