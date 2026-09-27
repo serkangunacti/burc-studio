@@ -42,6 +42,23 @@ function clock(deps: GenerationDeps): () => Date {
   return deps.now ?? (() => new Date());
 }
 
+// Ücretsiz sağlayıcıların dakikalık sınırları ani toplu isteklerle dolar; tek burç yeniden istemleri sınırlı eşzamanlılıkla gider.
+const RETRY_CONCURRENCY = 3;
+
+async function mapLimited<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await work(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
 function chunk<T>(items: readonly T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
 }
@@ -147,7 +164,7 @@ export async function generateHoroscopeSet(
       failedSigns.push(...check.failedSigns);
     }
     if (!post) throw new Error('Kabul edilen yanıtta gönderi alanları eksik');
-    const retried = await Promise.all(failedSigns.map((failed) => generateSign(router, context, failed.sign, failed.issues, spec.limits)));
+    const retried = await mapLimited(failedSigns, RETRY_CONCURRENCY, (failed) => generateSign(router, context, failed.sign, failed.issues, spec.limits));
     for (const { entry, source } of retried) {
       entries.set(entry.sign, entry);
       sources.set(entry.sign, source);

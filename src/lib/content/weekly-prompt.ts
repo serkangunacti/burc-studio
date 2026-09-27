@@ -6,7 +6,7 @@ import { LUCKY_COLOR_IDS } from './lucky-colors';
 import type { QualityIssue } from './quality';
 import type { Audience, RecentHeadline } from './types';
 
-export const WEEKLY_PROMPT_VERSION = 'haftalik-v1';
+export const WEEKLY_PROMPT_VERSION = 'haftalik-v2';
 
 export const WEEKLY_INSTRUCTIONS = [
   "Sen Instagram'da her pazartesi paylaşılan haftalık burç yorumları yazan, Türkçe konuşan bir astroloji içerik yazarısın.",
@@ -79,6 +79,9 @@ export function buildWeeklyBatchPrompt(
     'Her burç için bir haftalık yorum yaz ve şu JSON biçiminde yanıt ver:',
     `{"kapakKanca": "...", "caption": "...", "hashtagler": ["#..."], "burclar": [${ENTRY_SHAPE}]}`,
     `"burclar" dizisinde şu ${signs.length} burcun her biri tam bir kez, yukarıdaki sırayla ve "burc" alanında parantez içindeki kimlikle yer almalı.`,
+    ...(signs.length < SIGN_SLUGS.length
+      ? ['"kapakKanca" ve "caption" 12 burcun tamamını kapsayan haftalık gönderi içindir; yalnızca yukarıdaki burçlardan söz etme, burç adı sayma.']
+      : []),
   ].join('\n');
   return { instructions: WEEKLY_INSTRUCTIONS, prompt };
 }
