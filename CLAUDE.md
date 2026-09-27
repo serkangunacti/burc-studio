@@ -2,7 +2,7 @@
 
 # kozmikarkan (burc-studio): proje notları
 
-Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @kozmikarkan için içeriği otomatik üretir, tasarlar ve arşivler. Paylaşım ileride ajanlara devredilecek; hiçbir akış manuel adım gerektirmemeli.
+Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @kozmikarkan için içeriği otomatik üretir, tasarlar, arşivler ve kullanıcının Telegram onayıyla planlı saatlerde Instagram'a paylaşır (Faz 6). Hiçbir akış manuel adım gerektirmemeli.
 
 ## Bağlantılar
 - **Canlı site:** https://burc-studio.vercel.app (Vercel projesi `serkangunactis-projects/burc-studio`). `main`'e push otomatik yayına alır.
@@ -17,6 +17,25 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 - **Günlük plan:** Canlıdaki `settings.data.dailyPlan` alanında (4 kalem). Ayarlar sayfasından değişir.
 - **Her gönderi için:** 14 slaytlık JPEG carousel (tarayıcıda `renderStillOnWeb`), ZIP, caption ve 59 sn müzikli Reels (tarayıcıda `renderMediaOnWeb`, AAC).
 - **Reels müziği:** Kodla üretilir (`src/lib/music`). Kullanıcı sesleri onayladı; karakterini değiştirme.
+
+## Otomatik paylaşım (Faz 6, spec §14)
+- **Akış:**
+  1. Cron `/api/cron/daily` 05:00 TSİ'de içeriği üretir.
+  2. GitHub Actions `render-publications.yml` 06:07 TSİ'de çalışır (`scripts/render-publications.ts`, `scripts/automation/`):
+     - Carousel'i 3 parçaya böler (kapak + 4 burç + kapanış).
+     - JPEG'leri Neon `media_files` tablosuna, Reels MP4'ü Blob'a (`kozmikarkan-medya`) yazar.
+     - `/api/automation/ready` ucunu çağırır.
+  3. Telegram onay mesajı gider (`/api/telegram/webhook`).
+  4. Onaylananlar Vercel Queues'a (`instagram-publish`) gecikmeli bırakılır.
+  5. Tüketici `/api/queues/publish` Instagram Graph API v25 ile paylaşır.
+- **Bakım:** `/api/cron/maintenance` 00:30 TSİ'de çalışır. Onaysızları düşürür, 3 günlük medyayı siler, Instagram anahtarını yeniler.
+- **Kod:** `src/lib/automation/` (plan, carousel, repository, service, day-message, http, runtime), `src/lib/instagram/`, `src/lib/telegram/`.
+- **Arayüz:** Ayarlar → "Otomatik paylaşım" (bağlantılar ve saatler), `/paylasimlar` sayfası.
+- **Sırlar:**
+  - Vercel: `AUTOMATION_SECRET`, `INTEGRATIONS_KEY` (Secret), `BLOB_READ_WRITE_TOKEN`.
+  - GitHub secrets: `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`, `AUTOMATION_SECRET`.
+  - Bot ve Instagram anahtarları DB'de şifreli (`integrations`).
+- **Elle yeniden çizim:** `gh workflow run render-publications.yml -f date=YYYY-AA-GG [-f force=true]`.
 
 ## Mimari (önemli dosyalar)
 - **Üretim:**

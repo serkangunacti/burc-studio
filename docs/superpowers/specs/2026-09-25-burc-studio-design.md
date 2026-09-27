@@ -416,12 +416,36 @@ Her faz kendi ayrıntılı planıyla (writing-plans) ve TDD ile uygulanır. Her 
 
 ## 13. Kapsam dışı
 
-- Instagram'a otomatik paylaşım (Graph API)
+- ~~Instagram'a otomatik paylaşım (Graph API)~~ → Faz 6 ile kapsama alındı (§14)
 - Çoklu kullanıcı
 - Herkese açık site
 - Analitik
 - Yapay zekâ ile görsel üretimi
 - Ödeme
+
+## 14. Otomatik paylaşım (Faz 6, 27.09.2026)
+
+Plan: `docs/superpowers/plans/2026-09-27-faz-6-otomasyon.md`.
+
+- **Akış:**
+  1. Cron 05:00 TSİ'de içeriği üretir.
+  2. GitHub Actions 06:07 TSİ'de (`render-publications.yml`) carousel parçalarını ve müzikli Reels'i sunucuda (`@remotion/renderer`) çizer.
+  3. Telegram'a sabah onay mesajı gider ("Hepsini onayla" ve tek tek 🚫).
+  4. Onaylananlar Vercel Queues'ta planlanan saate kadar bekler, sonra Instagram Graph API ile paylaşılır.
+- **Carousel:** Instagram en fazla 10 görsele izin verdiği için her gönderi 3 parça hâlinde paylaşılır. Her parça kapak (parça etiketiyle) + 4 burç + kapanıştan oluşur. Parçalar sondan başa, 3'er dakika arayla paylaşılır.
+- **Saatler (TSİ, Ayarlar'dan değişir):**
+
+  | Gönderi | Carousel | Reels |
+  |---|---|---|
+  | Kadın burç | 08:30 | 19:00 |
+  | Erkek burç | 09:30 | 20:00 |
+  | Kadın tarot | 12:30 | 21:00 |
+  | Erkek tarot | 13:30 | 22:00 |
+  | Kadın haftalık (pazartesi) | 10:30 | 17:00 |
+  | Erkek haftalık (pazartesi) | 11:30 | 18:00 |
+- **Medya:** JPEG'ler Neon'da (`media_files`, `/api/media/:id`), Reels Vercel Blob'da. İkisi de 3 gün sonra bakım cron'unda silinir.
+- **Anahtarlar:** Telegram ve Instagram anahtarları Ayarlar'dan girilir ve `INTEGRATIONS_KEY` ile şifrelenir. Instagram anahtarı 20 gün kala kendiliğinden yenilenir.
+- **Güvenceler:** Onaysız paylaşım yapılmaz. Aynı paylaşım iki kez gönderilmez. Planlanan saatten önce paylaşım yapılmaz. Gün içinde onaylanmayanlar ertesi gece "süresi doldu" olur.
 
 ## Onaydan sonra (Superpowers akışı)
 
@@ -448,4 +472,4 @@ Her faz kendi ayrıntılı planıyla (writing-plans) ve TDD ile uygulanır. Her 
 **Yapılmayan, isteğe bağlı işler:**
 - **Özel gündem (§1.6, Faz 5):** Gökyüzü takvimi, özel günler ve serbest konu.
 - **Slayt MP4'leri (§3 AnimatedSlide):** Her slaytın animasyonlu MP4 hâli.
-- **Instagram'a otomatik paylaşım:** Kapsam dışı. Hesap ajanlara bağlanacak.
+- **Instagram'a otomatik paylaşım:** Faz 6 ile kuruldu (§14); Telegram botu ve Instagram erişim anahtarının Ayarlar'dan bağlanması gerekiyor.
