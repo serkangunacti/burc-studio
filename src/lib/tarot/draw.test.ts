@@ -14,4 +14,12 @@ describe('drawCards', () => {
   it('karıştırma verilen rastgele kaynağı kullanır (Fisher–Yates)', () => {
     expect(drawCards(3, () => 0).map((card) => card.id)).toEqual([TAROT_DECK[1].id, TAROT_DECK[2].id, TAROT_DECK[3].id]);
   });
+
+  it('dışarıda bırakılan kartları çekmez', () => {
+    const cards = drawCards(76, undefined, new Set(['deli', 'yildiz']));
+    expect(cards).toHaveLength(76);
+    expect(new Set(cards.map((card) => card.id)).size).toBe(76);
+    expect(cards.map((card) => card.id)).not.toContain('deli');
+    expect(cards.map((card) => card.id)).not.toContain('yildiz');
+  });
 });
