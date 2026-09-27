@@ -38,6 +38,15 @@ describe('günün render işi', () => {
     expect(rows[3].media.videoUrl).toBe(`https://blob.example/${DATE}-tarot-erkek.mp4`);
   });
 
+  it('haftalık gönderiyi de üç parçaya böler ve haftalık şablonla çizer', async () => {
+    await seedPost(db, { date: '2026-09-28', kind: 'weekly', audience: 'kadin' });
+    const renderers = fakeRenderers();
+    const result = await renderDay(db, '2026-09-28', renderers);
+    expect(result.failures).toEqual([]);
+    expect(renderers.stills.mock.calls.map(([version, slides]) => [version, slides.length])).toEqual(Array(3).fill(['pastel-weekly@1', 6]));
+    expect(renderers.videos).toHaveBeenCalledWith(expect.objectContaining({ templateVersion: 'pastel-weekly@1' }));
+  });
+
   it('yeniden çalışınca hazır ve onaylı satırları yeniden çizmez; zorlanınca yalnız hazırları yeniler', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await renderDay(db, DATE, fakeRenderers());

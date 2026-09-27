@@ -39,8 +39,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx remotion browser ensure
       - name: Çiz ve onaya gönder
-        run: node --import tsx scripts/render-publications.ts ${{ inputs.date && format('--date {0}', inputs.date) || '' }} ${{ inputs.force && '--force' || '' }}
+        run: node --import tsx scripts/render-publications.ts
         env:
+          RENDER_DATE: ${{ inputs.date }}
+          RENDER_FORCE: ${{ inputs.force }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}

@@ -25,11 +25,12 @@ async function notifyReady(date: string, failures: string[]) {
     body: JSON.stringify({ date, failures }),
   });
   log(`Onay mesajı: ${response.status} ${await response.text()}`);
-  if (!response.ok) throw new Error('Onay mesajı gönderilemedi');
+  // 409: Telegram henüz bağlanmadı; paylaşımlar hazır bekler, Paylaşımlar sayfasından yeniden gönderilebilir.
+  if (!response.ok && response.status !== 409) throw new Error('Onay mesajı gönderilemedi');
 }
 
 async function main() {
-  const date = values.date ?? istanbulDateKey();
+  const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
   const db = getDb();
   if (!(await getSettings(db)).automation.enabled) {
@@ -54,7 +55,7 @@ async function main() {
     upload: async (name, file) => (await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true })).url,
   });
   try {
-    const result = await renderDay(db, date, renderers, { force: values.force });
+    const result = await renderDay(db, date, renderers, { force: values.force || process.env.RENDER_FORCE === 'true' });
     log(`Çizilen: ${result.rendered.length}, korunan: ${result.kept.length}, hata: ${result.failures.length}`);
     for (const failure of result.failures) log(`HATA ${failure}`);
     const failures = [...missing.map((item) => `${item}: gönderi üretilmedi`), ...result.failures];
