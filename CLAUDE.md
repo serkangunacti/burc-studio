@@ -12,7 +12,7 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 - **Faz planları:** `docs/superpowers/plans/`. Her fazda verilen kararlar (`Ruling:`) ve ertelenen küçük işler: `docs/superpowers/ledgers/`.
 
 ## Ne üretiliyor
-- **Her gün ~06:00 TSİ cron (`/api/cron/daily`):** Kadın ve erkek günlük burç (`pastel@1`) ile kadın ve erkek günlük tarot (`pastel-tarot@1`).
+- **Her gün ~05:00 TSİ cron (`/api/cron/daily`):** Kadın ve erkek günlük burç (`pastel@1`) ile kadın ve erkek günlük tarot (`pastel-tarot@1`).
 - **Pazartesi ek olarak:** Kadın ve erkek haftalık yorumlar (`pastel-weekly@1`), 4 burçluk 3 parça hâlinde üretilir.
 - **Günlük plan:** Canlıdaki `settings.data.dailyPlan` alanında (4 kalem). Ayarlar sayfasından değişir.
 - **Her gönderi için:** 14 slaytlık JPEG carousel (tarayıcıda `renderStillOnWeb`), ZIP, caption ve 59 sn müzikli Reels (tarayıcıda `renderMediaOnWeb`, AAC).
