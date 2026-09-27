@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,14 +15,32 @@ export type ConnectionStatus = {
   tiktok: { channel: string | null } | null;
 };
 
-function ConnectForm({ action, label, placeholder }: { action: typeof connectTelegramAction; label: string; placeholder: string }) {
+// Anahtarlar kaydedildikten sonra tarayıcıya geri gönderilmez; kutu boş kalır, bağlı olduğu etiket ve yer tutucuyla belirtilir.
+function ConnectedTitle({ title, state }: { title: string; state: 'connected' | 'pending' | null }) {
+  return (
+    <CardTitle className="flex items-center justify-between gap-2">
+      {title}
+      {state === 'connected' && <Badge className="bg-emerald-600 text-white">✓ Bağlı</Badge>}
+      {state === 'pending' && <Badge variant="secondary">/start bekleniyor</Badge>}
+    </CardTitle>
+  );
+}
+
+function ConnectForm({ action, label, placeholder, connected }: { action: typeof connectTelegramAction; label: string; placeholder: string; connected: boolean }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_STATE);
   return (
     <form action={formAction} className="space-y-2">
       <div className="flex gap-2">
-        <Input name="token" type="password" autoComplete="off" aria-label={label} placeholder={placeholder} required />
+        <Input
+          name="token"
+          type="password"
+          autoComplete="off"
+          aria-label={label}
+          placeholder={connected ? 'Bağlı — değiştirmek için yeni anahtar yapıştır' : placeholder}
+          required
+        />
         <Button type="submit" disabled={pending}>
-          {pending ? 'Bağlanıyor…' : 'Bağla'}
+          {pending ? 'Bağlanıyor…' : connected ? 'Değiştir' : 'Bağla'}
         </Button>
       </div>
       {state.status === 'error' && (
@@ -40,7 +59,7 @@ export function Connections({ status }: { status: ConnectionStatus }) {
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <Card>
         <CardHeader>
-          <CardTitle>Telegram onayı</CardTitle>
+          <ConnectedTitle title="Telegram onayı" state={telegram ? (telegram.chatLinked ? 'connected' : 'pending') : null} />
           <CardDescription>
             {telegram
               ? telegram.chatLinked
@@ -50,12 +69,12 @@ export function Connections({ status }: { status: ConnectionStatus }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConnectForm action={connectTelegramAction} label="Telegram bot anahtarı" placeholder="123456789:AA…" />
+          <ConnectForm action={connectTelegramAction} label="Telegram bot anahtarı" placeholder="123456789:AA…" connected={telegram !== null} />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Instagram</CardTitle>
+          <ConnectedTitle title="Instagram" state={instagram ? 'connected' : null} />
           <CardDescription>
             {instagram
               ? `@${instagram.username ?? '?'} bağlı${instagram.expiresAt ? `; anahtar ${new Date(instagram.expiresAt).toLocaleDateString('tr-TR')} tarihine kadar geçerli, kendiliğinden yenilenir.` : '.'}`
@@ -63,12 +82,12 @@ export function Connections({ status }: { status: ConnectionStatus }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConnectForm action={connectInstagramAction} label="Instagram erişim anahtarı" placeholder="IGAA…" />
+          <ConnectForm action={connectInstagramAction} label="Instagram erişim anahtarı" placeholder="IGAA…" connected={instagram !== null} />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>TikTok (Buffer)</CardTitle>
+          <ConnectedTitle title="TikTok (Buffer)" state={tiktok ? 'connected' : null} />
           <CardDescription>
             {tiktok
               ? `${tiktok.channel ?? 'TikTok'} kanalı bağlı; Reels videoları aynı saatte TikTok'ta da paylaşılır.`
@@ -76,7 +95,7 @@ export function Connections({ status }: { status: ConnectionStatus }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConnectForm action={connectBufferAction} label="Buffer API anahtarı" placeholder="Buffer API anahtarı" />
+          <ConnectForm action={connectBufferAction} label="Buffer API anahtarı" placeholder="Buffer API anahtarı" connected={tiktok !== null} />
         </CardContent>
       </Card>
     </div>
