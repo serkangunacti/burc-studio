@@ -53,6 +53,27 @@ export function PostWorkspace({
     }
   }
 
+  const [redrawing, setRedrawing] = useState(false);
+
+  // Tarot: 12 kart yeniden çekilir ve yorumlar yeniden yazılır; eski sürüm arşivde kalır.
+  async function redrawAll() {
+    if (!window.confirm('Bu gönderinin 12 kartı yeniden çekilecek ve yorumlar yeniden yazılacak. Eski sürüm arşivde kalır. Devam edilsin mi?')) return;
+    setRedrawing(true);
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ date: post.date, audience: post.audience, kind: 'tarot', force: true }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { postId?: string; error?: string };
+    setRedrawing(false);
+    if (response.ok && data.postId) {
+      toast.success('Yeni kartlar çekildi.');
+      openPost(data.postId);
+    } else {
+      toast.error(data.error ?? 'Kartlar yeniden çekilemedi.');
+    }
+  }
+
   async function save() {
     setSaving(true);
     setErrors({});
@@ -93,6 +114,11 @@ export function PostWorkspace({
           <Badge variant="secondary" data-testid="post-status">
             {STATUS_LABELS[post.status]}
           </Badge>
+          {post.kind === 'tarot' && post.isCurrent && (
+            <Button type="button" variant="outline" size="sm" disabled={redrawing || dirty} onClick={() => void redrawAll()}>
+              {redrawing ? 'Kartlar çekiliyor…' : 'Tüm kartları yeniden çek'}
+            </Button>
+          )}
         </div>
       </header>
 

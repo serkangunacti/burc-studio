@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: 'Arşiv' };
 
 const PAGE_SIZE = 30;
 const STATUS_FILTERS: PostStatus[] = ['taslak', 'indirildi', 'paylasildi'];
-const KIND_FILTERS = { gunluk: 'horoscope', haftalik: 'weekly' } as const;
+const KIND_FILTERS = { gunluk: 'horoscope', tarot: 'tarot', haftalik: 'weekly' } as const;
 type Filters = { tur?: string; kitle?: string; durum?: string; once?: string };
 
 function archiveHref(filters: Filters): string {
@@ -47,7 +47,7 @@ function FilterNav({ label, options, active, href }: { label: string; options: [
 export default async function ArchivePage(props: PageProps<'/arsiv'>) {
   await connection();
   const params = await props.searchParams;
-  const tur = params.tur === 'gunluk' || params.tur === 'haftalik' ? params.tur : undefined;
+  const tur = params.tur === 'gunluk' || params.tur === 'tarot' || params.tur === 'haftalik' ? params.tur : undefined;
   const kitle = params.kitle === 'kadin' || params.kitle === 'erkek' ? params.kitle : undefined;
   const durum = STATUS_FILTERS.find((value) => value === params.durum);
   const once = isDateKey(params.once) ? params.once : undefined;
@@ -66,7 +66,7 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
         <h1 className="font-heading text-4xl">Arşiv</h1>
         <FilterNav
           label="Tür"
-          options={[[undefined, 'Tümü'], ['gunluk', 'Günlük'], ['haftalik', 'Haftalık']]}
+          options={[[undefined, 'Tümü'], ['gunluk', 'Günlük'], ['tarot', 'Tarot'], ['haftalik', 'Haftalık']]}
           active={tur}
           href={(value) => archiveHref({ tur: value, kitle, durum })}
         />
@@ -105,7 +105,8 @@ export default async function ArchivePage(props: PageProps<'/arsiv'>) {
                         <span className="flex items-center justify-between gap-2 px-1 text-sm">
                           <span className="font-medium">
                             {AUDIENCE_LABELS[audience]}
-                            {post.kind === 'weekly' && ' · Haftalık'} · Sürüm {post.version}
+                            {post.kind === 'weekly' && ' · Haftalık'}
+                            {post.kind === 'tarot' && ' · Tarot'} · Sürüm {post.version}
                           </span>
                           <Badge variant="outline">{STATUS_LABELS[post.status]}</Badge>
                         </span>

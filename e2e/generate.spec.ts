@@ -24,5 +24,12 @@ test('cron uç noktası anahtarla çalışır ve mevcut paketi atlar', async ({ 
   const response = await request.get('/api/cron/daily', { headers: { authorization: `Bearer ${E2E_CRON_SECRET}` } });
   expect(response.status()).toBe(200);
   const body = await response.json();
-  expect(body.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['skipped', 'skipped']);
+  // Plandaki günlük burç ve tarot kalemleri zaten üretildi; pazartesi eklenen haftalıklar bu testin konusu değil.
+  const planned = body.generated.filter((entry: { item: { kind: string } }) => entry.item.kind !== 'weekly');
+  expect(planned.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`)).toEqual([
+    'horoscope:kadin:skipped',
+    'horoscope:erkek:skipped',
+    'tarot:kadin:skipped',
+    'tarot:erkek:skipped',
+  ]);
 });
