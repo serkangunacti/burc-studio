@@ -17,6 +17,7 @@ export function TarotCover({ slide, backdrop }: { slide: CoverSlideData; backdro
   return (
     <AbsoluteFill style={{ padding: '96px 88px 110px', alignItems: 'center' }}>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 6, color: PALETTE.plumSoft }}>{slide.dateLabel}</div>
+      {slide.partLabel && <div style={{ marginTop: 12, fontSize: 24, fontWeight: 700, letterSpacing: 4, color: ink }}>{slide.partLabel}</div>}
       <div style={{ marginTop: 28, fontFamily: HEADING_FONT, fontSize: 64, fontWeight: 500, color: ink }}>Günlük</div>
       <div style={{ fontFamily: HEADING_FONT, fontSize: 104, fontWeight: 600, lineHeight: 1.02 }}>Tarot Yorumları</div>
       <div

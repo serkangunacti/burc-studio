@@ -46,7 +46,7 @@ describe('proxy', () => {
     expect(await res.json()).toEqual({ error: 'Oturum gerekli.' });
   });
 
-  it.each(['/giris', '/api/auth/login', '/api/cron/daily'])('%s herkese açıktır', async (path) => {
+  it.each(['/giris', '/api/auth/login', '/api/cron/daily', '/api/telegram/webhook', '/api/queues/publish', '/api/automation/ready', '/api/media/abc'])('%s herkese açıktır', async (path) => {
     expect((await proxy(request(path))).headers.get('x-middleware-next')).toBe('1');
   });
 

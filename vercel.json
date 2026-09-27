@@ -1,4 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [{ "path": "/api/cron/daily", "schedule": "0 3 * * *" }]
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/maintenance", "schedule": "30 21 * * *" }
+  ],
+  "functions": {
+    "src/app/api/queues/publish/route.ts": {
+      "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "instagram-publish", "retryAfterSeconds": 60 }]
+    }
+  }
 }

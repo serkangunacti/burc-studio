@@ -18,6 +18,22 @@ export const providerPreferenceSchema = z.object({
   model: z.string().min(1).optional(),
 });
 
+const clockSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Saat SS:DD biçiminde olmalı.');
+const slotSchema = z.object({ carousel: clockSchema, reels: clockSchema });
+const audienceSlotsSchema = z.object({ kadin: slotSchema, erkek: slotSchema });
+
+export const AUTOMATION_KINDS = ['horoscope', 'tarot', 'weekly'] as const;
+export type AutomationKind = (typeof AUTOMATION_KINDS)[number];
+
+export const automationSchema = z.object({
+  enabled: z.boolean(),
+  telegramChatId: z.number().int().nullable(),
+  // TSİ saatleri; haftalık satırı yalnız pazartesi kullanılır.
+  schedule: z.object({ horoscope: audienceSlotsSchema, tarot: audienceSlotsSchema, weekly: audienceSlotsSchema }),
+  partGapMinutes: z.number().int().min(1).max(30),
+});
+export type AutomationSettings = z.infer<typeof automationSchema>;
+
 export const settingsSchema = z.object({
   instagramHandle: z.string().regex(HANDLE_PATTERN, HANDLE_ERROR).nullable(),
   watermark: z.object({
@@ -31,6 +47,7 @@ export const settingsSchema = z.object({
   providerChain: z.array(providerPreferenceSchema),
   spreadLoad: z.boolean(),
   defaultFormat: z.enum(['4x5', '3x4']),
+  automation: automationSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -43,6 +60,7 @@ export type SettingsPatch = {
   providerChain?: Settings['providerChain'];
   spreadLoad?: boolean;
   defaultFormat?: PostFormat;
+  automation?: Partial<AutomationSettings>;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +77,16 @@ export const DEFAULT_SETTINGS: Settings = {
   providerChain: [],
   spreadLoad: false,
   defaultFormat: '4x5',
+  automation: {
+    enabled: true,
+    telegramChatId: null,
+    schedule: {
+      horoscope: { kadin: { carousel: '08:30', reels: '19:00' }, erkek: { carousel: '09:30', reels: '20:00' } },
+      tarot: { kadin: { carousel: '12:30', reels: '21:00' }, erkek: { carousel: '13:30', reels: '22:00' } },
+      weekly: { kadin: { carousel: '10:30', reels: '17:00' }, erkek: { carousel: '11:30', reels: '18:00' } },
+    },
+    partGapMinutes: 3,
+  },
 };
 
 export function normalizeInstagramHandle(input: string): string {
@@ -81,6 +109,7 @@ export function mergeSettings(base: Settings, patch: SettingsPatch): Settings {
     ...base,
     ...patch,
     watermark: { ...base.watermark, ...patch.watermark },
+    automation: { ...base.automation, ...patch.automation },
   });
 }
 
