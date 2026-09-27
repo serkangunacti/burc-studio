@@ -27,16 +27,23 @@ test('haftalık gönderi 14 slayt ve haftalık dosya adlarıyla indirilir; en uz
   await expect(page.getByRole('heading', { name: 'Kadın haftalık yorumlar' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Slayt \d+:/ })).toHaveCount(14);
 
-  await page.getByRole('button', { name: /^Slayt 10: Yay/ }).click();
-  await page.getByLabel('Yorum', { exact: true }).fill(LONGEST_WEEKLY_BODY);
-  await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
-  await expect(page.getByText('Yeni sürüm kaydedildi.').first()).toBeVisible();
-  await expect(page).not.toHaveURL(new RegExp(id));
-  expect(
-    await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('[data-slot="text"]')].every((element) => element.scrollHeight <= element.clientHeight + 1),
-    ),
-  ).toBe(true);
+  // Yazı boyutu kademelerinin (34/32/30/28 px) üst sınırlarında en uzun sözcüklerle metin kartta sığmalı.
+  const graphemes = [...new Intl.Segmenter('tr', { granularity: 'grapheme' }).segment(LONGEST_WEEKLY_BODY)].map((part) => part.segment);
+  for (const length of [620, 700, 780, 850]) {
+    const currentUrl = page.url();
+    await page.getByRole('button', { name: /^Slayt 10: Yay/ }).click();
+    await page.getByLabel('Başlık').fill('Çığır açan, güçlü bir hafta geçireceksin');
+    await page.getByLabel('Yorum', { exact: true }).fill(graphemes.slice(0, length).join('').trimEnd());
+    await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
+    await expect(page).not.toHaveURL(currentUrl);
+    await expect(page.getByRole('button', { name: /^Slayt 10: Yay/ })).toBeVisible();
+    expect(
+      await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('[data-slot="text"]')].every((element) => element.scrollHeight <= element.clientHeight + 1),
+      ),
+      `${length} karakter`,
+    ).toBe(true);
+  }
 
   const files = await downloadPostZip(page);
   const names = Object.keys(files);

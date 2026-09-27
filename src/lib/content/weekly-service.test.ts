@@ -23,7 +23,7 @@ describe('haftalık üretim', () => {
     expect(result.status).toBe('created');
     const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' });
     expect(readings).toHaveLength(12);
-    expect(readings[0]).toMatchObject({ promptVersion: 'haftalik-v1' });
+    expect(readings[0]).toMatchObject({ promptVersion: 'haftalik-v2' });
     expect(readings.every((row) => row.body.length >= 600)).toBe(true);
     expect(new Set(readings.map((row) => row.meta.tarotCardId)).size).toBe(12);
     expect((await getCurrentPost(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' }))?.post.templateVersion).toBe('pastel-weekly@1');
@@ -138,10 +138,16 @@ describe('haftalık üretim', () => {
 
   it('parçadaki burçların hepsi kurala uymasa da parçayı atmaz, burçları geri bildirimle tek tek yeniden ister', async () => {
     const prompts: string[] = [];
+    let active = 0;
+    let peak = 0;
     const model = new MockLanguageModelV4({
       doGenerate: async ({ prompt }) => {
         const text = JSON.stringify(prompt);
         prompts.push(text);
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active--;
         const single = text.match(/Yalnızca şu burç için yaz: [^()]*\(([a-z]+)\)/)?.[1];
         const payload = single
           ? { burc: mockWeeklyEntry(single as never) }
@@ -165,5 +171,7 @@ describe('haftalık üretim', () => {
     expect(prompts.filter((text) => text.includes('Yalnızca şu burç için yaz'))).toHaveLength(12);
     expect(prompts.filter((text) => !text.includes('Yalnızca şu burç için yaz'))).toHaveLength(3);
     expect(prompts.find((text) => text.includes('Yalnızca şu burç için yaz: Koç (koc)'))).toMatch(/baslik: 3-40 karakter olmalı/);
+    // Ücretsiz sağlayıcıların dakikalık sınırı ani toplu isteklerle dolar; yeniden istemler en fazla 3'er gider.
+    expect(peak).toBeLessThanOrEqual(3);
   });
 });

@@ -16,11 +16,14 @@ export const WEEKLY_LIMITS: EntryLimits = { ...DAILY_LIMITS, yorum: { min: 600, 
 // Burca göre metinde geçmemesi gereken ifadeler (ör. haftalık yorumda çekilen kartın adı).
 export type ForbiddenPhrases = (sign: SignSlug) => readonly string[];
 
-function forbiddenIssues(sign: SignSlug | null, text: string, forbidden: ForbiddenPhrases | undefined): QualityIssue[] {
+function forbiddenIssues(sign: SignSlug | null, fields: Record<string, string>, forbidden: ForbiddenPhrases | undefined): QualityIssue[] {
   if (!sign || !forbidden) return [];
-  const lower = text.toLocaleLowerCase('tr-TR');
-  const found = forbidden(sign).find((phrase) => lower.includes(phrase.toLocaleLowerCase('tr-TR')));
-  return found ? [{ field: 'yorum', message: `Metinde "${found}" geçmemeli.` }] : [];
+  const phrases = forbidden(sign);
+  return Object.entries(fields).flatMap(([field, text]) => {
+    const lower = text.toLocaleLowerCase('tr-TR');
+    const found = phrases.find((phrase) => lower.includes(phrase.toLocaleLowerCase('tr-TR')));
+    return found ? [{ field, message: `Metinde "${found}" geçmemeli.` }] : [];
+  });
 }
 export type HoroscopeEntry = {
   sign: SignSlug;
@@ -69,9 +72,10 @@ function textIssues(field: string, text: string, limits: TextLimit): QualityIssu
 function fitToSentences(text: string, limit: TextLimit): string {
   const trimmed = text.trim();
   if (graphemeLength(trimmed) <= limit.max) return trimmed;
-  const sentences = trimmed.match(/[^.!?…]+[.!?…]+[^\p{L}\p{N}]*/gu) ?? [];
-  for (let count = sentences.length - 1; count > 0; count--) {
-    const candidate = sentences.slice(0, count).join('').trim();
+  // Cümle sonu: rakamdan sonra gelmeyen noktalama (7. ev, 20.00 değil), ardından büyük harfle ya da tırnakla başlayan yeni cümle.
+  const ends = [...trimmed.matchAll(/(?<!\d)[.!?…]+(?:\s*\p{Extended_Pictographic}\uFE0F?)*(?=\s+[\p{Lu}"“'(])/gu)].map((match) => match.index + match[0].length);
+  for (const end of ends.reverse()) {
+    const candidate = trimmed.slice(0, end);
     const length = graphemeLength(candidate);
     if (length < limit.min) break;
     if (length <= limit.max) return candidate;
@@ -101,7 +105,7 @@ export function checkHoroscopeEntry(
     ...textIssues('baslik', raw.baslik, limits.baslik),
     ...textIssues('yorum', body, limits.yorum),
     ...textIssues('kisa', raw.kisa, limits.kisa),
-    ...forbiddenIssues(sign, `${raw.baslik} ${body} ${raw.kisa}`, forbidden),
+    ...forbiddenIssues(sign, { baslik: raw.baslik, yorum: body, kisa: raw.kisa }, forbidden),
     ...(looksTurkish(`${raw.baslik} ${raw.yorum} ${raw.kisa}`) ? [] : [{ field: 'yorum', message: 'Metin Türkçe görünmüyor.' }]),
     ...scoreIssues(raw),
     ...(luckyColor ? [] : [{ field: 'sansliRenk', message: `Şu kimliklerden biri olmalı: ${LUCKY_COLOR_IDS.join(', ')}.` }]),

@@ -41,7 +41,10 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
   // Müzik gönderinin zemin varyantından tohumlanır; aynı gönderi her seferinde aynı müziği alır.
   const seed = musicSeed(reels);
   const seconds = durationInFrames / REELS_FPS;
+  const supported = support?.ok === true && support.music;
   useEffect(() => {
+    // Müzik yalnızca videoya eklenebilecekse üretilir; aksi halde bellek ve işlemci boşa harcanmaz.
+    if (!supported) return;
     let src: string | null = null;
     let active = true;
     renderScoreToWav(composeAmbient(seed, seconds))
@@ -55,7 +58,7 @@ export function ReelsPanel({ post, reels, blocked }: { post: PostSummary; reels:
       active = false;
       if (src) URL.revokeObjectURL(src);
     };
-  }, [seed, seconds]);
+  }, [seed, seconds, supported]);
   const musicSrc = music.status === 'ready' && support?.ok && support.music ? music.src : null;
 
   async function prepare() {
