@@ -38,4 +38,14 @@ describe('kart atama', () => {
       }
     }
   });
+
+  it('kartı yeniden çekilen burca eski kartı da gelmez', () => {
+    const first = TAROT_SPEC.context({ date: '2026-09-27', audience: 'kadin', recent: [] });
+    const kept = new Map(SIGN_SLUGS.filter((sign) => sign !== 'aslan').map((sign) => [sign, first.tarotCardId(sign)!]));
+    const old = first.tarotCardId('aslan')!;
+    for (let run = 0; run < 300; run++) {
+      const next = TAROT_SPEC.context({ date: '2026-09-27', audience: 'kadin', recent: [], keptCards: kept, avoidCards: new Set([old]) });
+      expect(next.tarotCardId('aslan')).not.toBe(old);
+    }
+  });
 });

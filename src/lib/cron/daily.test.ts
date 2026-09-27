@@ -48,9 +48,9 @@ describe('handleDailyCron', () => {
   it('plandaki gönderileri üretir, ikinci çalıştırmada atlar', async () => {
     const first = await (await handleDailyCron(request('Bearer cron-anahtari'), deps())).json();
     expect(first.ok).toBe(true);
-    expect(first.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['created', 'created']);
+    expect(first.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['created', 'created', 'created', 'created']);
     const second = await (await handleDailyCron(request('Bearer cron-anahtari'), deps())).json();
-    expect(second.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['skipped', 'skipped']);
+    expect(second.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['skipped', 'skipped', 'skipped', 'skipped']);
   });
 
   it('pazartesi günlük ve haftalık paketleri birlikte üretir', async () => {
@@ -58,6 +58,34 @@ describe('handleDailyCron', () => {
     expect(body.ok).toBe(true);
     expect(
       body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`),
-    ).toEqual(['horoscope:kadin:created', 'horoscope:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created']);
+    ).toEqual(['horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created']);
+  });
+
+  it('tarotlu planla pazartesi 6 gönderi üretir', async () => {
+    const base = deps();
+    const withTarot = {
+      ...base,
+      today: '2026-09-28',
+      loadDeps: async () => {
+        const loaded = await base.loadDeps();
+        return {
+          ...loaded,
+          settings: {
+            ...loaded.settings,
+            dailyPlan: [
+              { kind: 'horoscope' as const, audience: 'kadin' as const },
+              { kind: 'horoscope' as const, audience: 'erkek' as const },
+              { kind: 'tarot' as const, audience: 'kadin' as const },
+              { kind: 'tarot' as const, audience: 'erkek' as const },
+            ],
+          },
+        };
+      },
+    };
+    const body = await (await handleDailyCron(request('Bearer cron-anahtari'), withTarot)).json();
+    expect(body.ok).toBe(true);
+    expect(body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`)).toEqual([
+      'horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created',
+    ]);
   });
 });

@@ -8,7 +8,7 @@ export type WatermarkPosition = (typeof WATERMARK_POSITIONS)[number];
 const HANDLE_PATTERN = /^[a-z0-9._]{1,30}$/;
 export const HANDLE_ERROR = 'Kullanıcı adı yalnızca harf, rakam, nokta ve alt çizgi içerebilir (en fazla 30 karakter).';
 
-export const planItemSchema = z.object({ kind: z.literal('horoscope'), audience: z.enum(['kadin', 'erkek']) });
+export const planItemSchema = z.object({ kind: z.enum(['horoscope', 'tarot']), audience: z.enum(['kadin', 'erkek']) });
 export type PlanItem = z.infer<typeof planItemSchema>;
 
 export const providerPreferenceSchema = z.object({
@@ -52,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   dailyPlan: [
     { kind: 'horoscope', audience: 'kadin' },
     { kind: 'horoscope', audience: 'erkek' },
+    { kind: 'tarot', audience: 'kadin' },
+    { kind: 'tarot', audience: 'erkek' },
   ],
   baseHashtags: ['#burç', '#astroloji'],
   providerChain: [],

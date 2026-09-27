@@ -44,6 +44,8 @@ describe('ayar birleştirme', () => {
       dailyPlan: [
         { kind: 'horoscope', audience: 'kadin' },
         { kind: 'horoscope', audience: 'erkek' },
+        { kind: 'tarot', audience: 'kadin' },
+        { kind: 'tarot', audience: 'erkek' },
       ],
       baseHashtags: ['#burç', '#astroloji'],
       providerChain: [],
@@ -64,7 +66,12 @@ describe('ayar birleştirme', () => {
 
 describe('üretim ayarları', () => {
   it('Faz 0 kaydı yeni alanların varsayılanlarıyla okunur', () => {
-    expect(parseStoredSettings({ instagramHandle: 'burc.studio' }).dailyPlan).toHaveLength(2);
+    expect(parseStoredSettings({ instagramHandle: 'burc.studio' }).dailyPlan).toEqual([
+      { kind: 'horoscope', audience: 'kadin' },
+      { kind: 'horoscope', audience: 'erkek' },
+      { kind: 'tarot', audience: 'kadin' },
+      { kind: 'tarot', audience: 'erkek' },
+    ]);
   });
 
   it('boş günlük plan, 2den fazla hashtag ve bilinmeyen sağlayıcı reddedilir', () => {

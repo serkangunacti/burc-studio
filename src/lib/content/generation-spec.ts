@@ -29,7 +29,14 @@ export type GenerationSpec = {
   // Bir istekte yazılan burç sayısı; ücretsiz sağlayıcılar uzun haftalık yanıtı tek seferde bitiremiyor.
   chunkSize: number;
   validDate(date: DateKey): boolean;
-  context(input: { date: DateKey; audience: Audience; recent: RecentHeadline[]; keptCards?: ReadonlyMap<SignSlug, string> }): SpecContext;
+  // avoidCards: yeniden çekilen burcun eski kartı; yeni çekilişe girmez.
+  context(input: {
+    date: DateKey;
+    audience: Audience;
+    recent: RecentHeadline[];
+    keptCards?: ReadonlyMap<SignSlug, string>;
+    avoidCards?: ReadonlySet<string>;
+  }): SpecContext;
 };
 
 // Tek sözcüklük kart adlarının çoğu (Ay, Güneş, Yıldız, Güç, Adalet…) gündelik Türkçe ve gökyüzü metninde de geçer;
@@ -41,9 +48,9 @@ function cardPhrases(card: TarotCard): string[] {
 }
 
 // Tutulan kartlar korunur; kalan burçlara tutulanlardan farklı, birbirinden de farklı yeni kartlar çekilir.
-function assignCards(keptCards: ReadonlyMap<SignSlug, string> | undefined): Map<SignSlug, TarotCard> {
+function assignCards(keptCards: ReadonlyMap<SignSlug, string> | undefined, avoidCards?: ReadonlySet<string>): Map<SignSlug, TarotCard> {
   const kept = new Set(keptCards?.values());
-  const fresh = drawCards(SIGN_SLUGS.length - kept.size, undefined, kept);
+  const fresh = drawCards(SIGN_SLUGS.length - kept.size, undefined, new Set([...kept, ...(avoidCards ?? [])]));
   let next = 0;
   return new Map(
     SIGN_SLUGS.map((sign) => {
@@ -79,8 +86,8 @@ export const WEEKLY_SPEC: GenerationSpec = {
   recentDays: 7,
   chunkSize: 4,
   validDate: isMonday,
-  context({ date, audience, recent, keptCards }) {
-    const cards = assignCards(keptCards);
+  context({ date, audience, recent, keptCards, avoidCards }) {
+    const cards = assignCards(keptCards, avoidCards);
     const input = { monday: date, audience, week: getWeekSky(date), cards, recent };
     return {
       batchPrompt: (signs) => buildWeeklyBatchPrompt(input, signs),
@@ -99,8 +106,8 @@ export const TAROT_SPEC: GenerationSpec = {
   recentDays: 2,
   chunkSize: SIGN_SLUGS.length,
   validDate: () => true,
-  context({ date, audience, recent, keptCards }) {
-    const cards = assignCards(keptCards);
+  context({ date, audience, recent, keptCards, avoidCards }) {
+    const cards = assignCards(keptCards, avoidCards);
     const input = { dateKey: date, audience, sky: getSkySnapshot(date), cards, recent };
     return {
       batchPrompt: () => buildTarotBatchPrompt(input),

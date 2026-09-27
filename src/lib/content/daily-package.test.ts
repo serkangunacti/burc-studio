@@ -49,4 +49,12 @@ describe('packageItemsFor', () => {
     expect(packageItemsFor('2026-09-29', plan)).toEqual(plan);
     expect(packageItemsFor('2026-09-28', [plan[1]])).toEqual([plan[1], { kind: 'weekly', audience: 'erkek' }]);
   });
+
+  it('tarotlu planda pazartesi 6, diğer günler 4 kalem döner', () => {
+    const withTarot = [...plan, { kind: 'tarot' as const, audience: 'kadin' as const }, { kind: 'tarot' as const, audience: 'erkek' as const }];
+    expect(packageItemsFor('2026-09-28', withTarot).map((item) => `${item.kind}:${item.audience}`)).toEqual([
+      'horoscope:kadin', 'horoscope:erkek', 'tarot:kadin', 'tarot:erkek', 'weekly:kadin', 'weekly:erkek',
+    ]);
+    expect(packageItemsFor('2026-09-29', withTarot)).toHaveLength(4);
+  });
 });

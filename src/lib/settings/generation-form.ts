@@ -7,6 +7,8 @@ export type GenerationFormErrors = Partial<Record<'dailyPlan' | 'baseHashtags' |
 const PLAN_VALUES: Record<string, PlanItem> = {
   'horoscope:kadin': { kind: 'horoscope', audience: 'kadin' },
   'horoscope:erkek': { kind: 'horoscope', audience: 'erkek' },
+  'tarot:kadin': { kind: 'tarot', audience: 'kadin' },
+  'tarot:erkek': { kind: 'tarot', audience: 'erkek' },
 };
 
 function parseJson(value: string): unknown {

@@ -209,17 +209,16 @@ export async function regenerateSign(
   if (!run) return { status: 'busy' };
 
   return withRun(deps, run.id, async () => {
-    const keptCards = new Map(
-      (await getCurrentReadings(deps.db, key)).flatMap((row) =>
-        // Kart yeniden çekilecekse hedef burcun kartı bırakılır; yenisi diğer 11 kartın dışından çekilir.
-        row.meta.tarotCardId && !(input.redrawCard && row.sign === input.sign) ? [[row.sign, row.meta.tarotCardId] as const] : [],
-      ),
-    );
+    const cardBySign = new Map((await getCurrentReadings(deps.db, key)).flatMap((row) => (row.meta.tarotCardId ? [[row.sign, row.meta.tarotCardId] as const] : [])));
+    // Kart yeniden çekilecekse hedef burcun kartı bırakılır; yenisi diğer 11 kartın ve eski kartın dışından çekilir.
+    const oldCard = input.redrawCard ? cardBySign.get(input.sign) : undefined;
+    const keptCards = new Map([...cardBySign].filter(([sign]) => !(input.redrawCard && sign === input.sign)));
     const context = spec.context({
       date: input.date,
       audience: input.audience,
       recent: await getRecentHeadlines(deps.db, key, input.date, spec.recentDays),
       keptCards,
+      avoidCards: oldCard ? new Set([oldCard]) : undefined,
     });
     const signIndex = SIGN_SLUGS.indexOf(input.sign);
     const signSlides = current.slides.filter((slide) => slide.type === 'sign');
