@@ -4,6 +4,7 @@ import { getLuckyColor } from '@/lib/content/lucky-colors';
 import type { Audience, ReadingAudience, ReadingKind } from '@/lib/content/types';
 import { formatDateLongTr, formatDateShortTr } from '@/lib/date/istanbul';
 import type { Settings } from '@/lib/settings/schema';
+import { getTarotCard } from '@/lib/tarot/deck';
 import { getSign } from '@/lib/zodiac/signs';
 import type { BrandProps, SlideProps } from '@/remotion/slide-types';
 import type { PostDetail } from './repository';
@@ -74,6 +75,9 @@ export function buildSlideProps(detail: PostDetail, brand: BrandProps): SlidePro
         scores: reading.meta.scores,
         luckyColor: { name: color.name, hex: color.hex },
         luckyNumber: reading.meta.luckyNumber,
+        ...(post.kind === 'tarot' && reading.meta.tarotCardId
+          ? { tarotCard: { id: reading.meta.tarotCardId, name: getTarotCard(reading.meta.tarotCardId).name } }
+          : {}),
       },
     };
   });

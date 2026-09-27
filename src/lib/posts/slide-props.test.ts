@@ -62,6 +62,17 @@ describe('haftalık gönderi verisi', () => {
   });
 });
 
+describe('tarot gönderi verisi', () => {
+  it('tarot gönderisinde her burç slaytı günün kartını taşır; burç gönderisinde taşımaz', async () => {
+    const tarot = await seedPost(db, { date: '2026-09-27', kind: 'tarot', audience: 'kadin' });
+    const slides = buildSlideProps((await getPostDetail(db, tarot.id))!, BRAND).filter((props) => props.slide.type === 'sign');
+    expect(slides).toHaveLength(12);
+    expect(slides.every((props) => props.slide.type === 'sign' && props.slide.tarotCard?.id && props.slide.tarotCard.name)).toBe(true);
+    const daily = await seedPost(db, KEY);
+    expect(buildSlideProps((await getPostDetail(db, daily.id))!, BRAND)[1].slide).not.toHaveProperty('tarotCard');
+  });
+});
+
 describe('variantFor', () => {
   it('aynı günün gönderileri birbirinden, ardışık günler de birbirinden farklı zemin alır', () => {
     const day = (date: string, kind: 'horoscope' | 'tarot' | 'special', audience: 'kadin' | 'erkek' | 'genel') => variantFor({ date, kind, audience }) % 7;

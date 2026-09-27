@@ -24,5 +24,6 @@ export function toReelsSign(slide: SignSlideData, short: string): ReelsSign {
     scores: slide.scores,
     luckyColor: slide.luckyColor,
     luckyNumber: slide.luckyNumber,
+    ...(slide.tarotCard ? { tarotCard: slide.tarotCard } : {}),
   };
 }
