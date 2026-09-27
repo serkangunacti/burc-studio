@@ -8,6 +8,7 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 - **Canlı site:** https://burc-studio.vercel.app (Vercel projesi `serkangunactis-projects/burc-studio`). `main`'e push otomatik yayına alır.
 - **Tasarım onay sayfası (tüm onaylı tasarımlar, örnek videolar):** https://claude.ai/artifact/7AwwB1EkVtnChKCXrKs3RQ. Güncellemeden önce Artifact aracıyla `read`, sonra aynı `url` ile yayınla.
 - **Spec (bağlayıcı, sondaki "Durum" bölümü güncel özet):** `docs/superpowers/specs/2026-09-25-burc-studio-design.md`.
+- **Instagram profil logoları (1080×1080 PNG + SVG; pastel, krem, koyu):** `docs/brand/`.
 - **Faz planları:** `docs/superpowers/plans/`. Her fazda verilen kararlar (`Ruling:`) ve ertelenen küçük işler: `docs/superpowers/ledgers/`.
 
 ## Ne üretiliyor
