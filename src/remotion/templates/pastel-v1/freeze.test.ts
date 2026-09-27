@@ -7,7 +7,7 @@ const DIR = path.join(process.cwd(), 'src/remotion/templates/pastel-v1');
 
 // pastel@1 yayımlanmış gönderilerde kullanılıyor; görünüm değişikliği yeni klasörde (pastel-v2) yapılır.
 const FROZEN: Record<string, string> = {
-  'cover-slide.tsx': 'cf8163ab127ee12f2476956b804e39a9d40e573bf3603faafe731d70c9bcd717',
+  'cover-slide.tsx': 'c944d1e0b640e049143f443b0c7cfab3789dccfe3ddef30d9519941cf877e2d7',
   'cta-slide.tsx': '2aa475e4706f994b71d1618269b7c8a57eb15a523c97e00dc632a93e813ebf07',
   'fonts.ts': '2c713f62b2cbeb3aabe09133894c8fe5b89f8b1b45d0122b1dea1c00741e35ab',
   'index.ts': '9676ce7db1595db0f28bee42f9804722d20bd2be12c75d1a30a3658116362b93',

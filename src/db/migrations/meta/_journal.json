@@ -22,6 +22,13 @@
       "when": 1790449833119,
       "tag": "0002_weekly",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790516569641,
+      "tag": "0003_automation",
+      "breakpoints": true
     }
   ]
 }

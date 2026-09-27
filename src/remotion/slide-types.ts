@@ -14,7 +14,8 @@ export const SLIDE_FPS = 30;
 
 export type BrandProps = { handle: string | null; enabled: boolean; position: WatermarkPosition; opacity: number };
 
-export type CoverSlideData = { type: 'cover'; audience: Audience; dateLabel: string; hook: string };
+// partLabel: otomatik paylaşımda carousel üç parçaya bölündüğünde kapakta gösterilen parça ve burçlar.
+export type CoverSlideData = { type: 'cover'; audience: Audience; dateLabel: string; hook: string; partLabel?: string };
 
 export type SignSlideData = {
   type: 'sign';

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  customType,
   date,
   index,
   integer,
@@ -147,4 +148,76 @@ export const postSlides = pgTable(
     readingId: uuid('reading_id').references(() => readings.id),
   },
   (t) => [primaryKey({ columns: [t.postId, t.position] })],
+);
+
+export const PUBLICATION_FORMATS = ['carousel', 'reels'] as const;
+export type PublicationFormat = (typeof PUBLICATION_FORMATS)[number];
+export const PUBLICATION_STATUSES = ['ready', 'approved', 'publishing', 'published', 'skipped', 'expired', 'failed'] as const;
+export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
+export type PublicationMedia = { imageIds?: string[]; videoUrl?: string };
+
+export const publicationFormatEnum = pgEnum('publication_format', PUBLICATION_FORMATS);
+export const publicationStatusEnum = pgEnum('publication_status', PUBLICATION_STATUSES);
+
+// Carousel'ler Instagram'ın 10 görsel sınırı yüzünden üç parça (part 1–3) hâlinde paylaşılır; Reels'te part 0.
+export const publications = pgTable(
+  'publications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    date: date('date', { mode: 'string' }).notNull(),
+    postId: uuid('post_id').notNull().references(() => posts.id),
+    kind: readingKindEnum('kind').notNull(),
+    audience: audienceEnum('audience').notNull(),
+    format: publicationFormatEnum('format').notNull(),
+    part: smallint('part').notNull(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
+    status: publicationStatusEnum('status').notNull().default('ready'),
+    caption: text('caption').notNull(),
+    media: jsonb('media').$type<PublicationMedia>().notNull(),
+    igContainerId: text('ig_container_id'),
+    igMediaId: text('ig_media_id'),
+    permalink: text('permalink'),
+    error: text('error'),
+    attempts: integer('attempts').notNull().default(0),
+    telegramMessageId: integer('telegram_message_id'),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('publications_slot_uq').on(t.date, t.kind, t.audience, t.format, t.part),
+    index('publications_status_scheduled_idx').on(t.status, t.scheduledAt),
+  ],
+);
+
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({ dataType: () => 'bytea' });
+
+// Carousel JPEG'leri Blob yerine burada durur: Hobby planında Blob ayda 2.000 yükleme işlemiyle sınırlı.
+export const mediaFiles = pgTable(
+  'media_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    publicationId: uuid('publication_id')
+      .notNull()
+      .references(() => publications.id, { onDelete: 'cascade' }),
+    position: smallint('position').notNull(),
+    contentType: text('content_type').notNull(),
+    data: bytea('data').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('media_files_position_uq').on(t.publicationId, t.position)],
+);
+
+export const instagramAuth = pgTable(
+  'instagram_auth',
+  {
+    id: smallint('id').primaryKey().default(1),
+    userId: text('user_id').notNull(),
+    username: text('username'),
+    tokenEncrypted: text('token_encrypted').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('instagram_auth_singleton', sql`${t.id} = 1`)],
 );

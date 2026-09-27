@@ -1,0 +1,3 @@
+Task 1: Ruling: Hobby Blob ayda 2.000 yükleme işlemiyle sınırlı (aşılırsa 30 gün kilit); günde ~80 JPEG bunu aşar — JPEG'ler Neon'da (media_files, bytea) tutulur ve /api/media ile sunulur, Blob yalnız Reels MP4 (ayda ~150 işlem) — maliyet: Neon'da en fazla ~3 günlük görsel (~60 MB), bakım cron'u siler
+Task 1: Ruling: carousel parçaları sondan başa paylaşılır (3/3 08:30, 2/3 08:33, 1/3 08:36) — profil ve akışta en üstte Koç–Yengeç parçası görünsün — maliyet: yok
+Task 1: pastel@1 kapağına isteğe bağlı partLabel eklendi; alan yokken çıktı aynı (render-chain altın hash'leri değişmedi), yalnız dosya hash'i dondurma manifestinde güncellendi
