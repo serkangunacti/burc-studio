@@ -432,7 +432,7 @@ describe('TikTok (Buffer)', () => {
     early.buffer.mockImplementation((query) => (query.includes('createPost') ? { data: { createPost: { post: { id: 'buf-1' } } } } : sending()));
     await db.update(publications).set({ attempts: 50 }).where(eq(publications.id, tiktok.id));
     await expect(publishPublication(early.deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater' });
-    const late = harness(db, new Date('2026-09-29T20:01:00Z'));
+    const late = harness(db, new Date('2026-09-29T23:01:00Z'));
     late.buffer.mockImplementation(sending);
     expect(await publishPublication(late.deps, tiktok.id)).toBe('failed');
     expect((await getPublication(db, tiktok.id))?.error).toBe('TikTok paylaşımı zamanında tamamlanmadı (Buffer durumu: sending)');

@@ -69,8 +69,8 @@ const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
 const RATE_LIMIT_WINDOW_MS = 4 * 3_600_000;
-// TikTok videoyu işlerken Buffer "sending"de kalır; planlanan saatten sonra en fazla bu kadar beklenir.
-const TIKTOK_TIMEOUT_MS = 60 * 60_000;
+// Buffer'ın TikTok gönderimi canlıda 40–60 dk sürdü; planlanan saatten sonra en fazla bu kadar beklenir.
+const TIKTOK_TIMEOUT_MS = 4 * 60 * 60_000;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
 const MAX_PROCESSING_ATTEMPTS = 20;
 const MAX_TRANSIENT_ATTEMPTS = 5;
