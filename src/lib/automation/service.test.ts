@@ -9,6 +9,7 @@ import { planPublications } from './plan';
 import { approveDay, getIntegration, getPublication, listPublications, saveIntegration, savePublication } from './repository';
 import { encryptSecret, telegramWebhookSecret } from './secrets';
 import {
+  approvalSummary,
   automationStatus,
   connectBuffer,
   connectInstagram,
@@ -78,6 +79,7 @@ function harness(db: Db, now: Date) {
     integrationsKey: KEY,
     automationSecret: 'secret',
     now: () => now,
+    sleep: vi.fn(async () => undefined),
     fetch: fetchImpl as unknown as typeof fetch,
     enqueue,
     deleteVideosBefore: vi.fn(async () => 2),
@@ -150,7 +152,7 @@ describe('günlük onay', () => {
   it('hepsini onayla yalnız hazırları planlanan saate göre kuyruğa bırakır; atlanan grup kuyruğa girmez', async () => {
     await connectAll(db);
     const rows = await seedDay(db);
-    const { deps, enqueue } = harness(db, new Date('2026-09-29T05:00:00Z'));
+    const { deps, enqueue, telegramCalls } = harness(db, new Date('2026-09-29T05:00:00Z'));
     await handleTelegramUpdate(deps, { callback_query: { id: 'q1', data: `s:${rows[0].postId}:r`, message: { chat: { id: CHAT }, message_id: 77 } } });
     await handleTelegramUpdate(deps, { callback_query: { id: 'q2', data: `a:${DATE}`, message: { chat: { id: CHAT }, message_id: 77 } } });
     await handleTelegramUpdate(deps, { callback_query: { id: 'q3', data: `a:${DATE}`, message: { chat: { id: CHAT }, message_id: 77 } } });
@@ -159,6 +161,8 @@ describe('günlük onay', () => {
       [2, 1980],
       [1, 2160],
     ]);
+    const summaries = telegramCalls().filter((call) => call.path === 'sendMessage').map((call) => String(call.params.text));
+    expect(summaries).toEqual(['✅ 3 paylaşım onaylandı.\nSıradaki: 08:30 · son: 08:36.\nHer paylaşım gidince "📤 Paylaşıldı" bildirimi gelecek.']);
     const reels = (await listPublications(db, DATE)).find((row) => row.format === 'reels');
     expect(reels?.status).toBe('skipped');
     await handleTelegramUpdate(deps, { callback_query: { id: 'q4', data: `u:${rows[0].postId}:r`, message: { chat: { id: CHAT }, message_id: 77 } } });
@@ -196,7 +200,8 @@ describe('Instagram paylaşımı', () => {
     const reels = (await seedDay(db))[3];
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
-    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } })).mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
+    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     const retry = await publishPublication(deps, reels.id).catch((error: unknown) => error);
     expect(retry).toBeInstanceOf(RetryLater);
     expect(retry).toMatchObject({ afterSeconds: 30 });
@@ -213,7 +218,8 @@ describe('Instagram paylaşımı', () => {
     const reels = (await seedDay(db))[3];
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
-    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } })).mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
+    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     await publishPublication(deps, reels.id).catch(() => undefined);
     instagram.mockImplementationOnce(() => ({ body: { status_code: 'PUBLISHED' } }));
     expect(await publishPublication(deps, reels.id)).toBe('published');
@@ -364,5 +370,25 @@ describe('TikTok (Buffer)', () => {
     const status = await automationStatus(deps);
     expect(status.tiktok).toEqual({ channel: 'kozmikarkan', enabled: true, ok: true, error: null });
     expect(describeStatus(status)).toContain('TikTok (Buffer): kozmikarkan · ✅');
+  });
+
+  it('görsel kısa sürede işlenirse kuyruğu beklemeden aynı teslimde paylaşır', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram } = harness(db, new Date('2026-09-29T05:30:10Z'));
+    for (let item = 0; item < 7; item++) instagram.mockImplementationOnce(() => ({ body: { id: `c-${item}` } }));
+    instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } })).mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    expect(deps.sleep).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('onay özeti', () => {
+  it('saati geçenleri ve sıradaki ilk ile son saati söyler', async () => {
+    const rows = await seedDay(db);
+    expect(approvalSummary(rows, new Date('2026-09-29T05:34:00Z'))).toBe(
+      '✅ 4 paylaşım onaylandı.\nSaati geçmiş 2 paylaşım hemen gönderiliyor.\nSıradaki: 08:36 · son: 19:00.\nHer paylaşım gidince "📤 Paylaşıldı" bildirimi gelecek.',
+    );
   });
 });
