@@ -58,6 +58,8 @@ const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
 const INLINE_STATUS_CHECKS = 3;
 const MAX_CONTAINER_REBUILDS = 1;
+const CAROUSEL_ITEM_CHECKS = 4;
+const CAROUSEL_ITEM_WAIT_MS = 4_000;
 const INLINE_STATUS_WAIT_MS = 8_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
@@ -232,7 +234,28 @@ async function createContainer(deps: AutomationDeps, instagram: InstagramClient,
   const mediaUrl = mediaUrlFor(deps.appUrl);
   const children: string[] = [];
   for (const id of imageIds) children.push(await instagram.createCarouselItem(mediaUrl(id)));
+  await waitForCarouselItems(deps, instagram, children, imageIds.map(mediaUrl));
   return instagram.createCarousel(children, row.caption);
+}
+
+// Instagram carousel'i ancak her görsel FINISHED olunca kabul ediyor; işlenmemiş öğeyle kurulan carousel ERROR'a düşer.
+// Hata veren görsel bir kez yeniden gönderilir, yine olmazsa Instagram'ın açıklamasıyla hata verilir.
+async function waitForCarouselItems(deps: AutomationDeps, instagram: InstagramClient, children: string[], urls: string[]): Promise<void> {
+  const resent = new Set<number>();
+  for (let round = 0; round < CAROUSEL_ITEM_CHECKS; round++) {
+    const statuses = await Promise.all(children.map((child) => instagram.containerStatus(child)));
+    if (statuses.every((status) => status === 'FINISHED')) return;
+    for (const [index, status] of statuses.entries()) {
+      if (status !== 'ERROR' && status !== 'EXPIRED') continue;
+      if (resent.has(index)) {
+        const detail = await instagram.containerDetail(children[index]).catch(() => null);
+        throw new Error(`Carousel görseli ${index + 1} Instagram'da işlenemedi (${status})${detail ? `: ${detail}` : ''}`);
+      }
+      resent.add(index);
+      children[index] = await instagram.createCarouselItem(urls[index]);
+    }
+    await deps.sleep(CAROUSEL_ITEM_WAIT_MS);
+  }
 }
 
 export type PublishOutcome = 'published' | 'failed' | 'ignored';
@@ -469,6 +492,20 @@ export async function startRender(deps: AutomationDeps, date: DateKey): Promise<
   const integration = await getIntegration(deps.db, 'github');
   const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
   return dispatchRenderWorkflow({ token, repository: deps.repository, date, fetch: deps.fetch });
+}
+
+// Kuyruk mesajları gönderildikleri yayın sürümünde işlenir; gün içinde yayınlanan düzeltmenin bekleyen paylaşımlara
+// uygulanması için onaylı ve başarısız paylaşımlar yeni sürümün kuyruğuna yeniden bırakılır (paylaşım iki kez gitmez).
+export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{ requeued: number; retried: number }> {
+  const rows = await listPublications(deps.db, date);
+  const now = deps.now();
+  const retried: PublicationRow[] = [];
+  for (const group of new Map(rows.filter((row) => row.status === 'failed').map((row) => [`${row.postId}:${row.format}`, row])).values()) {
+    retried.push(...(await retryFailedGroup(deps.db, { postId: group.postId, format: group.format }, now)));
+  }
+  const approved = rows.filter((row) => row.status === 'approved');
+  await enqueueRows(deps, [...approved, ...retried]);
+  return { requeued: approved.length, retried: retried.length };
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };

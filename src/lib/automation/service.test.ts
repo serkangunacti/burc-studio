@@ -20,6 +20,7 @@ import {
   describeStatus,
   handleTelegramUpdate,
   publishPublication,
+  requeueDay,
   RetryLater,
   runMaintenance,
   sendDayPlan,
@@ -190,19 +191,21 @@ describe('Instagram paylaşımı', () => {
     expect(await publishPublication(deps, part3.id)).toBe('published');
     const paths = igCalls().map((call) => `${call.path}${call.params.fields ? `?${call.params.fields}` : ''}`);
     expect(paths).toEqual([
-      ...Array(7).fill('/v25.0/1784/media'),
+      ...Array(6).fill('/v25.0/1784/media'),
+      ...[1, 2, 3, 4, 5, 6].map((item) => `/v25.0/container-${item}?status_code`),
+      '/v25.0/1784/media',
       '/v25.0/container-7?status_code',
       '/v25.0/1784/media_publish',
       '/v25.0/media-1?permalink',
     ]);
     expect(igCalls()[0].params.image_url).toBe(`https://app.test/api/media/${part3.media.imageIds![0]}`);
-    expect(igCalls()[6].params.caption).toBe(part3.caption);
+    expect(igCalls()[12].params.caption).toBe(part3.caption);
     const saved = await getPublication(db, part3.id);
     expect(saved).toMatchObject({ status: 'published', igMediaId: 'media-1', permalink: 'https://www.instagram.com/p/abc/' });
     expect(telegramCalls().some((call) => String(call.params.text).startsWith('📤 Paylaşıldı'))).toBe(true);
 
     expect(await publishPublication(deps, part3.id)).toBe('ignored');
-    expect(igCalls()).toHaveLength(10);
+    expect(igCalls()).toHaveLength(16);
   });
 
   it('Reels işlenirken yeniden denemeyi ister, container yeniden açılmadan sonraki teslimde paylaşır', async () => {
@@ -392,8 +395,11 @@ describe('TikTok (Buffer)', () => {
     const [part3] = await seedDay(db);
     await approveDay(db, DATE);
     const { deps, instagram } = harness(db, new Date('2026-09-29T05:30:10Z'));
-    for (let item = 0; item < 7; item++) instagram.mockImplementationOnce(() => ({ body: { id: `c-${item}` } }));
-    instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } })).mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    const base = instagram.getMockImplementation()!;
+    let carouselChecks = 0;
+    instagram.mockImplementation((path, params) =>
+      params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: ++carouselChecks <= 2 ? 'IN_PROGRESS' : 'FINISHED' } } : base(path, params),
+    );
     expect(await publishPublication(deps, part3.id)).toBe('published');
     expect(deps.sleep).toHaveBeenCalledTimes(2);
   });
@@ -436,8 +442,10 @@ describe('Instagram geçici hataları', () => {
     const [part3] = await seedDay(db);
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:33:10Z'));
-    for (let item = 0; item < 7; item++) instagram.mockImplementationOnce(() => ({ body: { id: `c-${item}` } }));
-    instagram.mockImplementationOnce(() => ({ body: { status_code: 'ERROR' } }));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: 'ERROR' } } : base(path, params),
+    );
     await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 30 });
     expect(await getPublication(db, part3.id)).toMatchObject({ status: 'approved', igContainerId: null, rebuilds: 1 });
 
@@ -445,14 +453,29 @@ describe('Instagram geçici hataları', () => {
     expect(igCalls().filter((call) => call.path.endsWith('/media'))).toHaveLength(14);
 
     const [, part2] = await listPublications(db, DATE);
-    await db.update(publications).set({ rebuilds: 2 }).where(eq(publications.id, part2.id));
-    instagram.mockImplementation((path: string, params: Record<string, unknown>) => {
+    await db.update(publications).set({ rebuilds: 1 }).where(eq(publications.id, part2.id));
+    instagram.mockImplementation((path, params) => {
       if (path.endsWith('/media')) return { body: { id: 'c-x' } };
       if (params.fields === 'status_code') return { body: { status_code: 'ERROR' } };
       return { body: { status: 'Error: Media upload has failed with error code 2207052' } };
     });
     expect(await publishPublication(deps, part2.id)).toBe('failed');
-    expect((await getPublication(db, part2.id))?.error).toBe('Instagram medyayı işleyemedi (ERROR): Error: Media upload has failed with error code 2207052');
+    expect((await getPublication(db, part2.id))?.error).toBe("Carousel görseli 1 Instagram'da işlenemedi (ERROR): Error: Media upload has failed with error code 2207052");
+  });
+
+  it('işlenemeyen carousel görselini bir kez yeniden gönderip carousel ı kurar', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:30:10Z'));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      params.fields === 'status_code' && path.endsWith('/container-3') ? { body: { status_code: 'ERROR' } } : base(path, params),
+    );
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    const created = igCalls().filter((call) => call.path.endsWith('/media'));
+    expect(created).toHaveLength(8);
+    expect(created.at(-1)?.params.children).toBe('container-1,container-2,container-7,container-4,container-5,container-6');
   });
 
   it('Telegramdaki yeniden dene düğmesi başarısız grubu sıfırlayıp hemen kuyruğa alır', async () => {
@@ -464,5 +487,23 @@ describe('Instagram geçici hataları', () => {
     await handleTelegramUpdate(deps, { callback_query: { id: 'q', data: `y:${rows[1].postId}:c`, message: { chat: { id: CHAT }, message_id: 77 } } });
     expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, igContainerId: null, attempts: 0, rebuilds: 0 });
     expect(enqueue.mock.calls).toEqual([[rows[1].id, { delaySeconds: 0, retentionSeconds: 86_400 }]]);
+  });
+});
+
+describe('kuyruğu yeni sürüme taşıma', () => {
+  it('onaylıları saatine göre, başarısızları sıfırlayıp hemen kuyruğa alır; paylaşılanlara dokunmaz', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await approveDay(db, DATE);
+    await db.update(publications).set({ status: 'published' }).where(eq(publications.id, rows[0].id));
+    await db.update(publications).set({ status: 'failed', error: 'x', rebuilds: 1 }).where(eq(publications.id, rows[1].id));
+    const { deps, enqueue } = harness(db, new Date('2026-09-29T05:34:00Z'));
+    expect(await requeueDay(deps, DATE)).toEqual({ requeued: 2, retried: 1 });
+    expect(enqueue.mock.calls.map(([id, options]) => [rows.findIndex((row) => row.id === id), options.delaySeconds]).sort()).toEqual([
+      [1, 0],
+      [2, 120],
+      [3, 37_560],
+    ]);
+    expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, rebuilds: 0 });
   });
 });
