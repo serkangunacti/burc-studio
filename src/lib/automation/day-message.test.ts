@@ -24,6 +24,7 @@ function row(overrides: Partial<PublicationRow>): PublicationRow {
     permalink: null,
     error: null,
     attempts: 0,
+    rebuilds: 0,
     telegramMessageId: null,
     approvedAt: null,
     publishedAt: null,
@@ -79,6 +80,7 @@ describe('günlük onay mesajı', () => {
     expect(parseDayAction(`s:${POST}:r`)).toEqual({ action: 'skip', postId: POST, format: 'reels' });
     expect(parseDayAction(`u:${POST}:c`)).toEqual({ action: 'undo', postId: POST, format: 'carousel' });
     expect(parseDayAction(`s:${POST}:t`)).toEqual({ action: 'skip', postId: POST, format: 'tiktok' });
+    expect(parseDayAction(`y:${POST}:c`)).toEqual({ action: 'retry', postId: POST, format: 'carousel' });
     for (const bad of ['a:2026-13-40', `s:${POST}:x`, 's:abc:c', '', undefined]) expect(parseDayAction(bad)).toBeNull();
   });
 
@@ -87,5 +89,11 @@ describe('günlük onay mesajı', () => {
     const { html, keyboard } = buildDayMessage('2026-09-29', [...ROWS, tiktok], { mediaUrl });
     expect(html).toContain('22:00 🕒 Erkek tarot · TikTok · <a href="https://blob/v.mp4">izle</a>');
     expect(keyboard.at(-1)).toEqual([{ text: '🚫 22:00 Erkek tarot TikTok', callback_data: `s:${OTHER}:t` }]);
+  });
+
+  it('başarısız grup için yeniden deneme düğmesi gösterir', () => {
+    const rows = ROWS.slice(0, 3).map((item, index) => ({ ...item, status: index === 1 ? ('failed' as const) : ('published' as const) }));
+    const { keyboard } = buildDayMessage('2026-09-29', rows, { mediaUrl });
+    expect(keyboard).toEqual([[{ text: '🔁 08:30 Kadın burç carousel yeniden dene', callback_data: `y:${POST}:c` }]]);
   });
 });

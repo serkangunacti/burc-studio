@@ -1,0 +1,1 @@
+ALTER TABLE "publications" ADD COLUMN "rebuilds" smallint DEFAULT 0 NOT NULL;
