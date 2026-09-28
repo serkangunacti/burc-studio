@@ -1,5 +1,6 @@
 // Instagram API with Instagram Login (graph.instagram.com); yalnızca paylaşım için gereken çağrılar.
-const API = 'https://graph.instagram.com/v25.0';
+// Sürüm INSTAGRAM_API_VERSION ile değiştirilebilir: v25'te carousel'lerin açıklamasız ERROR'a düştüğü bildirilmiş.
+const API = `https://graph.instagram.com/${process.env.INSTAGRAM_API_VERSION ?? 'v25.0'}`;
 const REFRESH_URL = 'https://graph.instagram.com/refresh_access_token';
 
 // Meta'nın geçici saydığı hata kodları: hız sınırı, servis kesintisi, bilinmeyen hata.
