@@ -584,6 +584,11 @@ export async function diagnoseCarousel(deps: AutomationDeps, publicationId: stri
   return { items: children, variants: results };
 }
 
+// Tanı: hesaptaki son gönderiler (salt okunur).
+export async function instagramRecentMedia(deps: AutomationDeps, limit: number) {
+  return (await loadInstagram(deps)).recentMedia(limit);
+}
+
 export async function bufferPostStatus(deps: AutomationDeps, remoteId: string) {
   return (await loadBuffer(deps)).client.post(remoteId);
 }
