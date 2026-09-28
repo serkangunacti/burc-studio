@@ -5,7 +5,7 @@ import { isDateKey } from '@/lib/date/istanbul';
 import { isPostId } from '@/lib/posts/repository';
 import { getMediaFile } from './repository';
 import { telegramWebhookSecret } from './secrets';
-import { automationStatus, handleTelegramUpdate, publishDueNow, requeueDay, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
+import { automationStatus, diagnoseCarousel, handleTelegramUpdate, publishDueNow, requeueDay, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
 
 const readySchema = z.object({ date: z.string().refine(isDateKey), failures: z.array(z.string()).max(50).default([]) });
 
@@ -71,4 +71,17 @@ export async function handlePublishNow(request: Request, deps: AutomationDeps): 
   const parsed = z.object({ date: z.string().refine(isDateKey), limit: z.number().int().min(1).max(5).default(2) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
   return Response.json(await publishDueNow(deps, parsed.data.date, parsed.data.limit));
+}
+
+export async function handleDiagnoseCarousel(request: Request, deps: AutomationDeps): Promise<Response> {
+  if (!isAuthorizedCronRequest(request.headers, deps.automationSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
+  const parsed = z
+    .object({ publicationId: z.string().uuid(), variants: z.array(z.array(z.number().int().min(0).max(9)).min(2).max(10)).min(1).max(4) })
+    .safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
+  try {
+    return Response.json(await diagnoseCarousel(deps, parsed.data.publicationId, parsed.data.variants));
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
 }

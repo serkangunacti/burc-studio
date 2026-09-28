@@ -560,6 +560,24 @@ export async function publishDueNow(deps: AutomationDeps, date: DateKey, limit: 
   return results;
 }
 
+export type CarouselVariantResult = { items: number[]; status: string };
+
+// Tanı: yayınlamadan, aynı görsellerle farklı öğe kombinasyonlarında carousel kurup Instagram'ın hangisini reddettiğini gösterir.
+// Kurulan container'lar hiçbir zaman yayınlanmaz; Instagram 24 saatte kendiliğinden siler.
+export async function diagnoseCarousel(deps: AutomationDeps, publicationId: string, variants: number[][]): Promise<{ items: string[]; variants: CarouselVariantResult[] }> {
+  const row = await getPublication(deps.db, publicationId);
+  if (!row || row.format !== 'carousel') throw new Error('Carousel paylaşımı bulunamadı');
+  const instagram = await loadInstagram(deps);
+  const children = await createCarouselChildren(deps, instagram, row);
+  const results: CarouselVariantResult[] = [];
+  for (const items of variants) {
+    await deps.sleep(CAROUSEL_PARENT_DELAY_MS);
+    const parent = await instagram.createCarousel(items.map((index) => children[index]), 'Tanı denemesi');
+    results.push({ items, status: await pollContainer(deps, instagram, parent) });
+  }
+  return { items: children, variants: results };
+}
+
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };
 
 export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceResult> {
