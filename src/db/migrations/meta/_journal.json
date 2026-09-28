@@ -43,6 +43,13 @@
       "when": 1790588472334,
       "tag": "0005_rebuilds",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790607903066,
+      "tag": "0006_yayin_denemesi",
+      "breakpoints": true
     }
   ]
 }

@@ -183,6 +183,8 @@ export const publications = pgTable(
     attempts: integer('attempts').notNull().default(0),
     // Instagram'ın ERROR/EXPIRED verdiği container'ın baştan kurulma sayısı.
     rebuilds: smallint('rebuilds').notNull().default(0),
+    // Instagram'a "yayınla" isteği gönderildiği an. Doluysa sonuç, yeniden yayınlanmadan hesaptaki gönderilerle doğrulanır.
+    publishAttemptedAt: timestamp('publish_attempted_at', { withTimezone: true }),
     telegramMessageId: integer('telegram_message_id'),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     publishedAt: timestamp('published_at', { withTimezone: true }),

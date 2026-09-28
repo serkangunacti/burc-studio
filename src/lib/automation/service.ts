@@ -15,6 +15,7 @@ import {
   getPublication,
   listPublications,
   markForRebuild,
+  markPublishAttempt,
   markFailed,
   markPublished,
   releaseForRetry,
@@ -56,14 +57,14 @@ const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
-const INLINE_STATUS_CHECKS = 6;
+const INLINE_STATUS_CHECKS = 3;
 const MAX_CONTAINER_REBUILDS = 1;
 const REBUILD_DELAY_SECONDS = 10 * 60;
-const CAROUSEL_ITEM_CHECKS = 4;
-const CAROUSEL_ITEM_WAIT_MS = 4_000;
-// Bir öğe container'ı yalnız bir carousel'de kullanılabiliyor; aynı öğelerle carousel yeniden kurulamaz.
-const CAROUSEL_PARENT_TRIES = 1;
+// Tanı ucunda carousel kurulmadan önceki bekleme.
 const CAROUSEL_PARENT_DELAY_MS = 15_000;
+// Yayın isteği hata döndüğünde sonuç bu aralıkla, bu süre boyunca hesaptaki gönderilerle doğrulanır.
+const PUBLISH_VERIFY_SECONDS = 120;
+const PUBLISH_VERIFY_WINDOW_MS = 15 * 60_000;
 const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
@@ -239,29 +240,9 @@ async function createCarouselChildren(deps: AutomationDeps, instagram: Instagram
   const mediaUrl = mediaUrlFor(deps.appUrl);
   const children: string[] = [];
   for (const id of imageIds) children.push(await instagram.createCarouselItem(mediaUrl(id)));
-  await waitForCarouselItems(deps, instagram, children, imageIds.map(mediaUrl));
   return children;
 }
 
-// Instagram carousel'i ancak her görsel FINISHED olunca kabul ediyor; işlenmemiş öğeyle kurulan carousel ERROR'a düşer.
-// Hata veren görsel bir kez yeniden gönderilir, yine olmazsa Instagram'ın açıklamasıyla hata verilir.
-async function waitForCarouselItems(deps: AutomationDeps, instagram: InstagramClient, children: string[], urls: string[]): Promise<void> {
-  const resent = new Set<number>();
-  for (let round = 0; round < CAROUSEL_ITEM_CHECKS; round++) {
-    const statuses = await Promise.all(children.map((child) => instagram.containerStatus(child)));
-    if (statuses.every((status) => status === 'FINISHED')) return;
-    for (const [index, status] of statuses.entries()) {
-      if (status !== 'ERROR' && status !== 'EXPIRED') continue;
-      if (resent.has(index)) {
-        const detail = await instagram.containerDetail(children[index]).catch(() => null);
-        throw new Error(`Carousel görseli ${index + 1} Instagram'da işlenemedi (${status})${detail ? `: ${detail}` : ''}`);
-      }
-      resent.add(index);
-      children[index] = await instagram.createCarouselItem(urls[index]);
-    }
-    await deps.sleep(CAROUSEL_ITEM_WAIT_MS);
-  }
-}
 
 export type PublishOutcome = 'published' | 'failed' | 'ignored';
 type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?: string; permalink: string | null; silent?: boolean };
@@ -270,6 +251,7 @@ type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?:
 async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow, containerId: string, status: string): Promise<never> {
   const detail = await instagram.containerDetail(containerId).catch(() => null);
   console.error('Instagram container hatası', { publication: row.id, containerId, status, detail, rebuilds: row.rebuilds });
+  // Bu noktada "yayınla" isteği hiç gönderilmemiştir; yeniden kurmak kopya paylaşım oluşturamaz.
   if (row.rebuilds < MAX_CONTAINER_REBUILDS) {
     await markForRebuild(deps.db, row.id);
     // Hemen yeniden kurmak hesabı "too many actions" kısıtlamasına sokuyor; taze öğelerle tek deneme 10 dakika sonra yapılır.
@@ -290,20 +272,15 @@ async function pollContainer(deps: AutomationDeps, instagram: InstagramClient, c
 
 async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
   const instagram = await loadInstagram(deps);
+  // Daha önce "yayınla" isteği gönderildiyse sonuç hesaptaki gönderilerle doğrulanır; hiçbir durumda yeniden yayınlanmaz.
+  if (row.publishAttemptedAt) return verifyPublished(deps, instagram, row, row.publishAttemptedAt);
+
   let containerId = row.igContainerId;
-  if (containerId) {
-    const status = await instagram.containerStatus(containerId);
-    // Önceki deneme paylaşıp sonucu yazamadan düştüyse ikinci kez yayınlanmaz.
-    if (status === 'PUBLISHED') return { igContainerId: containerId, igMediaId: null, permalink: null, silent: true };
-    if (status === 'EXPIRED' || status === 'ERROR') await rebuildOrFail(deps, instagram, row, containerId, status);
-  }
   let status: string;
   if (containerId) {
     status = await pollContainer(deps, instagram, containerId);
-  } else if (row.format === 'carousel') {
-    ({ containerId, status } = await buildCarousel(deps, instagram, row));
   } else {
-    containerId = await createContainer(deps, instagram, row);
+    containerId = row.format === 'carousel' ? await createCarousel(deps, instagram, row) : await createContainer(deps, instagram, row);
     await setContainer(deps.db, row.id, containerId);
     status = await pollContainer(deps, instagram, containerId);
   }
@@ -313,27 +290,42 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
     throw new RetryLater(REELS_POLL_SECONDS, 'Instagram medyayı işliyor');
   }
   if (status !== 'FINISHED') await rebuildOrFail(deps, instagram, row, containerId, status);
-  const mediaId = await instagram.publish(containerId);
+
+  const attemptedAt = deps.now();
+  await markPublishAttempt(deps.db, row.id, containerId, attemptedAt);
+  let mediaId: string;
+  try {
+    mediaId = await instagram.publish(containerId);
+  } catch (error) {
+    // Instagram, çağrı sınırındayken gönderiyi yayınlayıp yine de hata dönebiliyor: sonuç doğrulanmadan yeniden denenmez.
+    console.error('Instagram yayınla isteği hata döndü; sonuç doğrulanacak', { publication: row.id, containerId, error: String(error) });
+    await releaseForRetry(deps.db, row.id);
+    throw new RetryLater(PUBLISH_VERIFY_SECONDS, `Yayın sonucu doğrulanacak: ${error instanceof Error ? error.message : String(error)}`);
+  }
   const permalink = await instagram.permalink(mediaId).catch(() => null);
   return { igContainerId: containerId, igMediaId: mediaId, permalink };
 }
 
-// Graph API v25'te carousel, öğeleri FINISHED olsa bile ara sıra açıklamasız ERROR'a düşüyor (Meta forumunda bildirilmiş).
-// Öğeler korunur; yalnız carousel, kısa bir beklemeyle birkaç kez yeniden kurulur (deneme başına 1 çağrı).
-async function buildCarousel(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow): Promise<{ containerId: string; status: string }> {
-  const children = await createCarouselChildren(deps, instagram, row);
-  let containerId = '';
-  let status = 'ERROR';
-  for (let attempt = 0; attempt < CAROUSEL_PARENT_TRIES; attempt++) {
-    await deps.sleep(CAROUSEL_PARENT_DELAY_MS);
-    containerId = await instagram.createCarousel(children, row.caption);
-    await setContainer(deps.db, row.id, containerId);
-    status = await pollContainer(deps, instagram, containerId);
-    if (status !== 'ERROR') break;
-    console.error('Instagram carousel ERROR; öğeler korunarak yeniden kuruluyor', { publication: row.id, containerId, attempt });
+const captionKey = (caption: string | null | undefined) => (caption ?? '').replace(/\s+/g, ' ').trim();
+
+// Yayın isteğinin sonucu: aynı açıklamayla, istekten sonra oluşmuş gönderi hesapta varsa paylaşım yapılmış sayılır.
+async function verifyPublished(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow, attemptedAt: Date): Promise<Published> {
+  const key = captionKey(row.caption);
+  const since = attemptedAt.getTime() - 5 * 60_000;
+  const media = (await instagram.recentMedia(25)).find((item) => captionKey(item.caption) === key && Date.parse(item.timestamp) >= since);
+  if (media) return { igContainerId: row.igContainerId ?? undefined, igMediaId: media.id, permalink: media.permalink };
+  if (deps.now().getTime() - attemptedAt.getTime() < PUBLISH_VERIFY_WINDOW_MS) {
+    await releaseForRetry(deps.db, row.id);
+    throw new RetryLater(PUBLISH_VERIFY_SECONDS, 'Yayın sonucu henüz hesapta görünmüyor');
   }
-  return { containerId, status };
+  throw new Error('Yayın isteği gönderildi ama gönderi hesapta bulunamadı; kopya oluşmaması için yeniden gönderilmedi');
 }
+
+async function createCarousel(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow): Promise<string> {
+  const children = await createCarouselChildren(deps, instagram, row);
+  return instagram.createCarousel(children, row.caption);
+}
+
 
 async function publishToTikTok(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
   const buffer = await loadBuffer(deps);
@@ -343,7 +335,14 @@ async function publishToTikTok(deps: AutomationDeps, row: PublicationRow): Promi
     remoteId = await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl });
     await setRemoteId(deps.db, row.id, remoteId);
   }
-  const post = await buffer.client.post(remoteId);
+  let post = await buffer.client.post(remoteId);
+  // "Yeniden dene" ile gelen ilk teslimde önceki Buffer gönderisi hata vermişse yeni gönderi açılır; aksi hâlde aynı gönderi izlenir.
+  if (post.status === 'error' && row.attempts <= 1 && row.remoteId) {
+    if (!row.media.videoUrl) throw new Error('TikTok videosu yok');
+    remoteId = await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl });
+    await setRemoteId(deps.db, row.id, remoteId);
+    post = await buffer.client.post(remoteId);
+  }
   if (post.status === 'sent') return { remoteId, permalink: post.externalLink };
   if (post.status === 'error') throw new Error(`TikTok (Buffer): ${post.error ?? 'bilinmeyen hata'}`);
   // Aynı paylaşım için birden fazla kuyruk mesajı olabileceğinden sınır deneme sayısına değil geçen süreye bağlıdır.

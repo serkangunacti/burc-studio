@@ -210,9 +210,15 @@ export async function markForRebuild(db: Db, id: string): Promise<void> {
 export async function retryFailedGroup(db: Db, input: { postId: string; format: PublicationFormat }, now = new Date()): Promise<PublicationRow[]> {
   return db
     .update(publications)
-    .set({ status: 'approved', error: null, igContainerId: null, remoteId: null, attempts: 0, rebuilds: 0, approvedAt: now, updatedAt: now })
+    // Yayın denemesi ve Buffer gönderisi korunur: yeniden deneme önce bunların sonucunu doğrular, kopya paylaşım açmaz.
+    .set({ status: 'approved', error: null, attempts: 0, rebuilds: 0, approvedAt: now, updatedAt: now })
     .where(and(eq(publications.postId, input.postId), eq(publications.format, input.format), eq(publications.status, 'failed')))
     .returning();
+}
+
+// "Yayınla" isteğinden hemen önce yazılır: istek hata dönse ya da işlem yarıda kalsa da sonraki deneme yeniden yayınlamaz, doğrular.
+export async function markPublishAttempt(db: Db, id: string, igContainerId: string, now = new Date()): Promise<void> {
+  await db.update(publications).set({ igContainerId, publishAttemptedAt: now, updatedAt: now }).where(eq(publications.id, id));
 }
 
 // TikTok gönderisi Buffer'da oluşturulur oluşturulmaz kimliği yazılır; yarıda kalan deneme ikinci gönderi açmasın.

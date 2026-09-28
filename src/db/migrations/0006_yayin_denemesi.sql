@@ -1,0 +1,1 @@
+ALTER TABLE "publications" ADD COLUMN "publish_attempted_at" timestamp with time zone;
