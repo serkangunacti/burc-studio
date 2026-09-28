@@ -35,7 +35,11 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
   }
 
   return {
-    async tiktokChannels(): Promise<BufferChannel[]> {
+    tiktokChannels(): Promise<BufferChannel[]> {
+      return this.channels('tiktok');
+    },
+
+    async channels(service: 'tiktok' | 'instagram'): Promise<BufferChannel[]> {
       const { account } = await gql<{ account: { organizations: { id: string }[] } }>('query { account { organizations { id } } }');
       const channels: BufferChannel[] = [];
       for (const organization of account.organizations) {
@@ -45,7 +49,7 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
         );
         channels.push(
           ...data.channels
-            .filter((channel) => channel.service.toLowerCase() === 'tiktok')
+            .filter((channel) => channel.service.toLowerCase() === service)
             .map((channel) => ({ id: channel.id, name: channel.displayName ?? channel.name, service: channel.service })),
         );
       }
@@ -61,7 +65,8 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
     },
 
     // Planlama bizim kuyruğumuzda yapılır; Buffer'a paylaşım saatinde "şimdi paylaş" olarak gönderilir.
-    async shareVideoNow(input: { channelId: string; text: string; videoUrl: string }): Promise<string> {
+    // instagramReel: Instagram kanalında video Reels olarak (akışta da görünür) paylaşılır.
+    async shareVideoNow(input: { channelId: string; text: string; videoUrl: string; instagramReel?: boolean }): Promise<string> {
       const data = await gql<{ createPost: { post?: { id: string }; message?: string } }>(
         `mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
@@ -77,6 +82,7 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
             mode: 'shareNow',
             needsApproval: false,
             assets: [{ video: { url: input.videoUrl } }],
+            ...(input.instagramReel ? { metadata: { instagram: { type: 'reel', shouldShareToFeed: true } } } : {}),
           },
         },
       );

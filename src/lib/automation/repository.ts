@@ -122,7 +122,7 @@ export async function claimForPublishing(db: Db, id: string, now = new Date(), o
   const noOtherInstagram = sql`not exists (${db
     .select({ id: other.id })
     .from(other)
-    .where(and(ne(other.id, id), eq(other.status, 'publishing'), inArray(other.format, ['carousel', 'reels']), gte(other.updatedAt, leaseStart)))})`;
+    .where(and(ne(other.id, id), eq(other.status, 'publishing'), eq(other.format, 'carousel'), gte(other.updatedAt, leaseStart)))})`;
   const [row] = await db
     .update(publications)
     .set({ status: 'publishing', attempts: sql`${publications.attempts} + 1`, updatedAt: now })

@@ -300,22 +300,31 @@ describe('Instagram paylaşımı', () => {
     expect(await publishPublication(deps, part3.id)).toBe('published');
   });
 
-  it('Reels işlenirken yeniden denemeyi ister, container yeniden açılmadan sonraki teslimde paylaşır', async () => {
+  it('Instagram Reels i Buffer ın Instagram kanalından reel olarak paylaşır; bizim Instagram uygulamamızı kullanmaz', async () => {
     await connectAll(db);
     const reels = (await seedDay(db))[3];
     await approveDay(db, DATE);
-    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
-    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
-    const retry = await publishPublication(deps, reels.id).catch((error: unknown) => error);
-    expect(retry).toBeInstanceOf(RetryLater);
-    expect(retry).toMatchObject({ afterSeconds: 30 });
-    expect(await getPublication(db, reels.id)).toMatchObject({ status: 'approved', igContainerId: 'reels-c' });
-    expect(igCalls()[0].params).toMatchObject({ media_type: 'REELS', video_url: 'https://blob.test/r.mp4', share_to_feed: 'true' });
-
+    const { deps: setup } = harness(db, new Date('2026-09-29T00:00:00Z'));
+    await connectBuffer(setup, 'BUFFER-KEY');
+    const { deps, buffer, bufferCalls, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
+    const base = buffer.getMockImplementation()!;
+    buffer.mockImplementation((query) =>
+      query.includes('channels(')
+        ? { data: { channels: [{ id: 'tt-1', name: 'kozmikarkan', displayName: null, service: 'tiktok' }, { id: 'ig-1', name: 'kozmikarkan', displayName: null, service: 'instagram' }] } }
+        : base(query),
+    );
     expect(await publishPublication(deps, reels.id)).toBe('published');
-    expect(igCalls().filter((call) => call.path.endsWith('/media'))).toHaveLength(1);
-    expect(igCalls().find((call) => call.path.endsWith('/media_publish'))?.params.creation_id).toBe('reels-c');
+    expect(bufferCalls().find((call) => call.path === 'createPost')?.params).toMatchObject({
+      input: {
+        channelId: 'ig-1',
+        text: reels.caption,
+        mode: 'shareNow',
+        assets: [{ video: { url: 'https://blob.test/r.mp4' } }],
+        metadata: { instagram: { type: 'reel', shouldShareToFeed: true } },
+      },
+    });
+    expect(igCalls()).toHaveLength(0);
+    expect(await getIntegration(db, 'buffer_instagram')).toMatchObject({ account: { id: 'ig-1' } });
   });
 
 
@@ -341,14 +350,14 @@ describe('Instagram paylaşımı', () => {
     await connectAll(db);
     const rows = await seedDay(db);
     await approveDay(db, DATE);
-    const { deps, instagram, telegramCalls } = harness(db, new Date('2026-09-29T17:00:00Z'));
+    const { deps, instagram, telegramCalls } = harness(db, new Date('2026-09-29T05:40:00Z'));
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } }));
-    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
-    expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
+    await expect(publishPublication(deps, rows[2].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
+    expect((await getPublication(db, rows[2].id))?.status).toBe('approved');
     // Gün sonu saatine (22:15 TSİ) kadar başlayamayan paylaşım o gün yapılmaz ve bildirilir.
     const late = harness(db, new Date('2026-09-29T19:20:00Z'));
-    expect(await publishPublication(late.deps, rows[3].id)).toBe('expired');
-    expect(await getPublication(db, rows[3].id)).toMatchObject({ status: 'expired', error: 'Gün sonu saati (22:15) geçti; bugün paylaşılmadı' });
+    expect(await publishPublication(late.deps, rows[2].id)).toBe('expired');
+    expect(await getPublication(db, rows[2].id)).toMatchObject({ status: 'expired', error: 'Gün sonu saati (22:15) geçti; bugün paylaşılmadı' });
     expect(late.telegramCalls().some((call) => String(call.params.text).startsWith('⌛ Paylaşılmadı'))).toBe(true);
     expect(late.igCalls()).toHaveLength(0);
 
@@ -441,7 +450,7 @@ describe('TikTok (Buffer)', () => {
     buffer
       .mockImplementationOnce(() => ({ data: { createPost: { post: { id: 'buf-1' } } } }))
       .mockImplementationOnce(() => ({ data: { post: { id: 'buf-1', status: 'sending', externalLink: null, error: null } } }));
-    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 60 });
+    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 300 });
     expect(bufferCalls()[0].params).toMatchObject({
       input: { channelId: 'tt-1', text: tiktok.caption, mode: 'shareNow', assets: [{ video: { url: 'https://blob.test/r.mp4' } }] },
     });
@@ -566,10 +575,10 @@ describe('Instagram geçici hataları', () => {
     await connectAll(db);
     const rows = await seedDay(db);
     await approveDay(db, DATE);
-    const { deps, instagram } = harness(db, new Date('2026-09-29T16:00:05Z'));
+    const { deps, instagram } = harness(db, new Date('2026-09-29T05:40:05Z'));
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'User is performing too many actions', code: 368 } } }));
-    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
-    expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
+    await expect(publishPublication(deps, rows[2].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
+    expect((await getPublication(db, rows[2].id))?.status).toBe('approved');
   });
 
   it('Telegramdaki yeniden dene düğmesi başarısız grubu sıfırlayıp hemen kuyruğa alır', async () => {
