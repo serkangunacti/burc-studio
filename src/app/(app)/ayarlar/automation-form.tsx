@@ -68,9 +68,16 @@ export function AutomationSettingsForm({ initial }: { initial: AutomationSetting
         <p className="text-xs text-muted-foreground">Carousel üç parça hâlinde paylaşılır: son parça yazdığın saatte, diğerleri aralıkla ardından.</p>
       </fieldset>
 
-      <div className="max-w-xs space-y-2">
-        <Label htmlFor="partGapMinutes">Carousel parçaları arası (dakika)</Label>
-        <Input id="partGapMinutes" name="partGapMinutes" type="number" min={1} max={30} defaultValue={initial.partGapMinutes} />
+      <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="partGapMinutes">Carousel parçaları arası (dakika)</Label>
+          <Input id="partGapMinutes" name="partGapMinutes" type="number" min={1} max={30} defaultValue={initial.partGapMinutes} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cutoffTime">Gün sonu saati</Label>
+          <Input id="cutoffTime" name="cutoffTime" type="time" defaultValue={initial.cutoffTime} required />
+          <p className="text-xs text-muted-foreground">Bu saate kadar başlayamayan paylaşım o gün yapılmaz.</p>
+        </div>
       </div>
 
       {state.status === 'error' && (

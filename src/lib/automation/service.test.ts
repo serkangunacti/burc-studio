@@ -274,6 +274,32 @@ describe('Instagram paylaşımı', () => {
     expect(igCalls().some((call) => call.path.endsWith('/media_publish') || (call.path.endsWith('/media') && !call.params.fields))).toBe(false);
   });
 
+  it('başka bir Instagram paylaşımı sürerken sıradakini başlatmaz; TikTok bundan etkilenmez', async () => {
+    await connectAll(db);
+    const [part3, part2] = await seedDay(db);
+    await approveDay(db, DATE);
+    await db.update(publications).set({ status: 'publishing', updatedAt: new Date('2026-09-29T05:33:00Z') }).where(eq(publications.id, part3.id));
+    const { deps, igCalls } = harness(db, new Date('2026-09-29T05:34:00Z'));
+    await expect(publishPublication(deps, part2.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 90 });
+    expect((await getPublication(db, part2.id))?.status).toBe('approved');
+    expect(igCalls()).toHaveLength(0);
+  });
+
+  it('gün sonu saati geçse de başlamış paylaşımı (yayın doğrulaması) tamamlar', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    await db.update(publications).set({ igContainerId: 'c-1', publishAttemptedAt: new Date('2026-09-29T19:10:00Z') }).where(eq(publications.id, part3.id));
+    const { deps, instagram } = harness(db, new Date('2026-09-29T19:20:00Z'));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      path.endsWith('/1784/media') && params.fields
+        ? { body: { data: [{ id: 'm-5', caption: part3.caption, timestamp: '2026-09-29T19:10:05+0000', permalink: 'https://www.instagram.com/p/z/', media_type: 'CAROUSEL_ALBUM' }] } }
+        : base(path, params),
+    );
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+  });
+
   it('Reels işlenirken yeniden denemeyi ister, container yeniden açılmadan sonraki teslimde paylaşır', async () => {
     await connectAll(db);
     const reels = (await seedDay(db))[3];
@@ -317,12 +343,14 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, telegramCalls } = harness(db, new Date('2026-09-29T17:00:00Z'));
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } }));
-    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 900 });
+    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
     expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
-    const late = harness(db, new Date('2026-09-29T20:30:00Z'));
-    late.instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } }));
-    // Pencere geçince çağrı sınırı sıradan geçici hata gibi sınırlı sayıda denenir.
-    await expect(publishPublication(late.deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 240 });
+    // Gün sonu saatine (22:15 TSİ) kadar başlayamayan paylaşım o gün yapılmaz ve bildirilir.
+    const late = harness(db, new Date('2026-09-29T19:20:00Z'));
+    expect(await publishPublication(late.deps, rows[3].id)).toBe('expired');
+    expect(await getPublication(db, rows[3].id)).toMatchObject({ status: 'expired', error: 'Gün sonu saati (22:15) geçti; bugün paylaşılmadı' });
+    expect(late.telegramCalls().some((call) => String(call.params.text).startsWith('⌛ Paylaşılmadı'))).toBe(true);
+    expect(late.igCalls()).toHaveLength(0);
 
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Invalid OAuth access token', code: 190 } } }));
     expect(await publishPublication(deps, rows[0].id)).toBe('failed');
@@ -428,7 +456,7 @@ describe('TikTok (Buffer)', () => {
   it('Buffer gönderisi uzun süre işlenirken deneme sayısına değil geçen süreye göre bekler', async () => {
     const tiktok = await seedTikTokDay();
     const sending = () => ({ data: { post: { id: 'buf-1', status: 'sending', externalLink: null, error: null } } });
-    const early = harness(db, new Date('2026-09-29T19:40:00Z'));
+    const early = harness(db, new Date('2026-09-29T19:05:00Z'));
     early.buffer.mockImplementation((query) => (query.includes('createPost') ? { data: { createPost: { post: { id: 'buf-1' } } } } : sending()));
     await db.update(publications).set({ attempts: 50 }).where(eq(publications.id, tiktok.id));
     await expect(publishPublication(early.deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater' });
@@ -468,7 +496,8 @@ describe('TikTok (Buffer)', () => {
       params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: ++carouselChecks <= 2 ? 'IN_PROGRESS' : 'FINISHED' } } : base(path, params),
     );
     expect(await publishPublication(deps, part3.id)).toBe('published');
-    expect(deps.sleep).toHaveBeenCalledTimes(2);
+    // 5 görsel arası bekleme + 2 işlem kontrolü.
+    expect(deps.sleep).toHaveBeenCalledTimes(7);
   });
 });
 
@@ -533,13 +562,13 @@ describe('Instagram geçici hataları', () => {
     expect((await getPublication(db, part2.id))?.error).toBe('Instagram medyayı işleyemedi (ERROR): Error: Media upload has failed with error code 2207052');
   });
 
-  it('"too many actions" kısıtlamasında paylaşımı başarısız saymaz, 15 dakika sonra yeniden dener', async () => {
+  it('"too many actions" kısıtlamasında paylaşımı başarısız saymaz, 30 dakika sonra yeniden dener', async () => {
     await connectAll(db);
     const rows = await seedDay(db);
     await approveDay(db, DATE);
     const { deps, instagram } = harness(db, new Date('2026-09-29T16:00:05Z'));
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'User is performing too many actions', code: 368 } } }));
-    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 900 });
+    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1800 });
     expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
   });
 

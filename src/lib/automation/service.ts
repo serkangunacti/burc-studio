@@ -1,6 +1,7 @@
 import type { Db } from '@/db/types';
 import { BufferError, createBufferClient, type BufferClient } from '@/lib/buffer/client';
 import { istanbulDateKey, type DateKey } from '@/lib/date/istanbul';
+import { istanbulInstant } from './plan';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
 import { createTelegramClient, escapeHtml, TelegramError, type TelegramClient } from '@/lib/telegram/client';
@@ -14,6 +15,7 @@ import {
   getIntegration,
   getPublication,
   listPublications,
+  markExpired,
   markForRebuild,
   markPublishAttempt,
   markFailed,
@@ -67,7 +69,11 @@ const PUBLISH_VERIFY_SECONDS = 120;
 const PUBLISH_VERIFY_WINDOW_MS = 15 * 60_000;
 const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
-const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
+const RATE_LIMIT_RETRY_SECONDS = 30 * 60;
+// Başka bir Instagram paylaşımı sürerken sıradaki bu aralıkla bekler.
+const INSTAGRAM_TURN_SECONDS = 90;
+// Carousel görselleri art arda değil, bu aralıkla yüklenir (Instagram işlem sınırı).
+const CAROUSEL_ITEM_GAP_MS = 3_000;
 const RATE_LIMIT_WINDOW_MS = 4 * 3_600_000;
 // Buffer'ın TikTok gönderimi canlıda 40–60 dk sürdü; planlanan saatten sonra en fazla bu kadar beklenir.
 const TIKTOK_TIMEOUT_MS = 4 * 60 * 60_000;
@@ -239,12 +245,15 @@ async function createCarouselChildren(deps: AutomationDeps, instagram: Instagram
   if (imageIds.length < 2) throw new Error('Carousel görselleri eksik (bakım silmiş olabilir)');
   const mediaUrl = mediaUrlFor(deps.appUrl);
   const children: string[] = [];
-  for (const id of imageIds) children.push(await instagram.createCarouselItem(mediaUrl(id)));
+  for (const [index, id] of imageIds.entries()) {
+    if (index > 0) await deps.sleep(CAROUSEL_ITEM_GAP_MS);
+    children.push(await instagram.createCarouselItem(mediaUrl(id)));
+  }
   return children;
 }
 
 
-export type PublishOutcome = 'published' | 'failed' | 'ignored';
+export type PublishOutcome = 'published' | 'failed' | 'ignored' | 'expired';
 type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?: string; permalink: string | null; silent?: boolean };
 
 // Instagram carousel ve Reels'i zaman zaman geçici olarak ERROR'a düşürür; container sınırlı sayıda baştan kurulur.
@@ -361,9 +370,21 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   // Planlanan saatten önce paylaşılmaz; erken gelen teslim saatine ertelenir.
   const early = current.scheduledAt.getTime() - now.getTime();
   if (current.status === 'approved' && early > 60_000) throw new RetryLater(Math.ceil(early / 1000), 'Planlanan saat gelmedi');
-  const row = await claimForPublishing(deps.db, id, now);
+  const started = current.igContainerId !== null || current.remoteId !== null || current.publishAttemptedAt !== null;
+  if (current.status === 'approved' && !started) {
+    const { cutoffTime } = (await getSettings(deps.db)).automation;
+    // Gün sonu saatine kadar başlayamayan paylaşım o gün yapılmaz; başlamış olan (ör. doğrulama bekleyen) tamamlanır.
+    if (now.getTime() > istanbulInstant(current.date, cutoffTime).getTime()) {
+      await markExpired(deps.db, id, `Gün sonu saati (${cutoffTime}) geçti; bugün paylaşılmadı`);
+      await notify(deps, `⌛ Paylaşılmadı · ${escapeHtml(publicationLabel(current))}\n<i>Gün sonu saati (${cutoffTime}) geçti.</i>`, true);
+      await refreshDayMessage(deps, current.date);
+      return 'expired';
+    }
+  }
+  const row = await claimForPublishing(deps.db, id, now, { exclusiveInstagram: current.format !== 'tiktok' });
   if (!row) {
     if (current.status === 'publishing') throw new RetryLater(600, 'Paylaşım başka bir teslimde sürüyor');
+    if (current.status === 'approved') throw new RetryLater(INSTAGRAM_TURN_SECONDS, 'Sırada başka bir Instagram paylaşımı var');
     return 'ignored';
   }
 

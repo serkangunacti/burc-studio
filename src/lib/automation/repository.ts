@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { integrations, mediaFiles, publications, type IntegrationId, type PublicationFormat, type PublicationMedia } from '@/db/schema';
 import type { Db } from '@/db/types';
 import type { DateKey } from '@/lib/date/istanbul';
@@ -114,21 +115,30 @@ export async function setGroupSkipped(
     .returning();
 }
 
-export async function claimForPublishing(db: Db, id: string, now = new Date()): Promise<PublicationRow | null> {
+// Instagram paylaşımları tane tane yapılır: başka bir Instagram paylaşımı sürerken sahiplenme yapılmaz.
+export async function claimForPublishing(db: Db, id: string, now = new Date(), options: { exclusiveInstagram?: boolean } = {}): Promise<PublicationRow | null> {
+  const leaseStart = new Date(now.getTime() - PUBLISH_LEASE_MS);
+  const other = alias(publications, 'other');
+  const noOtherInstagram = sql`not exists (${db
+    .select({ id: other.id })
+    .from(other)
+    .where(and(ne(other.id, id), eq(other.status, 'publishing'), inArray(other.format, ['carousel', 'reels']), gte(other.updatedAt, leaseStart)))})`;
   const [row] = await db
     .update(publications)
     .set({ status: 'publishing', attempts: sql`${publications.attempts} + 1`, updatedAt: now })
     .where(
       and(
         eq(publications.id, id),
-        or(
-          eq(publications.status, 'approved'),
-          and(eq(publications.status, 'publishing'), lt(publications.updatedAt, new Date(now.getTime() - PUBLISH_LEASE_MS))),
-        ),
+        or(eq(publications.status, 'approved'), and(eq(publications.status, 'publishing'), lt(publications.updatedAt, leaseStart))),
+        options.exclusiveInstagram ? noOtherInstagram : undefined,
       ),
     )
     .returning();
   return row ?? null;
+}
+
+export async function markExpired(db: Db, id: string, error: string): Promise<void> {
+  await db.update(publications).set({ status: 'expired', error, updatedAt: new Date() }).where(and(eq(publications.id, id), eq(publications.status, 'approved')));
 }
 
 // Instagram ya da TikTok medyayı işlerken satır onaya geri bırakılır; kuyruğun sonraki teslimi kayıtlı kimlikle sürer.
