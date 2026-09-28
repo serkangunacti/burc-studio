@@ -60,6 +60,8 @@ const INLINE_STATUS_CHECKS = 6;
 const MAX_CONTAINER_REBUILDS = 1;
 const CAROUSEL_ITEM_CHECKS = 4;
 const CAROUSEL_ITEM_WAIT_MS = 4_000;
+const CAROUSEL_PARENT_TRIES = 3;
+const CAROUSEL_PARENT_DELAY_MS = 15_000;
 const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
@@ -225,17 +227,18 @@ function publicationLabel(row: PublicationRow): string {
 }
 
 async function createContainer(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow): Promise<string> {
-  if (row.format === 'reels') {
-    if (!row.media.videoUrl) throw new Error('Reels videosu yok');
-    return instagram.createReels(row.media.videoUrl, row.caption);
-  }
+  if (!row.media.videoUrl) throw new Error('Reels videosu yok');
+  return instagram.createReels(row.media.videoUrl, row.caption);
+}
+
+async function createCarouselChildren(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow): Promise<string[]> {
   const imageIds = row.media.imageIds ?? [];
   if (imageIds.length < 2) throw new Error('Carousel görselleri eksik (bakım silmiş olabilir)');
   const mediaUrl = mediaUrlFor(deps.appUrl);
   const children: string[] = [];
   for (const id of imageIds) children.push(await instagram.createCarouselItem(mediaUrl(id)));
   await waitForCarouselItems(deps, instagram, children, imageIds.map(mediaUrl));
-  return instagram.createCarousel(children, row.caption);
+  return children;
 }
 
 // Instagram carousel'i ancak her görsel FINISHED olunca kabul ediyor; işlenmemiş öğeyle kurulan carousel ERROR'a düşer.
@@ -272,6 +275,16 @@ async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, r
   throw new Error(`Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}`);
 }
 
+// Görseller genelde saniyeler içinde işlenir; kuyruğun yeniden teslimi dakikalar sürdüğü için önce kısa süre burada beklenir.
+async function pollContainer(deps: AutomationDeps, instagram: InstagramClient, containerId: string): Promise<string> {
+  let status = await instagram.containerStatus(containerId);
+  for (let check = 0; status === 'IN_PROGRESS' && check < INLINE_STATUS_CHECKS; check++) {
+    await deps.sleep(INLINE_STATUS_WAIT_MS);
+    status = await instagram.containerStatus(containerId);
+  }
+  return status;
+}
+
 async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
   const instagram = await loadInstagram(deps);
   let containerId = row.igContainerId;
@@ -281,15 +294,15 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
     if (status === 'PUBLISHED') return { igContainerId: containerId, igMediaId: null, permalink: null, silent: true };
     if (status === 'EXPIRED' || status === 'ERROR') await rebuildOrFail(deps, instagram, row, containerId, status);
   }
-  if (!containerId) {
+  let status: string;
+  if (containerId) {
+    status = await pollContainer(deps, instagram, containerId);
+  } else if (row.format === 'carousel') {
+    ({ containerId, status } = await buildCarousel(deps, instagram, row));
+  } else {
     containerId = await createContainer(deps, instagram, row);
     await setContainer(deps.db, row.id, containerId);
-  }
-  // Görseller genelde saniyeler içinde işlenir; kuyruğun yeniden teslimi dakikalar sürdüğü için önce kısa süre burada beklenir.
-  let status = await instagram.containerStatus(containerId);
-  for (let check = 0; status === 'IN_PROGRESS' && check < INLINE_STATUS_CHECKS; check++) {
-    await deps.sleep(INLINE_STATUS_WAIT_MS);
-    status = await instagram.containerStatus(containerId);
+    status = await pollContainer(deps, instagram, containerId);
   }
   if (status === 'IN_PROGRESS') {
     if (row.attempts >= MAX_PROCESSING_ATTEMPTS) throw new Error('Instagram medyayı zamanında işleyemedi');
@@ -300,6 +313,23 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
   const mediaId = await instagram.publish(containerId);
   const permalink = await instagram.permalink(mediaId).catch(() => null);
   return { igContainerId: containerId, igMediaId: mediaId, permalink };
+}
+
+// Graph API v25'te carousel, öğeleri FINISHED olsa bile ara sıra açıklamasız ERROR'a düşüyor (Meta forumunda bildirilmiş).
+// Öğeler korunur; yalnız carousel, kısa bir beklemeyle birkaç kez yeniden kurulur (deneme başına 1 çağrı).
+async function buildCarousel(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow): Promise<{ containerId: string; status: string }> {
+  const children = await createCarouselChildren(deps, instagram, row);
+  let containerId = '';
+  let status = 'ERROR';
+  for (let attempt = 0; attempt < CAROUSEL_PARENT_TRIES; attempt++) {
+    await deps.sleep(CAROUSEL_PARENT_DELAY_MS);
+    containerId = await instagram.createCarousel(children, row.caption);
+    await setContainer(deps.db, row.id, containerId);
+    status = await pollContainer(deps, instagram, containerId);
+    if (status !== 'ERROR') break;
+    console.error('Instagram carousel ERROR; öğeler korunarak yeniden kuruluyor', { publication: row.id, containerId, attempt });
+  }
+  return { containerId, status };
 }
 
 async function publishToTikTok(deps: AutomationDeps, row: PublicationRow): Promise<Published> {

@@ -402,7 +402,8 @@ describe('TikTok (Buffer)', () => {
       params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: ++carouselChecks <= 2 ? 'IN_PROGRESS' : 'FINISHED' } } : base(path, params),
     );
     expect(await publishPublication(deps, part3.id)).toBe('published');
-    expect(deps.sleep).toHaveBeenCalledTimes(2);
+    // Carousel kurulmadan önceki bekleme + iki işlem kontrolü.
+    expect(deps.sleep).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -438,7 +439,7 @@ describe('hazırlık tetikleyicisi (GitHub)', () => {
 });
 
 describe('Instagram geçici hataları', () => {
-  it('ERROR veren carousel container ı baştan kurar ve paylaşır; sınır aşılınca Instagramın açıklamasıyla başarısız olur', async () => {
+  it('ERROR veren carousel ı görselleri koruyarak aynı teslimde yeniden kurar ve paylaşır', async () => {
     await connectAll(db);
     const [part3] = await seedDay(db);
     await approveDay(db, DATE);
@@ -447,21 +448,33 @@ describe('Instagram geçici hataları', () => {
     instagram.mockImplementation((path, params) =>
       params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: 'ERROR' } } : base(path, params),
     );
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    const created = igCalls().filter((call) => call.path.endsWith('/media'));
+    expect(created).toHaveLength(8);
+    expect(created[6].params.children).toBe(created[7].params.children);
+    expect(igCalls().find((call) => call.path.endsWith('/media_publish'))?.params.creation_id).toBe('container-8');
+  });
+
+  it('carousel üç denemede de ERROR verirse bir kez baştan kurar; sonra Instagramın açıklamasıyla başarısız olur', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram } = harness(db, new Date('2026-09-29T05:33:10Z'));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) => {
+      if (params.fields === 'status_code' && /container-(7|8|9)$/.test(path)) return { body: { status_code: 'ERROR' } };
+      return base(path, params);
+    });
     await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 30 });
     expect(await getPublication(db, part3.id)).toMatchObject({ status: 'approved', igContainerId: null, rebuilds: 1 });
 
-    expect(await publishPublication(deps, part3.id)).toBe('published');
-    expect(igCalls().filter((call) => call.path.endsWith('/media'))).toHaveLength(14);
-
-    const [, part2] = await listPublications(db, DATE);
-    await db.update(publications).set({ rebuilds: 1 }).where(eq(publications.id, part2.id));
     instagram.mockImplementation((path, params) => {
       if (path.endsWith('/media')) return { body: { id: 'c-x' } };
       if (params.fields === 'status_code') return { body: { status_code: 'ERROR' } };
       return { body: { status: 'Error: Media upload has failed with error code 2207052' } };
     });
-    expect(await publishPublication(deps, part2.id)).toBe('failed');
-    expect((await getPublication(db, part2.id))?.error).toBe("Carousel görseli 1 Instagram'da işlenemedi (ERROR): Error: Media upload has failed with error code 2207052");
+    expect(await publishPublication(deps, part3.id)).toBe('failed');
+    expect((await getPublication(db, part3.id))?.error).toBe("Carousel görseli 1 Instagram'da işlenemedi (ERROR): Error: Media upload has failed with error code 2207052");
   });
 
   it('işlenemeyen carousel görselini bir kez yeniden gönderip carousel ı kurar', async () => {
