@@ -12,6 +12,7 @@ import { approveDay, getIntegration, getPublication, listPublications, saveInteg
 import { encryptSecret, telegramWebhookSecret } from './secrets';
 import {
   approvalSummary,
+  diagnoseCarousel,
   automationStatus,
   connectBuffer,
   connectGitHub,
@@ -543,5 +544,24 @@ describe('şimdi paylaş', () => {
       ['Kadın burç carousel 2/3', 'published'],
     ]);
     expect((await getPublication(db, rows[2].id))?.status).toBe('approved');
+  });
+});
+
+describe('carousel tanısı', () => {
+  it('görselleri bir kez yükler, her kombinasyon için yayınlamadan carousel kurup durumunu döndürür', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    const { deps, instagram, igCalls } = harness(db, new Date());
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      params.fields === 'status_code' && path.endsWith('/container-8') ? { body: { status_code: 'ERROR' } } : base(path, params),
+    );
+    const result = await diagnoseCarousel(deps, part3.id, [[0, 1, 3, 4, 5], [0, 2, 5]]);
+    expect(result.variants).toEqual([
+      { items: [0, 1, 3, 4, 5], status: 'FINISHED' },
+      { items: [0, 2, 5], status: 'ERROR' },
+    ]);
+    expect(igCalls().filter((call) => call.path.endsWith('/media'))).toHaveLength(8);
+    expect(igCalls().some((call) => call.path.endsWith('/media_publish'))).toBe(false);
   });
 });
