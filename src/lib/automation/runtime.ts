@@ -31,6 +31,7 @@ export function automationDeps(): AutomationDeps {
     integrationsKey: process.env.INTEGRATIONS_KEY,
     automationSecret: process.env.AUTOMATION_SECRET,
     now: () => new Date(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     fetch,
     enqueue: async (publicationId, options) => {
       await send(PUBLISH_TOPIC, { publicationId }, options);

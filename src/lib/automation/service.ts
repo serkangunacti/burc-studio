@@ -31,6 +31,7 @@ export type AutomationDeps = {
   integrationsKey: string | undefined;
   automationSecret: string | undefined;
   now: () => Date;
+  sleep: (ms: number) => Promise<void>;
   fetch: typeof fetch;
   enqueue: (publicationId: string, options: { delaySeconds: number; retentionSeconds: number }) => Promise<void>;
   deleteVideosBefore: (before: Date) => Promise<number>;
@@ -51,6 +52,8 @@ const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
+const INLINE_STATUS_CHECKS = 6;
+const INLINE_STATUS_WAIT_MS = 5_000;
 // TikTok videoyu işlerken Buffer "sending"de kalır; ~30 dakika beklenir.
 const MAX_TIKTOK_ATTEMPTS = 30;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
@@ -178,12 +181,26 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     await enqueueRows(deps, approved);
     await client.answerCallback(query.id, approved.length > 0 ? `✓ ${approved.length} paylaşım planlandı` : 'Onaylanacak paylaşım kalmadı.');
     await refreshDayMessage(deps, action.date, query.message.message_id);
+    if (approved.length > 0) await client.sendMessage(chatId, approvalSummary(approved, now));
     return;
   }
   const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip' }, now);
   if (action.action === 'undo') await enqueueRows(deps, changed.filter((row) => row.status === 'approved'));
   await client.answerCallback(query.id, changed.length === 0 ? 'Değişiklik yok.' : action.action === 'skip' ? 'Paylaşılmayacak.' : 'Geri alındı.');
   if (changed[0]) await refreshDayMessage(deps, changed[0].date, query.message.message_id);
+}
+
+const clock = (date: Date) => date.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
+
+// Telegram'ın düğme uyarısı birkaç saniyede kaybolur; onay kalıcı bir mesajla da doğrulanır.
+export function approvalSummary(approved: readonly PublicationRow[], now: Date): string {
+  const due = approved.filter((row) => row.scheduledAt.getTime() <= now.getTime());
+  const upcoming = approved.filter((row) => row.scheduledAt.getTime() > now.getTime()).sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+  const lines = [`✅ ${approved.length} paylaşım onaylandı.`];
+  if (due.length > 0) lines.push(`Saati geçmiş ${due.length} paylaşım hemen gönderiliyor.`);
+  if (upcoming.length > 0) lines.push(`Sıradaki: ${clock(upcoming[0].scheduledAt)} · son: ${clock(upcoming.at(-1)!.scheduledAt)}.`);
+  lines.push('Her paylaşım gidince "📤 Paylaşıldı" bildirimi gelecek.');
+  return lines.join('\n');
 }
 
 function publicationLabel(row: PublicationRow): string {
@@ -219,7 +236,12 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
     containerId = await createContainer(deps, instagram, row);
     await setContainer(deps.db, row.id, containerId);
   }
-  const status = await instagram.containerStatus(containerId);
+  // Görseller genelde saniyeler içinde işlenir; kuyruğun yeniden teslimi dakikalar sürdüğü için önce kısa süre burada beklenir.
+  let status = await instagram.containerStatus(containerId);
+  for (let check = 0; status === 'IN_PROGRESS' && check < INLINE_STATUS_CHECKS; check++) {
+    await deps.sleep(INLINE_STATUS_WAIT_MS);
+    status = await instagram.containerStatus(containerId);
+  }
   if (status === 'IN_PROGRESS') {
     if (row.attempts >= MAX_PROCESSING_ATTEMPTS) throw new Error('Instagram medyayı zamanında işleyemedi');
     await releaseForRetry(deps.db, row.id);
