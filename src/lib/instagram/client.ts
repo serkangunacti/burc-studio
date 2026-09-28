@@ -6,7 +6,7 @@ const REFRESH_URL = 'https://graph.instagram.com/refresh_access_token';
 // Meta'nın geçici saydığı hata kodları: hız sınırı, servis kesintisi, bilinmeyen hata.
 const TRANSIENT_CODES = new Set([1, 2, 4, 17, 32, 341, 613]);
 // Uygulama/kullanıcı çağrı sınırları: pencere dolana kadar beklenir, paylaşım başarısız sayılmaz.
-const RATE_LIMIT_CODES = new Set([4, 17, 32, 613]);
+const RATE_LIMIT_CODES = new Set([4, 9, 17, 32, 613]);
 
 export class InstagramError extends Error {
   constructor(
@@ -18,8 +18,9 @@ export class InstagramError extends Error {
     this.name = 'InstagramError';
   }
 
+  // "User is performing too many actions": Instagram hesabı kısa süreli işlem kısıtlamasına aldı.
   get rateLimited(): boolean {
-    return this.code !== null && RATE_LIMIT_CODES.has(this.code);
+    return (this.code !== null && RATE_LIMIT_CODES.has(this.code)) || /too many actions/i.test(this.message);
   }
 }
 

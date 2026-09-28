@@ -453,43 +453,7 @@ describe('hazırlık tetikleyicisi (GitHub)', () => {
 });
 
 describe('Instagram geçici hataları', () => {
-  it('ERROR veren carousel ı görselleri koruyarak aynı teslimde yeniden kurar ve paylaşır', async () => {
-    await connectAll(db);
-    const [part3] = await seedDay(db);
-    await approveDay(db, DATE);
-    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:33:10Z'));
-    const base = instagram.getMockImplementation()!;
-    instagram.mockImplementation((path, params) =>
-      params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: 'ERROR' } } : base(path, params),
-    );
-    expect(await publishPublication(deps, part3.id)).toBe('published');
-    const created = igCalls().filter((call) => call.path.endsWith('/media'));
-    expect(created).toHaveLength(8);
-    expect(created[6].params.children).toBe(created[7].params.children);
-    expect(igCalls().find((call) => call.path.endsWith('/media_publish'))?.params.creation_id).toBe('container-8');
-  });
 
-  it('carousel üç denemede de ERROR verirse bir kez baştan kurar; sonra Instagramın açıklamasıyla başarısız olur', async () => {
-    await connectAll(db);
-    const [part3] = await seedDay(db);
-    await approveDay(db, DATE);
-    const { deps, instagram } = harness(db, new Date('2026-09-29T05:33:10Z'));
-    const base = instagram.getMockImplementation()!;
-    instagram.mockImplementation((path, params) => {
-      if (params.fields === 'status_code' && /container-(7|8|9)$/.test(path)) return { body: { status_code: 'ERROR' } };
-      return base(path, params);
-    });
-    await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 30 });
-    expect(await getPublication(db, part3.id)).toMatchObject({ status: 'approved', igContainerId: null, rebuilds: 1 });
-
-    instagram.mockImplementation((path, params) => {
-      if (path.endsWith('/media')) return { body: { id: 'c-x' } };
-      if (params.fields === 'status_code') return { body: { status_code: 'ERROR' } };
-      return { body: { status: 'Error: Media upload has failed with error code 2207052' } };
-    });
-    expect(await publishPublication(deps, part3.id)).toBe('failed');
-    expect((await getPublication(db, part3.id))?.error).toBe("Carousel görseli 1 Instagram'da işlenemedi (ERROR): Error: Media upload has failed with error code 2207052");
-  });
 
   it('işlenemeyen carousel görselini bir kez yeniden gönderip carousel ı kurar', async () => {
     await connectAll(db);
@@ -504,6 +468,42 @@ describe('Instagram geçici hataları', () => {
     const created = igCalls().filter((call) => call.path.endsWith('/media'));
     expect(created).toHaveLength(8);
     expect(created.at(-1)?.params.children).toBe('container-1,container-2,container-7,container-4,container-5,container-6');
+  });
+
+  it('ERROR veren carousel ı 10 dakika sonra taze görsellerle bir kez yeniden kurar; yine ERROR olursa açıklamayla başarısız olur', async () => {
+    await connectAll(db);
+    const [part3, part2] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:33:10Z'));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: 'ERROR' } } : base(path, params),
+    );
+    await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 600 });
+    expect(await getPublication(db, part3.id)).toMatchObject({ status: 'approved', igContainerId: null, rebuilds: 1 });
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    const created = igCalls().filter((call) => call.path.endsWith('/media'));
+    expect(created).toHaveLength(14);
+    expect(created[13].params.children).toBe('container-8,container-9,container-10,container-11,container-12,container-13');
+
+    await db.update(publications).set({ rebuilds: 1 }).where(eq(publications.id, part2.id));
+    instagram.mockImplementation((path, params) => {
+      if (params.fields === 'status_code' && path.endsWith('/container-21')) return { body: { status_code: 'ERROR' } };
+      if (params.fields === 'status') return { body: { status: 'Error: Media upload has failed with error code 2207052' } };
+      return base(path, params);
+    });
+    expect(await publishPublication(deps, part2.id)).toBe('failed');
+    expect((await getPublication(db, part2.id))?.error).toBe('Instagram medyayı işleyemedi (ERROR): Error: Media upload has failed with error code 2207052');
+  });
+
+  it('"too many actions" kısıtlamasında paylaşımı başarısız saymaz, 15 dakika sonra yeniden dener', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram } = harness(db, new Date('2026-09-29T16:00:05Z'));
+    instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'User is performing too many actions', code: 368 } } }));
+    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 900 });
+    expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
   });
 
   it('Telegramdaki yeniden dene düğmesi başarısız grubu sıfırlayıp hemen kuyruğa alır', async () => {

@@ -58,9 +58,11 @@ const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
 const INLINE_STATUS_CHECKS = 6;
 const MAX_CONTAINER_REBUILDS = 1;
+const REBUILD_DELAY_SECONDS = 10 * 60;
 const CAROUSEL_ITEM_CHECKS = 4;
 const CAROUSEL_ITEM_WAIT_MS = 4_000;
-const CAROUSEL_PARENT_TRIES = 3;
+// Bir öğe container'ı yalnız bir carousel'de kullanılabiliyor; aynı öğelerle carousel yeniden kurulamaz.
+const CAROUSEL_PARENT_TRIES = 1;
 const CAROUSEL_PARENT_DELAY_MS = 15_000;
 const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
@@ -270,7 +272,8 @@ async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, r
   console.error('Instagram container hatası', { publication: row.id, containerId, status, detail, rebuilds: row.rebuilds });
   if (row.rebuilds < MAX_CONTAINER_REBUILDS) {
     await markForRebuild(deps.db, row.id);
-    throw new RetryLater(REELS_POLL_SECONDS, `Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}; yeniden kuruluyor`);
+    // Hemen yeniden kurmak hesabı "too many actions" kısıtlamasına sokuyor; taze öğelerle tek deneme 10 dakika sonra yapılır.
+    throw new RetryLater(REBUILD_DELAY_SECONDS, `Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}; yeniden kuruluyor`);
   }
   throw new Error(`Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}`);
 }
