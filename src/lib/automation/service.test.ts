@@ -211,7 +211,7 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
     instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    for (let check = 0; check < 4; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     const retry = await publishPublication(deps, reels.id).catch((error: unknown) => error);
     expect(retry).toBeInstanceOf(RetryLater);
     expect(retry).toMatchObject({ afterSeconds: 30 });
@@ -229,7 +229,7 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
     instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    for (let check = 0; check < 4; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     await publishPublication(deps, reels.id).catch(() => undefined);
     instagram.mockImplementationOnce(() => ({ body: { status_code: 'PUBLISHED' } }));
     expect(await publishPublication(deps, reels.id)).toBe('published');
@@ -260,8 +260,12 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, telegramCalls } = harness(db, new Date('2026-09-29T17:00:00Z'));
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } }));
-    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 120 });
+    await expect(publishPublication(deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 900 });
     expect((await getPublication(db, rows[3].id))?.status).toBe('approved');
+    const late = harness(db, new Date('2026-09-29T20:30:00Z'));
+    late.instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } }));
+    // Pencere geçince çağrı sınırı sıradan geçici hata gibi sınırlı sayıda denenir.
+    await expect(publishPublication(late.deps, rows[3].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 240 });
 
     instagram.mockImplementationOnce(() => ({ status: 400, body: { error: { message: 'Invalid OAuth access token', code: 190 } } }));
     expect(await publishPublication(deps, rows[0].id)).toBe('failed');
