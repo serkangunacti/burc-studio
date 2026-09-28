@@ -12,6 +12,7 @@ function formFrom(overrides: Record<string, string> = {}): FormData {
   }
   form.set('enabled', 'true');
   form.set('partGapMinutes', '3');
+  form.set('cutoffTime', '22:15');
   for (const [key, value] of Object.entries(overrides)) form.set(key, value);
   return form;
 }
@@ -26,6 +27,7 @@ describe('otomasyon formu', () => {
         automation: {
           enabled: false,
           partGapMinutes: 5,
+          cutoffTime: '22:15',
           tiktok: { enabled: true },
           schedule: { ...current.schedule, tarot: { ...current.schedule.tarot, erkek: { carousel: '13:30', reels: '23:15' } } },
         },
