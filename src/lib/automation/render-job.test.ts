@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { publications } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
@@ -94,5 +96,17 @@ describe('günün render işi', () => {
     expect(result.rendered).toEqual(['horoscope-kadin-tiktok-0']);
     expect(renderers.videos).not.toHaveBeenCalled();
     expect(renderers.stills).not.toHaveBeenCalled();
+  });
+
+  it('paylaşımda başarısız olan satırı geç gelen tetiklemede yeniden çizmez ve onaysız duruma çekmez', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    await renderDay(db, DATE, fakeRenderers());
+    await approveDay(db, DATE);
+    const [first] = await listPublications(db, DATE);
+    await db.update(publications).set({ status: 'failed' }).where(eq(publications.id, first.id));
+    const renderers = fakeRenderers();
+    expect((await renderDay(db, DATE, renderers)).rendered).toEqual([]);
+    expect(renderers.stills).not.toHaveBeenCalled();
+    expect((await listPublications(db, DATE))[0].status).toBe('failed');
   });
 });

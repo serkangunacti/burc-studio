@@ -37,10 +37,11 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   const posts = await getCurrentPostsForDate(db, date);
   const plan = planPublications(date, posts, settings.automation);
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
-  // Yalnız hiç çizilmemiş ya da başarısız kalan paylaşımlar yeniden çizilir; zorlanırsa hazırlar da yenilenir.
+  // Yalnız hiç çizilmemiş paylaşımlar çizilir; zorlanırsa onaylanmamış hazırlar da yenilenir. Paylaşımda başarısız olanlar
+  // yeniden çizilmez (Telegram'daki "yeniden dene" ile gönderilir): geç gelen bir tetikleme onları onaysız duruma çekmesin.
   const needsRender = (item: PlannedPublication) => {
     const status = existing.get(slotKey(item))?.status;
-    return status === undefined || status === 'failed' || (options.force === true && status === 'ready');
+    return status === undefined || (options.force === true && status === 'ready');
   };
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 

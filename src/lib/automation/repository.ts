@@ -8,8 +8,8 @@ export type PublicationRow = typeof publications.$inferSelect;
 export type IntegrationRow = typeof integrations.$inferSelect;
 export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string };
 
-// Yayın hattında kalan satır yeniden çizimle ezilmez: onaylanmış ya da paylaşılmış içerik sessizce değişmesin.
-const REPLACEABLE = ['ready', 'failed'] as const;
+// Yalnız onaylanmamış satır yeniden çizimle ezilir: onaylanmış, paylaşılmış ya da paylaşımda başarısız içerik sessizce değişmesin.
+const REPLACEABLE = ['ready'] as const;
 // Sonuç yazılmadan düşen bir paylaşım bu süreden sonra yeniden sahiplenilebilir.
 const PUBLISH_LEASE_MS = 10 * 60_000;
 
