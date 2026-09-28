@@ -373,6 +373,19 @@ describe('TikTok (Buffer)', () => {
     expect(await publishPublication(deps, tiktok.id)).toBe('ignored');
   });
 
+  it('Buffer gönderisi uzun süre işlenirken deneme sayısına değil geçen süreye göre bekler', async () => {
+    const tiktok = await seedTikTokDay();
+    const sending = () => ({ data: { post: { id: 'buf-1', status: 'sending', externalLink: null, error: null } } });
+    const early = harness(db, new Date('2026-09-29T19:40:00Z'));
+    early.buffer.mockImplementation((query) => (query.includes('createPost') ? { data: { createPost: { post: { id: 'buf-1' } } } } : sending()));
+    await db.update(publications).set({ attempts: 50 }).where(eq(publications.id, tiktok.id));
+    await expect(publishPublication(early.deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater' });
+    const late = harness(db, new Date('2026-09-29T20:01:00Z'));
+    late.buffer.mockImplementation(sending);
+    expect(await publishPublication(late.deps, tiktok.id)).toBe('failed');
+    expect((await getPublication(db, tiktok.id))?.error).toBe('TikTok paylaşımı zamanında tamamlanmadı (Buffer durumu: sending)');
+  });
+
   it('Buffer hata bildirirse paylaşımı başarısız yapar ve uyarır', async () => {
     const tiktok = await seedTikTokDay();
     const { deps, buffer, telegramCalls } = harness(db, new Date('2026-09-29T19:00:05Z'));
