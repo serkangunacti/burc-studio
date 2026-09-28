@@ -5,7 +5,7 @@ import { isDateKey } from '@/lib/date/istanbul';
 import { isPostId } from '@/lib/posts/repository';
 import { getMediaFile } from './repository';
 import { telegramWebhookSecret } from './secrets';
-import { automationStatus, handleTelegramUpdate, requeueDay, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
+import { automationStatus, handleTelegramUpdate, publishDueNow, requeueDay, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
 
 const readySchema = z.object({ date: z.string().refine(isDateKey), failures: z.array(z.string()).max(50).default([]) });
 
@@ -64,4 +64,11 @@ export async function handleRequeue(request: Request, deps: AutomationDeps): Pro
   const parsed = z.object({ date: z.string().refine(isDateKey) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
   return Response.json(await requeueDay(deps, parsed.data.date));
+}
+
+export async function handlePublishNow(request: Request, deps: AutomationDeps): Promise<Response> {
+  if (!isAuthorizedCronRequest(request.headers, deps.automationSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
+  const parsed = z.object({ date: z.string().refine(isDateKey), limit: z.number().int().min(1).max(5).default(2) }).safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
+  return Response.json(await publishDueNow(deps, parsed.data.date, parsed.data.limit));
 }
