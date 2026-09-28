@@ -56,9 +56,12 @@ const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
-const INLINE_STATUS_CHECKS = 6;
-const MAX_CONTAINER_REBUILDS = 2;
-const INLINE_STATUS_WAIT_MS = 5_000;
+const INLINE_STATUS_CHECKS = 3;
+const MAX_CONTAINER_REBUILDS = 1;
+const INLINE_STATUS_WAIT_MS = 8_000;
+// Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
+const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
+const RATE_LIMIT_WINDOW_MS = 4 * 3_600_000;
 // TikTok videoyu işlerken Buffer "sending"de kalır; ~30 dakika beklenir.
 const MAX_TIKTOK_ATTEMPTS = 30;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
@@ -237,11 +240,12 @@ type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?:
 
 // Instagram carousel ve Reels'i zaman zaman geçici olarak ERROR'a düşürür; container sınırlı sayıda baştan kurulur.
 async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow, containerId: string, status: string): Promise<never> {
+  const detail = await instagram.containerDetail(containerId).catch(() => null);
+  console.error('Instagram container hatası', { publication: row.id, containerId, status, detail, rebuilds: row.rebuilds });
   if (row.rebuilds < MAX_CONTAINER_REBUILDS) {
     await markForRebuild(deps.db, row.id);
     throw new RetryLater(REELS_POLL_SECONDS, `Instagram medyayı işleyemedi (${status}); yeniden kuruluyor`);
   }
-  const detail = await instagram.containerDetail(containerId).catch(() => null);
   throw new Error(`Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}`);
 }
 
@@ -316,6 +320,10 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
     return 'published';
   } catch (error) {
     if (error instanceof RetryLater) throw error;
+    if (error instanceof InstagramError && error.rateLimited && deps.now().getTime() < row.scheduledAt.getTime() + RATE_LIMIT_WINDOW_MS) {
+      await releaseForRetry(deps.db, id);
+      throw new RetryLater(RATE_LIMIT_RETRY_SECONDS, `Instagram çağrı sınırı: ${error.message}`);
+    }
     if ((error instanceof InstagramError || error instanceof BufferError) && error.retryable && row.attempts < MAX_TRANSIENT_ATTEMPTS) {
       await releaseForRetry(deps.db, id);
       throw new RetryLater(120 * row.attempts, error.message);
