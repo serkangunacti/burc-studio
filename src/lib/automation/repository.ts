@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { integrations, mediaFiles, publications, type IntegrationId, type PublicationFormat, type PublicationMedia } from '@/db/schema';
 import type { Db } from '@/db/types';
 import type { DateKey } from '@/lib/date/istanbul';
@@ -150,6 +150,15 @@ export async function markPublished(
 
 export async function markFailed(db: Db, id: string, error: string): Promise<void> {
   await db.update(publications).set({ status: 'failed', error, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+export async function hasPlanMessage(db: Db, date: DateKey): Promise<boolean> {
+  const [row] = await db
+    .select({ id: publications.id })
+    .from(publications)
+    .where(and(eq(publications.date, date), isNotNull(publications.telegramMessageId)))
+    .limit(1);
+  return row !== undefined;
 }
 
 export async function setTelegramMessageId(db: Db, date: DateKey, messageId: number): Promise<void> {
