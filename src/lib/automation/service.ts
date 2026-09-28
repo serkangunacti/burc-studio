@@ -56,11 +56,11 @@ const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
-const INLINE_STATUS_CHECKS = 3;
+const INLINE_STATUS_CHECKS = 6;
 const MAX_CONTAINER_REBUILDS = 1;
 const CAROUSEL_ITEM_CHECKS = 4;
 const CAROUSEL_ITEM_WAIT_MS = 4_000;
-const INLINE_STATUS_WAIT_MS = 8_000;
+const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
 const RATE_LIMIT_WINDOW_MS = 4 * 3_600_000;
