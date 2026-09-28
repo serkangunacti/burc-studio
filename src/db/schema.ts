@@ -181,6 +181,8 @@ export const publications = pgTable(
     permalink: text('permalink'),
     error: text('error'),
     attempts: integer('attempts').notNull().default(0),
+    // Instagram'ın ERROR/EXPIRED verdiği container'ın baştan kurulma sayısı.
+    rebuilds: smallint('rebuilds').notNull().default(0),
     telegramMessageId: integer('telegram_message_id'),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     publishedAt: timestamp('published_at', { withTimezone: true }),

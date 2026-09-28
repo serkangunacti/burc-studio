@@ -198,6 +198,23 @@ export async function saveIntegration(db: Db, values: Omit<IntegrationRow, 'upda
     .onConflictDoUpdate({ target: integrations.id, set: { ...values, updatedAt: now } });
 }
 
+// Instagram container'ı ERROR/EXPIRED olduysa bir sonraki teslim sıfırdan kurar.
+export async function markForRebuild(db: Db, id: string): Promise<void> {
+  await db
+    .update(publications)
+    .set({ status: 'approved', igContainerId: null, rebuilds: sql`${publications.rebuilds} + 1`, updatedAt: new Date() })
+    .where(eq(publications.id, id));
+}
+
+// Başarısız grup yeniden onaya alınır; sayaçlar ve dış kimlikler sıfırlanır, kuyruğa yeniden girer.
+export async function retryFailedGroup(db: Db, input: { postId: string; format: PublicationFormat }, now = new Date()): Promise<PublicationRow[]> {
+  return db
+    .update(publications)
+    .set({ status: 'approved', error: null, igContainerId: null, remoteId: null, attempts: 0, rebuilds: 0, approvedAt: now, updatedAt: now })
+    .where(and(eq(publications.postId, input.postId), eq(publications.format, input.format), eq(publications.status, 'failed')))
+    .returning();
+}
+
 // TikTok gönderisi Buffer'da oluşturulur oluşturulmaz kimliği yazılır; yarıda kalan deneme ikinci gönderi açmasın.
 export async function setRemoteId(db: Db, id: string, remoteId: string): Promise<void> {
   await db.update(publications).set({ remoteId, updatedAt: new Date() }).where(eq(publications.id, id));

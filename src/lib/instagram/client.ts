@@ -44,6 +44,8 @@ export function createInstagramClient(input: { token: string; userId: string; fe
     createReels: (videoUrl: string, caption: string) => media({ media_type: 'REELS', video_url: videoUrl, caption, share_to_feed: 'true' }),
     containerStatus: (containerId: string) =>
       get<{ status_code: ContainerStatus }>(containerId, { fields: 'status_code' }).then((body) => body.status_code),
+    // Hata durumunda Instagram'ın verdiği açıklama (ör. "Error: … 2207052").
+    containerDetail: (containerId: string) => get<{ status?: string }>(containerId, { fields: 'status' }).then((body) => body.status ?? null),
     publish: (containerId: string) => post<{ id: string }>(`${input.userId}/media_publish`, { creation_id: containerId }).then((body) => body.id),
     permalink: (mediaId: string) => get<{ permalink?: string }>(mediaId, { fields: 'permalink' }).then((body) => body.permalink ?? null),
     // Yalnız instagram_business_content_publish izniyle çalışır; bağlanırken izin denetimi olarak da kullanılır.

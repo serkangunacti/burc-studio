@@ -95,6 +95,8 @@ export function buildDayMessage(
     const code = FORMAT_CODES[group.format];
     if (group.status === 'ready' || group.status === 'approved') {
       keyboard.push([{ text: `🚫 ${time} ${groupLabel(group)}`, callback_data: `s:${group.postId}:${code}` }]);
+    } else if (group.status === 'failed') {
+      keyboard.push([{ text: `🔁 ${time} ${groupLabel(group)} yeniden dene`, callback_data: `y:${group.postId}:${code}` }]);
     } else if (group.status === 'skipped') {
       keyboard.push([{ text: `↩️ ${time} ${groupLabel(group)} geri al`, callback_data: `u:${group.postId}:${code}` }]);
     }
@@ -102,14 +104,14 @@ export function buildDayMessage(
   return { html, keyboard };
 }
 
-export type DayAction = { action: 'approve'; date: DateKey } | { action: 'skip' | 'undo'; postId: string; format: PublicationFormat };
+export type DayAction = { action: 'approve'; date: DateKey } | { action: 'skip' | 'undo' | 'retry'; postId: string; format: PublicationFormat };
+const GROUP_ACTIONS = { s: 'skip', u: 'undo', y: 'retry' } as const;
 
 export function parseDayAction(data: string | undefined): DayAction | null {
   const [action, target, code] = (data ?? '').split(':');
   if (action === 'a' && isDateKey(target)) return { action: 'approve', date: target };
   const format = (Object.keys(FORMAT_CODES) as PublicationFormat[]).find((candidate) => FORMAT_CODES[candidate] === code) ?? null;
-  if ((action === 's' || action === 'u') && format && /^[0-9a-f-]{36}$/.test(target ?? '')) {
-    return { action: action === 's' ? 'skip' : 'undo', postId: target, format };
-  }
+  const groupAction = GROUP_ACTIONS[action as keyof typeof GROUP_ACTIONS];
+  if (groupAction && format && /^[0-9a-f-]{36}$/.test(target ?? '')) return { action: groupAction, postId: target, format };
   return null;
 }

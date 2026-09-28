@@ -14,9 +14,11 @@ import {
   getIntegration,
   getPublication,
   listPublications,
+  markForRebuild,
   markFailed,
   markPublished,
   releaseForRetry,
+  retryFailedGroup,
   saveIntegration,
   setContainer,
   setGroupSkipped,
@@ -55,6 +57,7 @@ const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
 const TIKTOK_POLL_SECONDS = 60;
 const INLINE_STATUS_CHECKS = 6;
+const MAX_CONTAINER_REBUILDS = 2;
 const INLINE_STATUS_WAIT_MS = 5_000;
 // TikTok videoyu işlerken Buffer "sending"de kalır; ~30 dakika beklenir.
 const MAX_TIKTOK_ATTEMPTS = 30;
@@ -186,6 +189,13 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     if (approved.length > 0) await client.sendMessage(chatId, approvalSummary(approved, now));
     return;
   }
+  if (action.action === 'retry') {
+    const retried = await retryFailedGroup(deps.db, { postId: action.postId, format: action.format }, now);
+    await enqueueRows(deps, retried);
+    await client.answerCallback(query.id, retried.length > 0 ? `🔁 ${retried.length} paylaşım yeniden deneniyor` : 'Yeniden denenecek paylaşım yok.');
+    if (retried[0]) await refreshDayMessage(deps, retried[0].date, query.message.message_id);
+    return;
+  }
   const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip' }, now);
   if (action.action === 'undo') await enqueueRows(deps, changed.filter((row) => row.status === 'approved'));
   await client.answerCallback(query.id, changed.length === 0 ? 'Değişiklik yok.' : action.action === 'skip' ? 'Paylaşılmayacak.' : 'Geri alındı.');
@@ -225,6 +235,16 @@ async function createContainer(deps: AutomationDeps, instagram: InstagramClient,
 export type PublishOutcome = 'published' | 'failed' | 'ignored';
 type Published = { igContainerId?: string; igMediaId?: string | null; remoteId?: string; permalink: string | null; silent?: boolean };
 
+// Instagram carousel ve Reels'i zaman zaman geçici olarak ERROR'a düşürür; container sınırlı sayıda baştan kurulur.
+async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, row: PublicationRow, containerId: string, status: string): Promise<never> {
+  if (row.rebuilds < MAX_CONTAINER_REBUILDS) {
+    await markForRebuild(deps.db, row.id);
+    throw new RetryLater(REELS_POLL_SECONDS, `Instagram medyayı işleyemedi (${status}); yeniden kuruluyor`);
+  }
+  const detail = await instagram.containerDetail(containerId).catch(() => null);
+  throw new Error(`Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}`);
+}
+
 async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Promise<Published> {
   const instagram = await loadInstagram(deps);
   let containerId = row.igContainerId;
@@ -232,7 +252,7 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
     const status = await instagram.containerStatus(containerId);
     // Önceki deneme paylaşıp sonucu yazamadan düştüyse ikinci kez yayınlanmaz.
     if (status === 'PUBLISHED') return { igContainerId: containerId, igMediaId: null, permalink: null, silent: true };
-    if (status === 'EXPIRED') containerId = null;
+    if (status === 'EXPIRED' || status === 'ERROR') await rebuildOrFail(deps, instagram, row, containerId, status);
   }
   if (!containerId) {
     containerId = await createContainer(deps, instagram, row);
@@ -249,7 +269,7 @@ async function publishToInstagram(deps: AutomationDeps, row: PublicationRow): Pr
     await releaseForRetry(deps.db, row.id);
     throw new RetryLater(REELS_POLL_SECONDS, 'Instagram medyayı işliyor');
   }
-  if (status !== 'FINISHED') throw new Error(`Instagram medyayı işleyemedi (${status})`);
+  if (status !== 'FINISHED') await rebuildOrFail(deps, instagram, row, containerId, status);
   const mediaId = await instagram.publish(containerId);
   const permalink = await instagram.permalink(mediaId).catch(() => null);
   return { igContainerId: containerId, igMediaId: mediaId, permalink };

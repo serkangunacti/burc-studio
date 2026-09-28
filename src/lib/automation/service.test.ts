@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { publications } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { DEFAULT_SETTINGS } from '@/lib/settings/schema';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
@@ -421,5 +423,42 @@ describe('hazırlık tetikleyicisi (GitHub)', () => {
     github.status = 404;
     await expect(connectGitHub(deps, 'github_pat_X')).rejects.toThrow('Actions: Read and write');
     expect(await getIntegration(db, 'github')).toBeNull();
+  });
+});
+
+describe('Instagram geçici hataları', () => {
+  it('ERROR veren carousel container ı baştan kurar ve paylaşır; sınır aşılınca Instagramın açıklamasıyla başarısız olur', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:33:10Z'));
+    for (let item = 0; item < 7; item++) instagram.mockImplementationOnce(() => ({ body: { id: `c-${item}` } }));
+    instagram.mockImplementationOnce(() => ({ body: { status_code: 'ERROR' } }));
+    await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 30 });
+    expect(await getPublication(db, part3.id)).toMatchObject({ status: 'approved', igContainerId: null, rebuilds: 1 });
+
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    expect(igCalls().filter((call) => call.path.endsWith('/media'))).toHaveLength(14);
+
+    const [, part2] = await listPublications(db, DATE);
+    await db.update(publications).set({ rebuilds: 2 }).where(eq(publications.id, part2.id));
+    instagram.mockImplementation((path: string, params: Record<string, unknown>) => {
+      if (path.endsWith('/media')) return { body: { id: 'c-x' } };
+      if (params.fields === 'status_code') return { body: { status_code: 'ERROR' } };
+      return { body: { status: 'Error: Media upload has failed with error code 2207052' } };
+    });
+    expect(await publishPublication(deps, part2.id)).toBe('failed');
+    expect((await getPublication(db, part2.id))?.error).toBe('Instagram medyayı işleyemedi (ERROR): Error: Media upload has failed with error code 2207052');
+  });
+
+  it('Telegramdaki yeniden dene düğmesi başarısız grubu sıfırlayıp hemen kuyruğa alır', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await approveDay(db, DATE);
+    await db.update(publications).set({ status: 'failed', error: 'x', igContainerId: 'old', attempts: 3, rebuilds: 2 }).where(eq(publications.id, rows[1].id));
+    const { deps, enqueue } = harness(db, new Date('2026-09-29T06:00:00Z'));
+    await handleTelegramUpdate(deps, { callback_query: { id: 'q', data: `y:${rows[1].postId}:c`, message: { chat: { id: CHAT }, message_id: 77 } } });
+    expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, igContainerId: null, attempts: 0, rebuilds: 0 });
+    expect(enqueue.mock.calls).toEqual([[rows[1].id, { delaySeconds: 0, retentionSeconds: 86_400 }]]);
   });
 });
