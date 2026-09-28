@@ -11,6 +11,7 @@ import {
   expireUnapproved,
   getIntegration,
   getMediaFile,
+  hasPlanMessage,
   getPublication,
   listPublications,
   markPublished,
@@ -19,6 +20,7 @@ import {
   saveIntegration,
   setContainer,
   setGroupSkipped,
+  setTelegramMessageId,
 } from './repository';
 
 const DATE = '2026-09-29';
@@ -116,5 +118,13 @@ describe('paylaşım kayıtları', () => {
     await saveIntegration(db, { id: 'telegram', secretEncrypted: 'c', account: { id: '9', username: 'kozmikarkan_bot' }, expiresAt: null });
     expect((await getIntegration(db, 'instagram'))?.secretEncrypted).toBe('b');
     expect((await getIntegration(db, 'telegram'))?.account.username).toBe('kozmikarkan_bot');
+  });
+
+  it('günün onay mesajının gönderilip gönderilmediğini bilir', async () => {
+    await saveAll();
+    expect(await hasPlanMessage(db, DATE)).toBe(false);
+    await setTelegramMessageId(db, DATE, 77);
+    expect(await hasPlanMessage(db, DATE)).toBe(true);
+    expect(await hasPlanMessage(db, '2026-09-30')).toBe(false);
   });
 });

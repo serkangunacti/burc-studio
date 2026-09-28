@@ -4,7 +4,10 @@ name: Paylaşımları hazırla
 on:
   schedule:
     # 06:07 TSİ; günlük üretim cron'u 05:00–05:59 TSİ arasında çalışır, betik eksik gönderiyi bekler.
+    # GitHub zamanlanmış işleri geciktirebilir ya da atlayabilir; yedek tetiklemeler hazır günü yeniden çizmez ve ikinci mesaj göndermez.
     - cron: '7 3 * * *'
+    - cron: '37 3 * * *'
+    - cron: '7 4 * * *'
   workflow_dispatch:
     inputs:
       date:
