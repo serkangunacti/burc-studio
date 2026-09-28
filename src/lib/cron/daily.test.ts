@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { createMockModel } from '@/lib/llm/mock-model';
@@ -87,5 +87,33 @@ describe('handleDailyCron', () => {
     expect(body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`)).toEqual([
       'horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created',
     ]);
+  });
+
+  it('üretimden sonra görsel hazırlığını günün tarihiyle başlatır; otomasyon kapalıysa başlatmaz', async () => {
+    const startRender = vi.fn(async () => ({ dispatched: true }));
+    const body = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...deps(), startRender })).json();
+    expect(startRender).toHaveBeenCalledWith('2026-09-26');
+    expect(body.render).toEqual({ dispatched: true });
+
+    const disabled = vi.fn(async () => ({ dispatched: true }));
+    const base = deps();
+    await handleDailyCron(request('Bearer cron-anahtari'), {
+      ...base,
+      startRender: disabled,
+      loadDeps: async () => {
+        const loaded = await base.loadDeps();
+        return { ...loaded, settings: { ...loaded.settings, automation: { ...loaded.settings.automation, enabled: false } } };
+      },
+    });
+    expect(disabled).not.toHaveBeenCalled();
+  });
+
+  it('hazırlık başlatılamazsa üretim sonucu yine başarılı döner', async () => {
+    const startRender = vi.fn(async () => {
+      throw new Error('ağ hatası');
+    });
+    const body = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...deps(), startRender })).json();
+    expect(body.ok).toBe(true);
+    expect(body.render).toEqual({ dispatched: false, reason: 'ağ hatası' });
   });
 });

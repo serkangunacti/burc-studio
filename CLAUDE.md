@@ -21,7 +21,7 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 ## Otomatik paylaşım (Faz 6, spec §14)
 - **Akış:**
   1. Cron `/api/cron/daily` 05:00 TSİ'de içeriği üretir.
-  2. GitHub Actions `render-publications.yml` 06:07 TSİ'de çalışır (`scripts/render-publications.ts`, `scripts/automation/`):
+  2. Günlük cron üretimi bitirince GitHub Actions `render-publications.yml` işini `workflow_dispatch` ile başlatır. Anahtar Ayarlar'daki GitHub kartından girilir (ince ayarlı, yalnız bu depo, Actions RW). Yedek zamanlamalar 06:07, 06:37 ve 07:07 TSİ; aynı gün ikinci kez çizmez, ikinci mesaj göndermez (`scripts/render-publications.ts`, `scripts/automation/`):
      - Carousel'i 3 parçaya böler (kapak + 4 burç + kapanış).
      - JPEG'leri Neon `media_files` tablosuna, Reels MP4'ü Blob'a (`kozmikarkan-medya`) yazar.
      - `/api/automation/ready` ucunu çağırır.

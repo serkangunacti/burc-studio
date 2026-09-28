@@ -6,7 +6,13 @@ import { isAuthorizedCronRequest } from './auth';
 
 export async function handleDailyCron(
   request: Request,
-  deps: { secret: string | undefined; today: DateKey; loadDeps: () => Promise<GenerationDeps & { settings: Settings }> },
+  deps: {
+    secret: string | undefined;
+    today: DateKey;
+    loadDeps: () => Promise<GenerationDeps & { settings: Settings }>;
+    // Üretim bitince görsel hazırlığını başlatır; hata üretimin sonucunu bozmaz.
+    startRender?: (date: DateKey) => Promise<{ dispatched: boolean; reason?: string }>;
+  },
 ): Promise<Response> {
   if (!isAuthorizedCronRequest(request.headers, deps.secret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
   const generation = await deps.loadDeps();
@@ -17,5 +23,9 @@ export async function handleDailyCron(
     trigger: 'cron',
     skipIfExists: true,
   });
-  return Response.json({ ok: generated.every((entry) => 'result' in entry), generated });
+  const render = generation.settings.automation.enabled && deps.startRender
+    ? await deps.startRender(deps.today).catch((error: unknown) => ({ dispatched: false, reason: error instanceof Error ? error.message : String(error) }))
+    : undefined;
+  if (render && !render.dispatched) console.error('Görsel hazırlığı başlatılamadı', render.reason);
+  return Response.json({ ok: generated.every((entry) => 'result' in entry), generated, render });
 }

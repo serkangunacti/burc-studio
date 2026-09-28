@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { connectBufferAction, connectInstagramAction, connectTelegramAction, type ConnectState } from './automation-actions';
+import { connectBufferAction, connectGitHubAction, connectInstagramAction, connectTelegramAction, type ConnectState } from './automation-actions';
 
 const INITIAL_STATE: ConnectState = { status: 'idle' };
 
@@ -13,6 +13,7 @@ export type ConnectionStatus = {
   telegram: { username: string | null; chatLinked: boolean } | null;
   instagram: { username: string | null; expiresAt: string | null } | null;
   tiktok: { channel: string | null } | null;
+  renderTrigger: boolean;
 };
 
 // Anahtarlar kaydedildikten sonra tarayıcıya geri gönderilmez; kutu boş kalır, bağlı olduğu etiket ve yer tutucuyla belirtilir.
@@ -48,13 +49,13 @@ function ConnectForm({ action, label, placeholder, connected }: { action: typeof
           {state.error}
         </p>
       )}
-      {state.status === 'connected' && <p className="text-sm text-emerald-700">Bağlandı{state.username ? `: @${state.username}` : ''} ✓</p>}
+      {state.status === 'connected' && <p className="text-sm text-emerald-700">Bağlandı{state.username ? `: ${state.username}` : ''} ✓</p>}
     </form>
   );
 }
 
 export function Connections({ status }: { status: ConnectionStatus }) {
-  const { telegram, instagram, tiktok } = status;
+  const { telegram, instagram, tiktok, renderTrigger } = status;
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <Card>
@@ -96,6 +97,19 @@ export function Connections({ status }: { status: ConnectionStatus }) {
         </CardHeader>
         <CardContent>
           <ConnectForm action={connectBufferAction} label="Buffer API anahtarı" placeholder="Buffer API anahtarı" connected={tiktok !== null} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <ConnectedTitle title="Hazırlık tetikleyicisi (GitHub)" state={renderTrigger ? 'connected' : null} />
+          <CardDescription>
+            {renderTrigger
+              ? 'İçerik üretimi biter bitmez görsel ve Reels hazırlığı başlar.'
+              : "Bağlı değilken hazırlık GitHub'ın yedek zamanlamasıyla (06:07–07:07) başlar; bu zamanlama gecikebilir."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ConnectForm action={connectGitHubAction} label="GitHub anahtarı" placeholder="github_pat_…" connected={renderTrigger} />
         </CardContent>
       </Card>
     </div>
