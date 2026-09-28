@@ -214,7 +214,7 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
     instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 4; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     const retry = await publishPublication(deps, reels.id).catch((error: unknown) => error);
     expect(retry).toBeInstanceOf(RetryLater);
     expect(retry).toMatchObject({ afterSeconds: 30 });
@@ -232,7 +232,7 @@ describe('Instagram paylaşımı', () => {
     await approveDay(db, DATE);
     const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
     instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 4; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
+    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
     await publishPublication(deps, reels.id).catch(() => undefined);
     instagram.mockImplementationOnce(() => ({ body: { status_code: 'PUBLISHED' } }));
     expect(await publishPublication(deps, reels.id)).toBe('published');
