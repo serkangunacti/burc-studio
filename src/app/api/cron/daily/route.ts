@@ -1,4 +1,6 @@
 import { getDb } from '@/db/client';
+import { automationDeps } from '@/lib/automation/runtime';
+import { startRender } from '@/lib/automation/service';
 import { loadGenerationDeps } from '@/lib/content/runtime';
 import { handleDailyCron } from '@/lib/cron/daily';
 import { istanbulDateKey } from '@/lib/date/istanbul';
@@ -10,5 +12,6 @@ export async function GET(request: Request) {
     secret: process.env.CRON_SECRET,
     today: istanbulDateKey(),
     loadDeps: () => loadGenerationDeps(getDb()),
+    startRender: (date) => startRender(automationDeps(), date),
   });
 }

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('./automation-actions', () => ({ connectTelegramAction: vi.fn(), connectInstagramAction: vi.fn(), connectBufferAction: vi.fn() }));
+vi.mock('./automation-actions', () => ({ connectTelegramAction: vi.fn(), connectInstagramAction: vi.fn(), connectBufferAction: vi.fn(), connectGitHubAction: vi.fn() }));
 const { Connections } = await import('./connections');
 
 describe('bağlantı kartları', () => {
@@ -13,21 +13,22 @@ describe('bağlantı kartları', () => {
           telegram: { username: 'kozmikarkan_bot', chatLinked: true },
           instagram: { username: 'kozmikarkan', expiresAt: '2026-11-26T18:11:03.527Z' },
           tiktok: { channel: 'kozmikarkan' },
+          renderTrigger: true,
         },
       }),
     );
-    expect(html.split('✓ Bağlı').length - 1).toBe(3);
-    expect(html.split('Bağlı — değiştirmek için yeni anahtar yapıştır').length - 1).toBe(3);
+    expect(html.split('✓ Bağlı').length - 1).toBe(4);
+    expect(html.split('Bağlı — değiştirmek için yeni anahtar yapıştır').length - 1).toBe(4);
     expect(html).toContain('>Değiştir<');
     expect(html).not.toContain('>Bağla<');
   });
 
   it('bağlı olmayan hesaplarda kurulum yönergesini ve Bağla düğmesini, /start bekleyen botu ayrı gösterir', () => {
     const html = renderToStaticMarkup(
-      createElement(Connections, { status: { telegram: { username: 'kozmikarkan_bot', chatLinked: false }, instagram: null, tiktok: null } }),
+      createElement(Connections, { status: { telegram: { username: 'kozmikarkan_bot', chatLinked: false }, instagram: null, tiktok: null, renderTrigger: false } }),
     );
     expect(html).toContain('/start bekleniyor');
     expect(html).not.toContain('✓ Bağlı');
-    expect(html.split('>Bağla<').length - 1).toBe(2);
+    expect(html.split('>Bağla<').length - 1).toBe(3);
   });
 });

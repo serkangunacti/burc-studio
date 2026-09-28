@@ -12,6 +12,7 @@ import {
   approvalSummary,
   automationStatus,
   connectBuffer,
+  connectGitHub,
   connectInstagram,
   connectTelegram,
   describeStatus,
@@ -20,6 +21,7 @@ import {
   RetryLater,
   runMaintenance,
   sendDayPlan,
+  startRender,
   type AutomationDeps,
 } from './service';
 
@@ -27,7 +29,7 @@ const DATE = '2026-09-29';
 const KEY = randomBytes(32).toString('base64');
 const CHAT = 5550001;
 
-type Call = { host: 'telegram' | 'instagram' | 'buffer'; path: string; params: Record<string, unknown> };
+type Call = { host: 'telegram' | 'instagram' | 'buffer' | 'github'; path: string; params: Record<string, unknown> };
 
 function harness(db: Db, now: Date) {
   const calls: Call[] = [];
@@ -45,6 +47,7 @@ function harness(db: Db, now: Date) {
     if (query.includes('channel(')) return { data: { channel: { id: 'tt-1', name: 'kozmikarkan', displayName: null, isQueuePaused: false } } };
     return { data: { post: { id: 'buf-1', status: 'sent', externalLink: 'https://www.tiktok.com/@kozmikarkan/video/9', error: null } } };
   });
+  const github = { status: 200 };
   const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.host === 'api.telegram.org') {
@@ -61,6 +64,10 @@ function harness(db: Db, now: Date) {
               : true;
       return Response.json({ ok: true, result });
     }
+    if (url.host === 'api.github.com') {
+      calls.push({ host: 'github', path: `${init?.method ?? 'GET'} ${url.pathname}`, params: init?.body ? JSON.parse(String(init.body)) : {} });
+      return init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json({ id: 1 }, { status: github.status });
+    }
     if (url.host === 'api.buffer.com') {
       const payload = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
       calls.push({ host: 'buffer', path: payload.query.match(/(createPost|post|channels|channel|account)\b/)?.[1] ?? '', params: payload.variables });
@@ -76,6 +83,7 @@ function harness(db: Db, now: Date) {
   const deps: AutomationDeps = {
     db,
     appUrl: 'https://app.test',
+    repository: 'serkangunacti/burc-studio',
     integrationsKey: KEY,
     automationSecret: 'secret',
     now: () => now,
@@ -84,7 +92,7 @@ function harness(db: Db, now: Date) {
     enqueue,
     deleteVideosBefore: vi.fn(async () => 2),
   };
-  return { deps, calls, instagram, buffer, enqueue, bufferCalls: () => calls.filter((call) => call.host === 'buffer'), telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
+  return { deps, calls, instagram, buffer, github, enqueue, githubCalls: () => calls.filter((call) => call.host === 'github'), bufferCalls: () => calls.filter((call) => call.host === 'buffer'), telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
 }
 
 async function connectAll(db: Db) {
@@ -303,6 +311,7 @@ describe('durum', () => {
       telegram: { username: 'kozmikarkan_bot', chatLinked: true, webhookOk: true, pendingUpdates: 0, lastError: null },
       instagram: { username: 'kozmikarkan', expiresAt: '2026-11-20T00:00:00.000Z', publishing: { ok: true, used: 3, total: 100 } },
       tiktok: null,
+      renderTrigger: false,
     });
     expect(igCalls()[0]).toMatchObject({ path: '/v25.0/1784/content_publishing_limit', params: { fields: 'quota_usage,config' } });
     expect(describeStatus(status)).toContain('Paylaşım izni ✅ · son 24 saatte 3/100 paylaşım');
@@ -390,5 +399,27 @@ describe('onay özeti', () => {
     expect(approvalSummary(rows, new Date('2026-09-29T05:34:00Z'))).toBe(
       '✅ 4 paylaşım onaylandı.\nSaati geçmiş 2 paylaşım hemen gönderiliyor.\nSıradaki: 08:36 · son: 19:00.\nHer paylaşım gidince "📤 Paylaşıldı" bildirimi gelecek.',
     );
+  });
+});
+
+describe('hazırlık tetikleyicisi (GitHub)', () => {
+  it('anahtarı iş akışına erişimle doğrular, şifreli saklar ve günün hazırlığını başlatır', async () => {
+    const { deps, githubCalls } = harness(db, new Date('2026-09-29T02:30:00Z'));
+    expect(await startRender(deps, DATE)).toEqual({ dispatched: false, reason: 'GitHub anahtarı bağlı değil' });
+    expect(await connectGitHub(deps, 'github_pat_X')).toEqual({ repository: 'serkangunacti/burc-studio' });
+    expect((await getIntegration(db, 'github'))?.secretEncrypted).not.toContain('github_pat_X');
+    expect(await startRender(deps, DATE)).toEqual({ dispatched: true });
+    expect(githubCalls().map((call) => call.path)).toEqual([
+      'GET /repos/serkangunacti/burc-studio/actions/workflows/render-publications.yml',
+      'POST /repos/serkangunacti/burc-studio/actions/workflows/render-publications.yml/dispatches',
+    ]);
+    expect(githubCalls()[1].params).toEqual({ ref: 'main', inputs: { date: DATE } });
+  });
+
+  it('iş akışına erişemeyen anahtarı kaydetmez', async () => {
+    const { deps, github } = harness(db, new Date());
+    github.status = 404;
+    await expect(connectGitHub(deps, 'github_pat_X')).rejects.toThrow('Actions: Read and write');
+    expect(await getIntegration(db, 'github')).toBeNull();
   });
 });

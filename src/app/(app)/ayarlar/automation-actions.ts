@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/db/client';
 import { requireSession } from '@/lib/auth/require-session';
 import { automationDeps } from '@/lib/automation/runtime';
-import { connectBuffer, connectInstagram, connectTelegram } from '@/lib/automation/service';
+import { connectBuffer, connectGitHub, connectInstagram, connectTelegram } from '@/lib/automation/service';
 import { BufferError } from '@/lib/buffer/client';
 import { InstagramError } from '@/lib/instagram/client';
 import { parseAutomationForm } from '@/lib/settings/automation-form';
@@ -63,5 +63,18 @@ export async function connectBufferAction(_prev: ConnectState, formData: FormDat
   } catch (error) {
     if (error instanceof BufferError) return { status: 'error', error: `Buffer bağlantısı kurulamadı: ${error.message}` };
     throw error;
+  }
+}
+
+export async function connectGitHubAction(_prev: ConnectState, formData: FormData): Promise<ConnectState> {
+  await requireSession();
+  const token = String(formData.get('token') ?? '').trim();
+  if (!/^(github_pat_|ghp_)\w{20,}$/.test(token)) return { status: 'error', error: 'Bu bir GitHub anahtarına benzemiyor (github_pat_… ile başlamalı).' };
+  try {
+    const { repository } = await connectGitHub(automationDeps(), token);
+    revalidatePath('/ayarlar');
+    return { status: 'connected', username: repository, at: Date.now() };
+  } catch (error) {
+    return { status: 'error', error: error instanceof Error ? error.message : String(error) };
   }
 }

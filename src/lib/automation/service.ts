@@ -5,6 +5,7 @@ import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshIn
 import { getSettings, saveSettings } from '@/lib/settings/repository';
 import { createTelegramClient, escapeHtml, TelegramError, type TelegramClient } from '@/lib/telegram/client';
 import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
+import { dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
 import {
   approveDay,
   claimForPublishing,
@@ -28,6 +29,7 @@ import { decryptSecret, encryptSecret, telegramWebhookSecret } from './secrets';
 export type AutomationDeps = {
   db: Db;
   appUrl: string;
+  repository: string;
   integrationsKey: string | undefined;
   automationSecret: string | undefined;
   now: () => Date;
@@ -344,13 +346,15 @@ export type AutomationStatus = {
   telegram: { username: string | null; chatLinked: boolean; webhookOk: boolean; pendingUpdates: number; lastError: string | null } | null;
   instagram: { username: string | null; expiresAt: string | null; publishing: { ok: true; used: number; total: number } | { ok: false; error: string } } | null;
   tiktok: { channel: string | null; enabled: boolean; ok: boolean; error: string | null } | null;
+  renderTrigger: boolean;
 };
 
 export async function automationStatus(deps: AutomationDeps): Promise<AutomationStatus> {
-  const [telegramRow, instagramRow, bufferRow, settings] = await Promise.all([
+  const [telegramRow, instagramRow, bufferRow, githubRow, settings] = await Promise.all([
     getIntegration(deps.db, 'telegram'),
     getIntegration(deps.db, 'instagram'),
     getIntegration(deps.db, 'buffer'),
+    getIntegration(deps.db, 'github'),
     getSettings(deps.db),
   ]);
   let telegram: AutomationStatus['telegram'] = null;
@@ -380,7 +384,7 @@ export async function automationStatus(deps: AutomationDeps): Promise<Automation
       .catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
     tiktok = { channel: bufferRow.account.username, enabled: settings.automation.tiktok.enabled, ...checked };
   }
-  return { telegram, instagram, tiktok };
+  return { telegram, instagram, tiktok, renderTrigger: githubRow !== null };
 }
 
 export function describeStatus(status: AutomationStatus): string {
@@ -403,6 +407,7 @@ export function describeStatus(status: AutomationStatus): string {
       ? `TikTok (Buffer): ${escapeHtml(tiktok.channel ?? '?')} · ${tiktok.ok ? '✅' : `❌ ${escapeHtml(tiktok.error ?? '')}`}${tiktok.enabled ? '' : ' · paylaşım kapalı'}`
       : 'TikTok (Buffer): ❌ bağlı değil',
   );
+  lines.push(status.renderTrigger ? 'Hazırlık tetikleyicisi (GitHub): ✅' : 'Hazırlık tetikleyicisi (GitHub): ❌ bağlı değil · yedek zamanlama kullanılıyor');
   return lines.join('\n');
 }
 
@@ -417,6 +422,25 @@ export async function connectBuffer(deps: AutomationDeps, apiKey: string): Promi
   });
   await saveSettings(deps.db, { automation: { tiktok: { enabled: true } } });
   return { channel: channel.name };
+}
+
+export async function connectGitHub(deps: AutomationDeps, token: string): Promise<{ repository: string }> {
+  if (!(await verifyRenderWorkflowAccess({ token, repository: deps.repository, fetch: deps.fetch }))) {
+    throw new Error(`Anahtar ${deps.repository} deposunun iş akışlarına erişemiyor; depo seçimini ve "Actions: Read and write" iznini kontrol et.`);
+  }
+  await saveIntegration(deps.db, {
+    id: 'github',
+    secretEncrypted: encryptSecret(token, deps.integrationsKey),
+    account: { id: deps.repository, username: null },
+    expiresAt: null,
+  });
+  return { repository: deps.repository };
+}
+
+export async function startRender(deps: AutomationDeps, date: DateKey): Promise<{ dispatched: boolean; reason?: string }> {
+  const integration = await getIntegration(deps.db, 'github');
+  const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
+  return dispatchRenderWorkflow({ token, repository: deps.repository, date, fetch: deps.fetch });
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };

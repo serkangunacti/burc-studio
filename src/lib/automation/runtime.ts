@@ -28,6 +28,7 @@ export function automationDeps(): AutomationDeps {
   return {
     db: getDb(),
     appUrl: appUrl(),
+    repository: process.env.GITHUB_REPOSITORY ?? 'serkangunacti/burc-studio',
     integrationsKey: process.env.INTEGRATIONS_KEY,
     automationSecret: process.env.AUTOMATION_SECRET,
     now: () => new Date(),
