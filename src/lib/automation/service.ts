@@ -267,7 +267,7 @@ async function rebuildOrFail(deps: AutomationDeps, instagram: InstagramClient, r
   console.error('Instagram container hatası', { publication: row.id, containerId, status, detail, rebuilds: row.rebuilds });
   if (row.rebuilds < MAX_CONTAINER_REBUILDS) {
     await markForRebuild(deps.db, row.id);
-    throw new RetryLater(REELS_POLL_SECONDS, `Instagram medyayı işleyemedi (${status}); yeniden kuruluyor`);
+    throw new RetryLater(REELS_POLL_SECONDS, `Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}; yeniden kuruluyor`);
   }
   throw new Error(`Instagram medyayı işleyemedi (${status})${detail ? `: ${detail}` : ''}`);
 }
@@ -506,6 +506,28 @@ export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{
   const approved = rows.filter((row) => row.status === 'approved');
   await enqueueRows(deps, [...approved, ...retried]);
   return { requeued: approved.length, retried: retried.length };
+}
+
+export type PublishNowResult = { id: string; label: string; outcome: PublishOutcome | 'retry'; message?: string };
+
+// Kuyruğun yeniden teslimini beklemeden, saati gelmiş onaylı paylaşımları bu istekte gönderir (Instagram işlemesi dahil).
+export async function publishDueNow(deps: AutomationDeps, date: DateKey, limit: number): Promise<PublishNowResult[]> {
+  const now = deps.now();
+  const due = (await listPublications(deps.db, date)).filter((row) => row.status === 'approved' && row.scheduledAt.getTime() <= now.getTime()).slice(0, limit);
+  const results: PublishNowResult[] = [];
+  for (const row of due) {
+    let result: PublishNowResult = { id: row.id, label: publicationLabel(row), outcome: 'retry' };
+    for (let attempt = 0; attempt <= MAX_CONTAINER_REBUILDS && result.outcome === 'retry'; attempt++) {
+      try {
+        result = { ...result, outcome: await publishPublication(deps, row.id) };
+      } catch (error) {
+        if (!(error instanceof RetryLater)) throw error;
+        result = { ...result, outcome: 'retry', message: error.message };
+      }
+    }
+    results.push(result);
+  }
+  return results;
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };

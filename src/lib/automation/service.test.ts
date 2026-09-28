@@ -19,6 +19,7 @@ import {
   connectTelegram,
   describeStatus,
   handleTelegramUpdate,
+  publishDueNow,
   publishPublication,
   requeueDay,
   RetryLater,
@@ -505,5 +506,29 @@ describe('kuyruğu yeni sürüme taşıma', () => {
       [3, 37_560],
     ]);
     expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, rebuilds: 0 });
+  });
+});
+
+describe('şimdi paylaş', () => {
+  it('saati gelmiş onaylıları bu istekte paylaşır, gelmeyenlere dokunmaz; yeniden kurmayı aynı istekte dener', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram } = harness(db, new Date('2026-09-29T05:34:00Z'));
+    const base = instagram.getMockImplementation()!;
+    let firstCarousel = true;
+    instagram.mockImplementation((path, params) => {
+      if (params.fields === 'status_code' && path.endsWith('/container-7') && firstCarousel) {
+        firstCarousel = false;
+        return { body: { status_code: 'ERROR' } };
+      }
+      return base(path, params);
+    });
+    const results = await publishDueNow(deps, DATE, 5);
+    expect(results.map((result) => [result.label, result.outcome])).toEqual([
+      ['Kadın burç carousel 3/3', 'published'],
+      ['Kadın burç carousel 2/3', 'published'],
+    ]);
+    expect((await getPublication(db, rows[2].id))?.status).toBe('approved');
   });
 });
