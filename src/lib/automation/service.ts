@@ -66,8 +66,8 @@ const INLINE_STATUS_WAIT_MS = 10_000;
 // Meta'nın saatlik çağrı sınırı dolduysa bu aralıkla, planlanan saatten sonra en fazla bu süre boyunca denenir.
 const RATE_LIMIT_RETRY_SECONDS = 15 * 60;
 const RATE_LIMIT_WINDOW_MS = 4 * 3_600_000;
-// TikTok videoyu işlerken Buffer "sending"de kalır; ~30 dakika beklenir.
-const MAX_TIKTOK_ATTEMPTS = 30;
+// TikTok videoyu işlerken Buffer "sending"de kalır; planlanan saatten sonra en fazla bu kadar beklenir.
+const TIKTOK_TIMEOUT_MS = 60 * 60_000;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
 const MAX_PROCESSING_ATTEMPTS = 20;
 const MAX_TRANSIENT_ATTEMPTS = 5;
@@ -343,7 +343,10 @@ async function publishToTikTok(deps: AutomationDeps, row: PublicationRow): Promi
   const post = await buffer.client.post(remoteId);
   if (post.status === 'sent') return { remoteId, permalink: post.externalLink };
   if (post.status === 'error') throw new Error(`TikTok (Buffer): ${post.error ?? 'bilinmeyen hata'}`);
-  if (row.attempts >= MAX_TIKTOK_ATTEMPTS) throw new Error('TikTok paylaşımı zamanında tamamlanmadı');
+  // Aynı paylaşım için birden fazla kuyruk mesajı olabileceğinden sınır deneme sayısına değil geçen süreye bağlıdır.
+  if (deps.now().getTime() > row.scheduledAt.getTime() + TIKTOK_TIMEOUT_MS) {
+    throw new Error(`TikTok paylaşımı zamanında tamamlanmadı (Buffer durumu: ${post.status}${post.error ? `, ${post.error}` : ''})`);
+  }
   await releaseForRetry(deps.db, row.id);
   throw new RetryLater(TIKTOK_POLL_SECONDS, 'TikTok paylaşımı sürüyor');
 }
@@ -576,6 +579,10 @@ export async function diagnoseCarousel(deps: AutomationDeps, publicationId: stri
     results.push({ items, status: await pollContainer(deps, instagram, parent) });
   }
   return { items: children, variants: results };
+}
+
+export async function bufferPostStatus(deps: AutomationDeps, remoteId: string) {
+  return (await loadBuffer(deps)).client.post(remoteId);
 }
 
 export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };
