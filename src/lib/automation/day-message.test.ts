@@ -25,6 +25,7 @@ function row(overrides: Partial<PublicationRow>): PublicationRow {
     error: null,
     attempts: 0,
     rebuilds: 0,
+    publishAttemptedAt: null,
     telegramMessageId: null,
     approvedAt: null,
     publishedAt: null,

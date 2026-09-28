@@ -193,21 +193,85 @@ describe('Instagram paylaşımı', () => {
     expect(await publishPublication(deps, part3.id)).toBe('published');
     const paths = igCalls().map((call) => `${call.path}${call.params.fields ? `?${call.params.fields}` : ''}`);
     expect(paths).toEqual([
-      ...Array(6).fill('/v25.0/1784/media'),
-      ...[1, 2, 3, 4, 5, 6].map((item) => `/v25.0/container-${item}?status_code`),
-      '/v25.0/1784/media',
+      ...Array(7).fill('/v25.0/1784/media'),
       '/v25.0/container-7?status_code',
       '/v25.0/1784/media_publish',
       '/v25.0/media-1?permalink',
     ]);
     expect(igCalls()[0].params.image_url).toBe(`https://app.test/api/media/${part3.media.imageIds![0]}`);
-    expect(igCalls()[12].params.caption).toBe(part3.caption);
+    expect(igCalls()[6].params.caption).toBe(part3.caption);
     const saved = await getPublication(db, part3.id);
     expect(saved).toMatchObject({ status: 'published', igMediaId: 'media-1', permalink: 'https://www.instagram.com/p/abc/' });
     expect(telegramCalls().some((call) => String(call.params.text).startsWith('📤 Paylaşıldı'))).toBe(true);
 
     expect(await publishPublication(deps, part3.id)).toBe('ignored');
-    expect(igCalls()).toHaveLength(16);
+    expect(igCalls()).toHaveLength(10);
+  });
+
+  it('yayınla isteği hata dönse de gönderi yayınlandıysa bunu hesaptan doğrular, ikinci kez yayınlamaz', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:30:10Z'));
+    const base = instagram.getMockImplementation()!;
+    let published = false;
+    instagram.mockImplementation((path, params) => {
+      if (path.endsWith('/media_publish')) {
+        published = true;
+        return { status: 400, body: { error: { message: 'Application request limit reached', code: 4 } } };
+      }
+      if (path.endsWith('/1784/media') && params.fields) {
+        return { body: { data: published ? [{ id: 'm-9', caption: part3.caption, timestamp: '2026-09-29T05:30:12+0000', permalink: 'https://www.instagram.com/p/x/', media_type: 'CAROUSEL_ALBUM' }] : [] } };
+      }
+      return base(path, params);
+    });
+    await expect(publishPublication(deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 120 });
+    expect((await getPublication(db, part3.id))?.publishAttemptedAt).not.toBeNull();
+    expect(await publishPublication(deps, part3.id)).toBe('published');
+    expect(await getPublication(db, part3.id)).toMatchObject({ status: 'published', igMediaId: 'm-9', permalink: 'https://www.instagram.com/p/x/' });
+    expect(igCalls().filter((call) => call.path.endsWith('/media_publish'))).toHaveLength(1);
+    expect(igCalls().filter((call) => call.path.endsWith('/media') && !call.params.fields)).toHaveLength(7);
+  });
+
+  it('yayın sonucu doğrulanamazsa yeniden yayınlamaz; süre dolunca açıklamayla başarısız olur', async () => {
+    await connectAll(db);
+    const [part3] = await seedDay(db);
+    await approveDay(db, DATE);
+    const first = harness(db, new Date('2026-09-29T05:30:10Z'));
+    const base = first.instagram.getMockImplementation()!;
+    const failPublish = (path: string, params: Record<string, unknown>) => {
+      if (path.endsWith('/media_publish')) return { status: 500, body: { error: { message: 'An unexpected error has occurred', code: 2 } } };
+      if (path.endsWith('/1784/media') && params.fields) return { body: { data: [] } };
+      return base(path, params);
+    };
+    first.instagram.mockImplementation(failPublish);
+    await expect(publishPublication(first.deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater' });
+    await expect(publishPublication(first.deps, part3.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 120 });
+    const late = harness(db, new Date('2026-09-29T05:50:00Z'));
+    late.instagram.mockImplementation(failPublish);
+    expect(await publishPublication(late.deps, part3.id)).toBe('failed');
+    expect((await getPublication(db, part3.id))?.error).toContain('kopya oluşmaması için yeniden gönderilmedi');
+    expect([...first.igCalls(), ...late.igCalls()].filter((call) => call.path.endsWith('/media_publish'))).toHaveLength(1);
+  });
+
+  it('başarısız paylaşım yeniden denenince önce hesabı kontrol eder; yayınlanmışsa yeni kayıt açmadan tamamlar', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await db
+      .update(publications)
+      .set({ status: 'failed', error: 'x', igContainerId: 'c-old', publishAttemptedAt: new Date('2026-09-29T05:33:00Z') })
+      .where(eq(publications.id, rows[1].id));
+    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T06:00:00Z'));
+    const base = instagram.getMockImplementation()!;
+    instagram.mockImplementation((path, params) =>
+      path.endsWith('/1784/media') && params.fields
+        ? { body: { data: [{ id: 'm-2', caption: rows[1].caption, timestamp: '2026-09-29T05:34:01+0000', permalink: 'https://www.instagram.com/p/y/', media_type: 'CAROUSEL_ALBUM' }] } }
+        : base(path, params),
+    );
+    await handleTelegramUpdate(deps, { callback_query: { id: 'q', data: `y:${rows[1].postId}:c`, message: { chat: { id: CHAT }, message_id: 77 } } });
+    expect(await publishPublication(deps, rows[1].id)).toBe('published');
+    expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'published', igMediaId: 'm-2' });
+    expect(igCalls().some((call) => call.path.endsWith('/media_publish') || (call.path.endsWith('/media') && !call.params.fields))).toBe(false);
   });
 
   it('Reels işlenirken yeniden denemeyi ister, container yeniden açılmadan sonraki teslimde paylaşır', async () => {
@@ -228,18 +292,6 @@ describe('Instagram paylaşımı', () => {
     expect(igCalls().find((call) => call.path.endsWith('/media_publish'))?.params.creation_id).toBe('reels-c');
   });
 
-  it('paylaşım sonucu yazılmadan düşmüşse container yayınlanmış görünür ve ikinci kez yayınlanmaz', async () => {
-    await connectAll(db);
-    const reels = (await seedDay(db))[3];
-    await approveDay(db, DATE);
-    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T16:00:05Z'));
-    instagram.mockImplementationOnce(() => ({ body: { id: 'reels-c' } }));
-    for (let check = 0; check < 7; check++) instagram.mockImplementationOnce(() => ({ body: { status_code: 'IN_PROGRESS' } }));
-    await publishPublication(deps, reels.id).catch(() => undefined);
-    instagram.mockImplementationOnce(() => ({ body: { status_code: 'PUBLISHED' } }));
-    expect(await publishPublication(deps, reels.id)).toBe('published');
-    expect(igCalls().some((call) => call.path.endsWith('/media_publish'))).toBe(false);
-  });
 
   it('planlanan saatten önce gelen teslimi saatine erteler', async () => {
     await connectAll(db);
@@ -416,8 +468,7 @@ describe('TikTok (Buffer)', () => {
       params.fields === 'status_code' && path.endsWith('/container-7') ? { body: { status_code: ++carouselChecks <= 2 ? 'IN_PROGRESS' : 'FINISHED' } } : base(path, params),
     );
     expect(await publishPublication(deps, part3.id)).toBe('published');
-    // Carousel kurulmadan önceki bekleme + iki işlem kontrolü.
-    expect(deps.sleep).toHaveBeenCalledTimes(3);
+    expect(deps.sleep).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -455,20 +506,6 @@ describe('hazırlık tetikleyicisi (GitHub)', () => {
 describe('Instagram geçici hataları', () => {
 
 
-  it('işlenemeyen carousel görselini bir kez yeniden gönderip carousel ı kurar', async () => {
-    await connectAll(db);
-    const [part3] = await seedDay(db);
-    await approveDay(db, DATE);
-    const { deps, instagram, igCalls } = harness(db, new Date('2026-09-29T05:30:10Z'));
-    const base = instagram.getMockImplementation()!;
-    instagram.mockImplementation((path, params) =>
-      params.fields === 'status_code' && path.endsWith('/container-3') ? { body: { status_code: 'ERROR' } } : base(path, params),
-    );
-    expect(await publishPublication(deps, part3.id)).toBe('published');
-    const created = igCalls().filter((call) => call.path.endsWith('/media'));
-    expect(created).toHaveLength(8);
-    expect(created.at(-1)?.params.children).toBe('container-1,container-2,container-7,container-4,container-5,container-6');
-  });
 
   it('ERROR veren carousel ı 10 dakika sonra taze görsellerle bir kez yeniden kurar; yine ERROR olursa açıklamayla başarısız olur', async () => {
     await connectAll(db);
@@ -513,7 +550,7 @@ describe('Instagram geçici hataları', () => {
     await db.update(publications).set({ status: 'failed', error: 'x', igContainerId: 'old', attempts: 3, rebuilds: 2 }).where(eq(publications.id, rows[1].id));
     const { deps, enqueue } = harness(db, new Date('2026-09-29T06:00:00Z'));
     await handleTelegramUpdate(deps, { callback_query: { id: 'q', data: `y:${rows[1].postId}:c`, message: { chat: { id: CHAT }, message_id: 77 } } });
-    expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, igContainerId: null, attempts: 0, rebuilds: 0 });
+    expect(await getPublication(db, rows[1].id)).toMatchObject({ status: 'approved', error: null, igContainerId: 'old', attempts: 0, rebuilds: 0 });
     expect(enqueue.mock.calls).toEqual([[rows[1].id, { delaySeconds: 0, retentionSeconds: 86_400 }]]);
   });
 });
