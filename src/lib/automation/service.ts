@@ -127,6 +127,9 @@ export async function sendDayPlan(deps: AutomationDeps, date: DateKey, failures:
   const telegram = await loadTelegram(deps);
   if (!telegram) return { sent: false, reason: 'Telegram botu bağlı değil.' };
   if (!telegram.chatId) return { sent: false, reason: 'Bota henüz /start yazılmadı.' };
+  if (!deps.automationSecret) throw new Error('AUTOMATION_SECRET tanımlı değil');
+  // Anahtar değişmiş olabilir; düğmeler gönderilmeden webhook eşitlenir, bekleyen onaylar korunur.
+  await telegram.client.setWebhook(`${deps.appUrl}/api/telegram/webhook`, telegramWebhookSecret(deps.automationSecret), { dropPendingUpdates: false });
   const rows = await listPublications(deps.db, date);
   const mediaUrl = mediaUrlFor(deps.appUrl);
   const covers = rows

@@ -8,6 +8,7 @@ import { getSettings, saveSettings } from '@/lib/settings/repository';
 import { createTestDb } from '@/test/db';
 import { seedPost } from '@/test/posts';
 import { planPublications } from './plan';
+import { handleTelegramWebhook } from './http';
 import { approveDay, getIntegration, getPublication, listPublications, saveIntegration, savePublication } from './repository';
 import { encryptSecret, telegramWebhookSecret } from './secrets';
 import {
@@ -38,6 +39,7 @@ type Call = { host: 'telegram' | 'instagram' | 'buffer' | 'github'; path: string
 
 function harness(db: Db, now: Date) {
   const calls: Call[] = [];
+  const telegramWebhook = { secret: telegramWebhookSecret('previous-secret'), pendingUpdates: 1, failRegistration: false };
   const instagram = vi.fn((path: string, params: Record<string, unknown>): { status?: number; body: unknown } => {
     if (path.endsWith('/media')) return { body: { id: `container-${calls.filter((call) => call.path.endsWith('/media')).length}` } };
     if (path.endsWith('/media_publish')) return { body: { id: 'media-1' } };
@@ -59,6 +61,11 @@ function harness(db: Db, now: Date) {
       const method = url.pathname.split('/').pop()!;
       const params = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       calls.push({ host: 'telegram', path: method, params });
+      if (method === 'setWebhook') {
+        if (telegramWebhook.failRegistration) return Response.json({ ok: false, description: 'Webhook registration failed' }, { status: 500 });
+        telegramWebhook.secret = String(params.secret_token);
+        if (params.drop_pending_updates === true) telegramWebhook.pendingUpdates = 0;
+      }
       const result =
         method === 'getMe'
           ? { id: 42, username: 'kozmikarkan_bot' }
@@ -97,7 +104,7 @@ function harness(db: Db, now: Date) {
     enqueue,
     deleteVideosBefore: vi.fn(async () => 2),
   };
-  return { deps, calls, instagram, buffer, github, enqueue, githubCalls: () => calls.filter((call) => call.host === 'github'), bufferCalls: () => calls.filter((call) => call.host === 'buffer'), telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
+  return { deps, calls, instagram, buffer, github, telegramWebhook, enqueue, githubCalls: () => calls.filter((call) => call.host === 'github'), bufferCalls: () => calls.filter((call) => call.host === 'buffer'), telegramCalls: () => calls.filter((call) => call.host === 'telegram'), igCalls: () => calls.filter((call) => call.host === 'instagram') };
 }
 
 async function connectAll(db: Db) {
@@ -146,6 +153,51 @@ describe('Telegram bağlantısı', () => {
 });
 
 describe('günlük onay', () => {
+  it('anahtar değişince plan öncesinde webhook yenilenir; onay HTTP üzerinden kaydedilip kuyruğa girer', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    const { deps, telegramWebhook, telegramCalls, enqueue } = harness(db, new Date('2026-09-29T05:00:00Z'));
+    const callback = { callback_query: { id: 'rotated-secret', data: `a:${DATE}`, message: { chat: { id: CHAT }, message_id: 77 } } };
+    const request = (secret: string) => new Request(`${deps.appUrl}/api/telegram/webhook`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
+      body: JSON.stringify(callback),
+    });
+    const oldSecret = telegramWebhook.secret;
+    expect((await handleTelegramWebhook(request(oldSecret), deps)).status).toBe(401);
+    expect(enqueue).not.toHaveBeenCalled();
+
+    await sendDayPlan(deps, DATE);
+    const response = await handleTelegramWebhook(request(telegramWebhook.secret), deps);
+    expect(response.status).toBe(200);
+    expect(enqueue.mock.calls.map(([id]) => id)).toEqual(rows.map((row) => row.id));
+    expect((await listPublications(db, DATE)).every((row) => row.status === 'approved')).toBe(true);
+    expect(telegramCalls().some((call) => call.path === 'sendMessage' && String(call.params.text).startsWith('✅ 4 paylaşım onaylandı.'))).toBe(true);
+    expect(telegramCalls()[0]).toMatchObject({ path: 'setWebhook', params: { url: 'https://app.test/api/telegram/webhook', drop_pending_updates: false } });
+    expect(telegramWebhook.pendingUpdates).toBe(1);
+    expect((await handleTelegramWebhook(request(oldSecret), deps)).status).toBe(401);
+    await handleTelegramWebhook(request(telegramWebhook.secret), deps);
+    expect(enqueue).toHaveBeenCalledTimes(4);
+  });
+
+  it('webhook yenilenemezse çalışmayan onay düğmeleri göndermez', async () => {
+    await connectAll(db);
+    await seedDay(db);
+    const { deps, telegramWebhook, telegramCalls } = harness(db, new Date());
+    telegramWebhook.failRegistration = true;
+    await expect(sendDayPlan(deps, DATE)).rejects.toThrow('Webhook registration failed');
+    expect(telegramCalls().some((call) => call.path === 'sendMessage' || call.path === 'sendMediaGroup')).toBe(false);
+    expect((await listPublications(db, DATE))[0].telegramMessageId).toBeNull();
+  });
+
+  it('otomasyon anahtarı yoksa onay düğmelerini göndermez', async () => {
+    await connectAll(db);
+    const { deps, telegramCalls } = harness(db, new Date());
+    deps.automationSecret = undefined;
+    await expect(sendDayPlan(deps, DATE)).rejects.toThrow('AUTOMATION_SECRET');
+    expect(telegramCalls()).toHaveLength(0);
+  });
+
   it('plan mesajını kapak albümüyle gönderir, mesaj kimliğini saklar', async () => {
     await connectAll(db);
     await seedDay(db);
