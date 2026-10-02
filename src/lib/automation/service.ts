@@ -1,9 +1,11 @@
 import type { Db } from '@/db/types';
 import { BufferError, createBufferClient, type BufferClient } from '@/lib/buffer/client';
-import { istanbulDateKey, type DateKey } from '@/lib/date/istanbul';
+import { istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
 import { istanbulInstant } from './plan';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
+import type { AutomationSettings } from '@/lib/settings/schema';
+import { getPostDetail } from '@/lib/posts/repository';
 import { createTelegramClient, escapeHtml, TelegramError, type TelegramClient } from '@/lib/telegram/client';
 import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
 import { dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
@@ -30,6 +32,7 @@ import {
   type PublicationRow,
 } from './repository';
 import { decryptSecret, encryptSecret, telegramWebhookSecret } from './secrets';
+import { automationStartReason } from './start';
 
 export type AutomationDeps = {
   db: Db;
@@ -87,11 +90,11 @@ const INSTAGRAM_TOKEN_LIFETIME_MS = 60 * DAY_MS;
 
 export const mediaUrlFor = (appUrl: string) => (id: string) => `${appUrl}/api/media/${id}`;
 
-async function loadTelegram(deps: AutomationDeps): Promise<{ client: TelegramClient; chatId: number | null } | null> {
+async function loadTelegram(deps: AutomationDeps): Promise<{ client: TelegramClient; chatId: number | null; automation: AutomationSettings } | null> {
   const integration = await getIntegration(deps.db, 'telegram');
   if (!integration) return null;
   const settings = await getSettings(deps.db);
-  return { client: createTelegramClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch), chatId: settings.automation.telegramChatId };
+  return { client: createTelegramClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch), chatId: settings.automation.telegramChatId, automation: settings.automation };
 }
 
 type BufferService = 'tiktok' | 'instagram';
@@ -127,6 +130,8 @@ export async function sendDayPlan(deps: AutomationDeps, date: DateKey, failures:
   const telegram = await loadTelegram(deps);
   if (!telegram) return { sent: false, reason: 'Telegram botu bağlı değil.' };
   if (!telegram.chatId) return { sent: false, reason: 'Bota henüz /start yazılmadı.' };
+  const paused = automationStartReason(telegram.automation.startDate, date, deps.now());
+  if (!telegram.automation.enabled || paused) return { sent: false, reason: paused ?? 'Otomatik paylaşım kapalı.' };
   if (!deps.automationSecret) throw new Error('AUTOMATION_SECRET tanımlı değil');
   // Anahtar değişmiş olabilir; düğmeler gönderilmeden webhook eşitlenir, bekleyen onaylar korunur.
   await telegram.client.setWebhook(`${deps.appUrl}/api/telegram/webhook`, telegramWebhookSecret(deps.automationSecret), { dropPendingUpdates: false });
@@ -211,6 +216,14 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     return;
   }
   const now = deps.now();
+  const targetDate = action.action === 'approve' ? action.date : telegram.automation.startDate
+    ? (await getPostDetail(deps.db, action.postId))?.post.date ?? istanbulDateKey(now)
+    : istanbulDateKey(now);
+  const paused = automationStartReason(telegram.automation.startDate, targetDate, now);
+  if (!telegram.automation.enabled || paused) {
+    await client.answerCallback(query.id, paused ?? 'Otomatik paylaşım kapalı.');
+    return;
+  }
   if (action.action === 'approve') {
     const approved = await approveDay(deps.db, action.date, now);
     await enqueueRows(deps, approved);
@@ -381,12 +394,17 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   const now = deps.now();
   const current = await getPublication(deps.db, id);
   if (!current) return 'ignored';
+  const { automation } = await getSettings(deps.db);
+  if (!automation.enabled || (automation.startDate && current.date < automation.startDate)) return 'ignored';
+  if (automation.startDate && istanbulDateKey(now) < automation.startDate) {
+    throw new RetryLater(Math.max(1, Math.ceil((istanbulDayStart(automation.startDate).getTime() - now.getTime()) / 1000)), 'Otomasyon başlangıcı bekleniyor');
+  }
   // Planlanan saatten önce paylaşılmaz; erken gelen teslim saatine ertelenir.
   const early = current.scheduledAt.getTime() - now.getTime();
   if (current.status === 'approved' && early > 60_000) throw new RetryLater(Math.ceil(early / 1000), 'Planlanan saat gelmedi');
   const started = current.igContainerId !== null || current.remoteId !== null || current.publishAttemptedAt !== null;
   if (current.status === 'approved' && !started) {
-    const { cutoffTime } = (await getSettings(deps.db)).automation;
+    const { cutoffTime } = automation;
     // Gün sonu saatine kadar başlayamayan paylaşım o gün yapılmaz; başlamış olan (ör. doğrulama bekleyen) tamamlanır.
     if (now.getTime() > istanbulInstant(current.date, cutoffTime).getTime()) {
       await markExpired(deps.db, id, `Gün sonu saati (${cutoffTime}) geçti; bugün paylaşılmadı`);
@@ -565,6 +583,9 @@ export async function connectGitHub(deps: AutomationDeps, token: string): Promis
 }
 
 export async function startRender(deps: AutomationDeps, date: DateKey): Promise<{ dispatched: boolean; reason?: string }> {
+  const { automation } = await getSettings(deps.db);
+  const paused = automationStartReason(automation.startDate, date, deps.now());
+  if (!automation.enabled || paused) return { dispatched: false, reason: paused ?? 'Otomatik paylaşım kapalı.' };
   const integration = await getIntegration(deps.db, 'github');
   const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
   return dispatchRenderWorkflow({ token, repository: deps.repository, date, fetch: deps.fetch });
@@ -573,6 +594,8 @@ export async function startRender(deps: AutomationDeps, date: DateKey): Promise<
 // Kuyruk mesajları gönderildikleri yayın sürümünde işlenir; gün içinde yayınlanan düzeltmenin bekleyen paylaşımlara
 // uygulanması için onaylı ve başarısız paylaşımlar yeni sürümün kuyruğuna yeniden bırakılır (paylaşım iki kez gitmez).
 export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{ requeued: number; retried: number }> {
+  const { automation } = await getSettings(deps.db);
+  if (!automation.enabled || automationStartReason(automation.startDate, date, deps.now())) return { requeued: 0, retried: 0 };
   const rows = await listPublications(deps.db, date);
   const now = deps.now();
   const retried: PublicationRow[] = [];
@@ -589,6 +612,8 @@ export type PublishNowResult = { id: string; label: string; outcome: PublishOutc
 // Kuyruğun yeniden teslimini beklemeden, saati gelmiş onaylı paylaşımları bu istekte gönderir (Instagram işlemesi dahil).
 export async function publishDueNow(deps: AutomationDeps, date: DateKey, limit: number): Promise<PublishNowResult[]> {
   const now = deps.now();
+  const { automation } = await getSettings(deps.db);
+  if (!automation.enabled || automationStartReason(automation.startDate, date, now)) return [];
   const due = (await listPublications(deps.db, date)).filter((row) => row.status === 'approved' && row.scheduledAt.getTime() <= now.getTime()).slice(0, limit);
   const results: PublishNowResult[] = [];
   for (const row of due) {
@@ -633,10 +658,13 @@ export async function bufferPostStatus(deps: AutomationDeps, remoteId: string) {
   return (await loadBuffer(deps)).client.post(remoteId);
 }
 
-export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean };
+export type MaintenanceResult = { expired: number; deletedImages: number; deletedVideos: number; tokenRefreshed: boolean; skipped?: string };
 
 export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceResult> {
   const now = deps.now();
+  const { automation } = await getSettings(deps.db);
+  const paused = automationStartReason(automation.startDate, istanbulDateKey(now), now);
+  if (paused) return { expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false, skipped: paused };
   const expired = await expireUnapproved(deps.db, istanbulDateKey(now));
   const cutoff = new Date(now.getTime() - MEDIA_RETENTION_DAYS * DAY_MS);
   const deletedImages = await deleteMediaBefore(deps.db, cutoff);

@@ -32,6 +32,27 @@ const request = (authorization?: string) =>
   new Request('http://localhost/api/cron/daily', authorization ? { headers: { authorization } } : undefined);
 
 describe('handleDailyCron', () => {
+  it('başlangıçtan önce üretimi ve render tetiklemesini atlar; TSİ gece yarısında açılır', async () => {
+    const base = deps();
+    const startRender = vi.fn(async () => ({ dispatched: true }));
+    const scheduled = {
+      ...base,
+      today: '2026-10-05',
+      startRender,
+      loadDeps: async () => {
+        const loaded = await base.loadDeps();
+        return { ...loaded, settings: { ...loaded.settings, automation: { ...loaded.settings.automation, startDate: '2026-10-05' } } };
+      },
+    };
+    const before = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...scheduled, now: () => new Date('2026-10-04T20:59:59.999Z') })).json();
+    expect(before.generated).toEqual([]);
+    expect(before.skipped).toContain('2026-10-05');
+    expect(startRender).not.toHaveBeenCalled();
+    const after = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...scheduled, now: () => new Date('2026-10-04T21:00:00Z') })).json();
+    expect(after.generated).toHaveLength(6);
+    expect(startRender).toHaveBeenCalledWith('2026-10-05');
+  });
+
   it('anahtarsız istek veritabanına dokunmadan 401 alır', async () => {
     expect((await handleDailyCron(request(), deps())).status).toBe(401);
     expect(loads).toBe(0);

@@ -23,6 +23,16 @@ beforeEach(async () => {
 });
 
 describe('günün render işi', () => {
+  it('başlangıçtan önce eski planı zorla tetikleme dahil çizmez', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    await saveSettings(db, { automation: { startDate: '2026-10-05' } });
+    const renderers = fakeRenderers();
+    expect(await renderDay(db, DATE, renderers, { force: true })).toEqual({ rendered: [], kept: [], failures: [] });
+    expect(renderers.stills).not.toHaveBeenCalled();
+    expect(renderers.videos).not.toHaveBeenCalled();
+    expect(await listPublications(db, DATE)).toEqual([]);
+  });
+
   it('eksik gönderileri listeler', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     expect(await missingPosts(db, DATE)).toEqual(['horoscope-erkek', 'tarot-kadin', 'tarot-erkek']);

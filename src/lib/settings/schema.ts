@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { PostFormat } from '@/db/schema';
 import { PROVIDER_IDS } from '@/lib/llm/provider-ids';
+import { isDateKey } from '@/lib/date/istanbul';
 
 export const WATERMARK_POSITIONS = ['bottom-center', 'bottom-right'] as const;
 export type WatermarkPosition = (typeof WATERMARK_POSITIONS)[number];
@@ -27,6 +28,8 @@ export type AutomationKind = (typeof AUTOMATION_KINDS)[number];
 
 export const automationSchema = z.object({
   enabled: z.boolean(),
+  // Bu TSİ gününün 00:00 anından önce otomasyon çalışmaz; eski günler sonradan da başlamaz.
+  startDate: z.string().refine(isDateKey, 'Geçerli bir başlangıç tarihi gerekli.').nullable(),
   telegramChatId: z.number().int().nullable(),
   // TSİ saatleri; haftalık satırı yalnız pazartesi kullanılır.
   schedule: z.object({ horoscope: audienceSlotsSchema, tarot: audienceSlotsSchema, weekly: audienceSlotsSchema }),
@@ -83,6 +86,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultFormat: '4x5',
   automation: {
     enabled: true,
+    startDate: null,
     telegramChatId: null,
     schedule: {
       horoscope: { kadin: { carousel: '08:30', reels: '19:00' }, erkek: { carousel: '09:30', reels: '20:00' } },
