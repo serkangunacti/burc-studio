@@ -25,7 +25,7 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
      - Carousel'i 3 parçaya böler (kapak + 4 burç + kapanış).
      - JPEG'leri Neon `media_files` tablosuna, Reels MP4'ü Blob'a (`kozmikarkan-medya`) yazar.
      - `/api/automation/ready` ucunu çağırır.
-  3. Telegram onay mesajı gider (`/api/telegram/webhook`).
+  3. Telegram onay mesajı gider (`/api/telegram/webhook`). Her plan gönderilmeden webhook güncel `AUTOMATION_SECRET` ile eşitlenir; bekleyen Telegram güncellemeleri silinmez.
   4. Onaylananlar Vercel Queues'a (`instagram-publish`) gecikmeli bırakılır.
   5. Tüketici `/api/queues/publish` Instagram Graph API v25 ile paylaşır.
   6. TikTok'a yalnızca Reels videosu gider: Buffer GraphQL API (`src/lib/buffer/`) ile `shareNow`, durum `sent` olana kadar izlenir.
