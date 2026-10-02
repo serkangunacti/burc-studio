@@ -113,17 +113,93 @@ async function connectAll(db: Db) {
   await saveSettings(db, { automation: { telegramChatId: CHAT } });
 }
 
-async function seedDay(db: Db) {
-  const post = await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
-  for (const item of planPublications(DATE, [post], DEFAULT_SETTINGS.automation)) {
-    await savePublication(db, DATE, item, item.format === 'reels' ? { videoUrl: 'https://blob.test/r.mp4' } : { images: Array.from({ length: 6 }, (_, index) => new Uint8Array([index])) });
+async function seedDay(db: Db, date = DATE) {
+  const post = await seedPost(db, { date, kind: 'horoscope', audience: 'kadin' });
+  for (const item of planPublications(date, [post], DEFAULT_SETTINGS.automation)) {
+    await savePublication(db, date, item, item.format === 'reels' ? { videoUrl: 'https://blob.test/r.mp4' } : { images: Array.from({ length: 6 }, (_, index) => new Uint8Array([index])) });
   }
-  return listPublications(db, DATE);
+  return listPublications(db, date);
 }
 
 let db: Db;
 beforeEach(async () => {
   db = await createTestDb();
+});
+
+describe('programlı başlangıç', () => {
+  const START = '2026-10-05';
+
+  it('başlangıçtan önce Telegram planı ve render tetiklemesi göndermez', async () => {
+    await connectAll(db);
+    await seedDay(db);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, calls } = harness(db, new Date('2026-10-04T20:59:59.999Z'));
+    await saveIntegration(db, { id: 'github', secretEncrypted: encryptSecret('GH', KEY), account: { id: 'repo', username: null }, expiresAt: null });
+    expect((await sendDayPlan(deps, START)).sent).toBe(false);
+    expect((await startRender(deps, START)).dispatched).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it('başlangıçtan önce gelecek günün onayını da kaydetmez', async () => {
+    await connectAll(db);
+    await seedDay(db, START);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, enqueue } = harness(db, new Date('2026-10-04T20:59:59.999Z'));
+    await handleTelegramUpdate(deps, { callback_query: { id: 'early', data: `a:${START}`, message: { chat: { id: CHAT }, message_id: 77 } } });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect((await listPublications(db, START)).every((row) => row.status === 'ready')).toBe(true);
+  });
+
+  it('TSİ gece yarısında yeni plan açılır; eski onay, yeniden dene ve geri al düğmeleri eski işleri başlatmaz', async () => {
+    await connectAll(db);
+    const old = await seedDay(db);
+    await db.update(publications).set({ status: 'failed' }).where(eq(publications.id, old[0].id));
+    await db.update(publications).set({ status: 'skipped' }).where(eq(publications.id, old[3].id));
+    const fresh = await seedDay(db, START);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, enqueue } = harness(db, new Date('2026-10-04T21:00:00Z'));
+    for (const data of [`a:${DATE}`, `y:${old[0].postId}:c`, `u:${old[3].postId}:r`]) {
+      await handleTelegramUpdate(deps, { callback_query: { id: data, data, message: { chat: { id: CHAT }, message_id: 77 } } });
+    }
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(await getPublication(db, old[0].id)).toMatchObject({ status: 'failed' });
+    expect(await getPublication(db, old[3].id)).toMatchObject({ status: 'skipped' });
+    expect(await sendDayPlan(deps, START)).toEqual({ sent: true });
+    await handleTelegramUpdate(deps, { callback_query: { id: 'new', data: `a:${START}`, message: { chat: { id: CHAT }, message_id: 77 } } });
+    expect(enqueue.mock.calls.map(([id]) => id)).toEqual(fresh.map((row) => row.id));
+  });
+
+  it('eski kuyruk teslimi ve elle yeniden kuyruğa alma başlangıç sonrasında da yayın yapmaz', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db);
+    await approveDay(db, DATE);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, calls, enqueue } = harness(db, new Date('2026-10-05T06:00:00Z'));
+    expect(await publishPublication(deps, rows[0].id)).toBe('ignored');
+    expect(await requeueDay(deps, DATE)).toEqual({ requeued: 0, retried: 0 });
+    expect(calls).toEqual([]);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('bakım başlangıçtan önce medya silmez veya anahtar yenilemez', async () => {
+    await connectAll(db);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, calls } = harness(db, new Date('2026-10-04T20:59:59.999Z'));
+    expect(await runMaintenance(deps)).toMatchObject({ expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false });
+    expect(deps.deleteVideosBefore).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  it('yeni gün için erken gelen kuyruk teslimini kaybetmeden başlangıca erteler', async () => {
+    await connectAll(db);
+    const rows = await seedDay(db, START);
+    await approveDay(db, START);
+    await saveSettings(db, { automation: { startDate: START } });
+    const { deps, calls } = harness(db, new Date('2026-10-04T20:59:59Z'));
+    await expect(publishPublication(deps, rows[0].id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 1 });
+    expect(calls).toEqual([]);
+    expect(await getPublication(db, rows[0].id)).toMatchObject({ status: 'approved', attempts: 0 });
+  });
 });
 
 describe('Telegram bağlantısı', () => {

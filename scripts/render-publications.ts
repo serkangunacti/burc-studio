@@ -5,6 +5,7 @@ import { missingPosts, renderDay } from '../src/lib/automation/render-job';
 import { hasPlanMessage } from '../src/lib/automation/repository';
 import { isDateKey, istanbulDateKey } from '../src/lib/date/istanbul';
 import { getSettings } from '../src/lib/settings/repository';
+import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 
@@ -34,8 +35,10 @@ async function main() {
   const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
   const db = getDb();
-  if (!(await getSettings(db)).automation.enabled) {
-    log('Otomatik paylaşım kapalı; bugün hazırlık yapılmadı.');
+  const { automation } = await getSettings(db);
+  const paused = automationStartReason(automation.startDate, date);
+  if (!automation.enabled || paused) {
+    log(paused ?? 'Otomatik paylaşım kapalı; bugün hazırlık yapılmadı.');
     await closeDb();
     return;
   }

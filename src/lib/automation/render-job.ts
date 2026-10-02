@@ -11,6 +11,7 @@ import type { ReelsProps, SlideProps } from '@/remotion/slide-types';
 import { splitCarousel } from './carousel';
 import { planPublications, type PlannedPublication } from './plan';
 import { listPublications, savePublication } from './repository';
+import { automationStartReason } from './start';
 
 export type Renderers = {
   renderStills: (templateVersion: string, slides: SlideProps[]) => Promise<Uint8Array[]>;
@@ -33,6 +34,7 @@ export async function missingPosts(db: Db, date: DateKey): Promise<string[]> {
 
 export async function renderDay(db: Db, date: DateKey, renderers: Renderers, options: { force?: boolean } = {}): Promise<RenderDayResult> {
   const settings = await getSettings(db);
+  if (!settings.automation.enabled || automationStartReason(settings.automation.startDate, date)) return { rendered: [], kept: [], failures: [] };
   const brand = brandFromSettings(settings);
   const posts = await getCurrentPostsForDate(db, date);
   const plan = planPublications(date, posts, settings.automation);

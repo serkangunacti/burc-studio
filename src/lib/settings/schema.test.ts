@@ -53,6 +53,7 @@ describe('ayar birleştirme', () => {
       defaultFormat: '4x5',
       automation: {
         enabled: true,
+        startDate: null,
         telegramChatId: null,
         schedule: {
           horoscope: { kadin: { carousel: '08:30', reels: '19:00' }, erkek: { carousel: '09:30', reels: '20:00' } },
@@ -110,5 +111,13 @@ describe('üretim ayarları', () => {
     const bad = structuredClone(DEFAULT_SETTINGS.automation.schedule);
     bad.tarot.kadin.reels = '24:00';
     expect(() => mergeSettings(DEFAULT_SETTINGS, { automation: { schedule: bad } })).toThrow();
+  });
+
+  it('başlangıç tarihini saklar; eksik ve geçersiz takvim tarihlerini reddeder', () => {
+    expect(mergeSettings(DEFAULT_SETTINGS, { automation: { startDate: '2026-10-05' } }).automation.startDate).toBe('2026-10-05');
+    expect(parseStoredSettings({ automation: { enabled: true } }).automation.startDate).toBeNull();
+    for (const startDate of ['2026-02-30', '05.10.2026', '2026-10-05T00:00:00Z']) {
+      expect(() => mergeSettings(DEFAULT_SETTINGS, { automation: { startDate } })).toThrow();
+    }
   });
 });

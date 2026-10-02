@@ -32,6 +32,7 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
      - Buffer API anahtarı Ayarlar'dan girilir.
      - `automation.tiktok.enabled` ile açılıp kapanır.
 - **Bakım:** `/api/cron/maintenance` 00:30 TSİ'de çalışır. Onaysızları düşürür, 3 günlük medyayı siler, Instagram anahtarını yeniler.
+- **Programlı başlangıç:** `settings.automation.startDate` TSİ gününün 00:00 sınırıdır (`null`: tarih kısıtı yok). Üretim, render, Telegram onayı, kuyruk ve bakım bu tarihten önce işlem yapmaz; daha eski planlar tarih geçtikten sonra da yeniden başlatılmaz. Canlıdaki yeni başlangıç: **5 Ekim 2026 00:00 TSİ** (pazar gününün sonu); günlük saatler aynıdır.
 - **Kod:** `src/lib/automation/` (plan, carousel, repository, service, day-message, http, runtime), `src/lib/instagram/`, `src/lib/telegram/`, `src/lib/buffer/`.
 - **Arayüz:** Ayarlar → "Otomatik paylaşım" (bağlantılar ve saatler), `/paylasimlar` sayfası.
 - **Sırlar:**

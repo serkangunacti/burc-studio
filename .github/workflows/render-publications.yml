@@ -33,15 +33,26 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Başlangıç tarihini kontrol et
+        id: start-window
+        run: node --import tsx scripts/check-automation-start.ts
+        env:
+          RENDER_DATE: ${{ inputs.date }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
+        if: steps.start-window.outputs.allowed == 'true'
       - uses: actions/cache@v4
+        if: steps.start-window.outputs.allowed == 'true'
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
+        if: steps.start-window.outputs.allowed == 'true'
       - run: npx remotion browser ensure
+        if: steps.start-window.outputs.allowed == 'true'
       - name: Çiz ve onaya gönder
+        if: steps.start-window.outputs.allowed == 'true'
         run: node --import tsx scripts/render-publications.ts
         env:
           RENDER_DATE: ${{ inputs.date }}
