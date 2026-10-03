@@ -154,7 +154,7 @@ export const PUBLICATION_FORMATS = ['carousel', 'reels', 'tiktok'] as const;
 export type PublicationFormat = (typeof PUBLICATION_FORMATS)[number];
 export const PUBLICATION_STATUSES = ['ready', 'approved', 'publishing', 'published', 'skipped', 'expired', 'failed'] as const;
 export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
-export type PublicationMedia = { imageIds?: string[]; videoUrl?: string };
+export type PublicationMedia = { imageIds?: string[]; videoUrl?: string; isAiGenerated?: boolean };
 
 export const publicationFormatEnum = pgEnum('publication_format', PUBLICATION_FORMATS);
 export const publicationStatusEnum = pgEnum('publication_status', PUBLICATION_STATUSES);
@@ -176,14 +176,14 @@ export const publications = pgTable(
     media: jsonb('media').$type<PublicationMedia>().notNull(),
     igContainerId: text('ig_container_id'),
     igMediaId: text('ig_media_id'),
-    // TikTok paylaşımının Buffer gönderi kimliği.
+    // TikTok veya Instagram Reels paylaşımının Buffer gönderi kimliği.
     remoteId: text('remote_id'),
     permalink: text('permalink'),
     error: text('error'),
     attempts: integer('attempts').notNull().default(0),
     // Instagram'ın ERROR/EXPIRED verdiği container'ın baştan kurulma sayısı.
     rebuilds: smallint('rebuilds').notNull().default(0),
-    // Instagram'a "yayınla" isteği gönderildiği an. Doluysa sonuç, yeniden yayınlanmadan hesaptaki gönderilerle doğrulanır.
+    // Instagram'a yayınla / Buffer'a oluştur isteği gönderildiği an. Belirsiz sonuçta kopya oluşturulmaz.
     publishAttemptedAt: timestamp('publish_attempted_at', { withTimezone: true }),
     telegramMessageId: integer('telegram_message_id'),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
@@ -217,7 +217,7 @@ export const mediaFiles = pgTable(
 
 export const INTEGRATION_IDS = ['instagram', 'telegram', 'buffer', 'buffer_instagram', 'github'] as const;
 export type IntegrationId = (typeof INTEGRATION_IDS)[number];
-export type IntegrationAccount = { id: string; username: string | null };
+export type IntegrationAccount = { id: string; username: string | null; rateLimits?: { windowSeconds: number; limit: number; remaining: number; resetsAt: string }[] };
 
 // Instagram ve Telegram anahtarları Ayarlar'dan girilir; INTEGRATIONS_KEY ile şifreli saklanır.
 export const integrations = pgTable('integrations', {

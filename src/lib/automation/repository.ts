@@ -3,11 +3,12 @@ import { alias } from 'drizzle-orm/pg-core';
 import { integrations, mediaFiles, publications, type IntegrationId, type PublicationFormat, type PublicationMedia } from '@/db/schema';
 import type { Db } from '@/db/types';
 import type { DateKey } from '@/lib/date/istanbul';
+import type { BufferRateLimit } from '@/lib/buffer/client';
 import type { PlannedPublication } from './plan';
 
 export type PublicationRow = typeof publications.$inferSelect;
 export type IntegrationRow = typeof integrations.$inferSelect;
-export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string };
+export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string; isAiGenerated?: boolean };
 
 // Yalnız onaylanmamış satır yeniden çizimle ezilir: onaylanmış, paylaşılmış ya da paylaşımda başarısız içerik sessizce değişmesin.
 const REPLACEABLE = ['ready'] as const;
@@ -39,7 +40,7 @@ export async function savePublication(
       scheduledAt: planned.scheduledAt,
       caption: planned.caption,
       status: 'ready' as const,
-      media: 'videoUrl' in media ? { videoUrl: media.videoUrl } : {},
+      media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,
       updatedAt: new Date(),
@@ -208,6 +209,13 @@ export async function saveIntegration(db: Db, values: Omit<IntegrationRow, 'upda
     .onConflictDoUpdate({ target: integrations.id, set: { ...values, updatedAt: now } });
 }
 
+// Kota kaydı kanal kimliğini veya şifreli anahtarı yeniden yazmaz.
+export async function saveBufferRateLimits(db: Db, limits: readonly BufferRateLimit[]): Promise<void> {
+  await db.update(integrations)
+    .set({ account: sql`${integrations.account} || ${JSON.stringify({ rateLimits: limits })}::jsonb` })
+    .where(eq(integrations.id, 'buffer'));
+}
+
 // Instagram container'ı ERROR/EXPIRED olduysa bir sonraki teslim sıfırdan kurar.
 export async function markForRebuild(db: Db, id: string): Promise<void> {
   await db
@@ -233,7 +241,12 @@ export async function markPublishAttempt(db: Db, id: string, igContainerId: stri
 
 // TikTok gönderisi Buffer'da oluşturulur oluşturulmaz kimliği yazılır; yarıda kalan deneme ikinci gönderi açmasın.
 export async function setRemoteId(db: Db, id: string, remoteId: string): Promise<void> {
-  await db.update(publications).set({ remoteId, updatedAt: new Date() }).where(eq(publications.id, id));
+  await db.update(publications).set({ remoteId, publishAttemptedAt:null, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+// Buffer isteğinin sonucu bilinmeden yeni bir oluşturma isteği açılmasını önler.
+export async function markBufferSubmission(db:Db,id:string,at:Date|null):Promise<void> {
+  await db.update(publications).set({publishAttemptedAt:at,updatedAt:new Date()}).where(eq(publications.id,id));
 }
 
 // Instagram carousel parçası gönderilmeden önce container kimliği yazılır; yarıda kalan deneme yeniden paylaşmasın.

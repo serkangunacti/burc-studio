@@ -38,10 +38,14 @@ export default async function PublicationsPage(props: PageProps<'/paylasimlar'>)
           <span className="font-medium">{formatDateLongTr(date)}</span>
           {date < today && <Link href={`/paylasimlar?tarih=${addDays(date, 1)}`}>Sonraki gün →</Link>}
         </nav>
+        <p className="text-sm text-muted-foreground">
+          <a href={`/api/automation/metrics?tarih=${date}`} className="text-primary underline-offset-4 hover:underline">24 / 72 saat ölçüm çizelgesini indir</a>
+          {' · Görüntülenme ve izleme verilerini ücretsiz Instagram / TikTok istatistiklerinden doldur. Kontrol saatleri gerçek yayın saatine göre hesaplanır.'}
+        </p>
       </div>
       {groups.length === 0 ? (
         <p className="text-muted-foreground">
-          {"Bu gün için hazırlanmış paylaşım yok. Paylaşımlar her sabah ~06:10'da hazırlanır ve onay için Telegram'a gönderilir."}
+          {'Bu gün için hazırlanmış paylaşım yok. İçerik üretimi ve görsel hazırlığı tamamlanınca onay planı Telegram’a gönderilir.'}
         </p>
       ) : (
         <ul className="divide-y rounded-2xl border">
@@ -59,7 +63,7 @@ export default async function PublicationsPage(props: PageProps<'/paylasimlar'>)
                     {row.format === 'carousel' ? `${row.part}/3 ${clock(row.scheduledAt)}` : clock(row.scheduledAt)}:{' '}
                     {row.permalink ? (
                       <a href={row.permalink} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-                        Instagram
+                        {row.format === 'tiktok' ? 'TikTok' : 'Instagram'}
                       </a>
                     ) : row.media.videoUrl ? (
                       <a href={row.media.videoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">

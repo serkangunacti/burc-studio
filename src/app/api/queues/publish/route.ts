@@ -4,7 +4,8 @@ import { publishPublication, RetryLater } from '@/lib/automation/service';
 
 export const maxDuration = 300;
 
-export const POST = handleCallback(
+// The SDK also accepts event wrappers; Next.js route handlers receive Request.
+export const POST: (request: Request) => Promise<Response> = handleCallback(
   async (message: { publicationId: string }) => {
     await publishPublication(automationDeps(), message.publicationId);
   },

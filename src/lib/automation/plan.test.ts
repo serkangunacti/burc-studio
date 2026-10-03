@@ -51,8 +51,11 @@ describe('paylaşım planı', () => {
 
   it('açıklamaya parçanın burçlarını ve hashtagleri ekler; Reels açıklaması parçasızdır', () => {
     const plan = planPublications('2026-09-29', [DAILY[0]], automation);
-    expect(plan[0].caption).toBe('Koç · Boğa · İkizler · Yengeç (1/3)\n\nGünün yorumları burada ✨\n\n#burç #astroloji');
-    expect(plan[3].caption).toBe('Günün yorumları burada ✨\n\n#burç #astroloji');
+    expect(plan[0].caption).toContain('29 Eylül 2026 · Günlük burç yorumu · Kadın');
+    expect(plan[0].caption).toContain('Koç · Boğa · İkizler · Yengeç (1/3)');
+    expect(plan[3].caption).toContain('29 Eylül 2026 · Günlük burç yorumu · Kadın');
+    expect(plan[3].caption).not.toContain('(1/3)');
+    expect(plan[3].caption).toContain('#günlükburç #burçyorumu');
   });
 
   it('pazartesi haftalık gönderileri kendi saatlerinde planlar; özel ve genel gönderileri atlar', () => {
@@ -72,13 +75,29 @@ describe('paylaşım planı', () => {
     expect(planPublications('2026-09-29', [DAILY[1]], automation).every((item) => item.postId === 'he')).toBe(true);
   });
 
-  it('TikTok açıksa her gönderinin Reels videosunu aynı saat ve açıklamayla TikTok için de planlar', () => {
+  it('aynı videoyu aynı saatte, platforma uygun açıklamayla iki platform için planlar', () => {
     const plan = planPublications('2026-09-29', DAILY, { ...automation, tiktok: { enabled: true } });
     expect(plan).toHaveLength(20);
     const tiktok = plan.filter((item) => item.format === 'tiktok');
     const reels = plan.filter((item) => item.format === 'reels');
-    expect(tiktok.map(({ postId, part, scheduledAt, caption }) => ({ postId, part, scheduledAt, caption }))).toEqual(
-      reels.map(({ postId, part, scheduledAt, caption }) => ({ postId, part, scheduledAt, caption })),
+    expect(tiktok.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt }))).toEqual(
+      reels.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt })),
     );
+    expect(tiktok[0].caption).toContain('Sana uyan yorum hangisi?');
+    expect(reels[0].caption).toContain('Günün notunu sonra okumak için kaydet.');
+    expect(tiktok[0].caption).not.toBe(reels[0].caption);
+  });
+
+  it('tarot açıklamasında türü ve erkek hedef kitleyi belirtir; ilgili etiketleri kullanır', () => {
+    const plan = planPublications('2026-10-05', [post('te', 'tarot', 'erkek')], automation);
+    expect(plan[3].caption).toContain('5 Ekim 2026 · Günlük tarot yorumu · Erkek');
+    expect(plan[3].caption).toContain('#tarot #günlüktarot');
+    expect(plan[3].caption).not.toContain('#astroloji');
+    expect(plan[3].caption.match(/#[\p{L}\p{N}_]+/gu)?.length).toBeLessThanOrEqual(5);
+  });
+
+  it('haftalık dönemin yıl sınırını doğru gösterir', () => {
+    const plan = planPublications('2026-12-28', [post('we', 'weekly', 'erkek')], automation);
+    expect(plan[3].caption).toContain('28 Aralık 2026 – 3 Ocak 2027 · Haftalık burç yorumu · Erkek');
   });
 });

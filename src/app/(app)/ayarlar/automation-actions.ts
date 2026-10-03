@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/db/client';
 import { requireSession } from '@/lib/auth/require-session';
 import { automationDeps } from '@/lib/automation/runtime';
-import { connectBuffer, connectGitHub, connectInstagram, connectTelegram } from '@/lib/automation/service';
+import { automationStatus, connectBuffer, connectGitHub, connectInstagram, connectTelegram, type AutomationStatus } from '@/lib/automation/service';
 import { BufferError } from '@/lib/buffer/client';
 import { InstagramError } from '@/lib/instagram/client';
 import { parseAutomationForm } from '@/lib/settings/automation-form';
@@ -13,6 +13,19 @@ import { TelegramError } from '@/lib/telegram/client';
 
 export type AutomationFormState = { status: 'idle' } | { status: 'saved'; savedAt: number } | { status: 'error'; error: string };
 export type ConnectState = { status: 'idle' } | { status: 'connected'; username: string | null; at: number } | { status: 'error'; error: string };
+export type HealthState = {status:'idle'} | {status:'checked';report:AutomationStatus;at:number} | {status:'error';error:string};
+
+export async function checkConnectionsAction(_prev:HealthState):Promise<HealthState> {
+  void _prev;
+  await requireSession();
+  try {
+    const report = await automationStatus(automationDeps());
+    revalidatePath('/ayarlar');
+    return {status:'checked',report,at:Date.now()};
+  } catch(error) {
+    return {status:'error',error:error instanceof Error ? error.message : String(error)};
+  }
+}
 
 export async function saveAutomationSettingsAction(_prev: AutomationFormState, formData: FormData): Promise<AutomationFormState> {
   await requireSession();

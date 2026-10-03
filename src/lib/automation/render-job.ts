@@ -16,7 +16,7 @@ import { automationStartReason } from './start';
 export type Renderers = {
   renderStills: (templateVersion: string, slides: SlideProps[]) => Promise<Uint8Array[]>;
   // Videoyu üretip herkese açık adresini döndürür.
-  renderReels: (input: { templateVersion: string; reels: ReelsProps; musicSeed: number; name: string }) => Promise<string>;
+  renderReels: (input: { templateVersion: string; reels: ReelsProps; musicSeed: number; name: string }) => Promise<string | { videoUrl: string; isAiGenerated?: boolean }>;
 };
 
 export type RenderDayResult = { rendered: string[]; kept: string[]; failures: string[] };
@@ -58,16 +58,18 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
       if (!detail) throw new Error('Gönderi bulunamadı');
       const parts = new Map(splitCarousel(buildSlideProps(detail, brand)).map((entry) => [entry.part, entry.slides]));
       // TikTok, Reels ile aynı videoyu paylaşır; video bir kez çizilir.
-      let videoUrl = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media.videoUrl;
+      const existingVideo = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media;
+      let video = existingVideo?.videoUrl ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
       const renderVideo = async () => {
         const reels = buildReelsProps(detail, brand);
-        videoUrl = await renderers.renderReels({
+        const rendered = await renderers.renderReels({
           templateVersion: post.templateVersion,
           reels,
           musicSeed: musicSeed(reels),
           name: `${date}-${post.kind}-${post.audience}`,
         });
-        return videoUrl;
+        video = typeof rendered === 'string' ? { videoUrl: rendered } : rendered;
+        return video;
       };
       for (const item of pending) {
         if (item.format === 'carousel') {
@@ -76,9 +78,9 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
           const images = await renderers.renderStills(post.templateVersion, slides);
           await savePublication(db, date, item, { images });
         } else if (item.format === 'reels') {
-          await savePublication(db, date, item, { videoUrl: await renderVideo() });
+          await savePublication(db, date, item, await renderVideo());
         } else {
-          await savePublication(db, date, item, { videoUrl: videoUrl ?? (await renderVideo()) });
+          await savePublication(db, date, item, video ?? (await renderVideo()));
         }
         result.rendered.push(slotKey(item));
       }

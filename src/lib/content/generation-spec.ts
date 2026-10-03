@@ -62,7 +62,7 @@ function assignCards(keptCards: ReadonlyMap<SignSlug, string> | undefined, avoid
 
 export const HOROSCOPE_SPEC: GenerationSpec = {
   kind: 'horoscope',
-  templateVersion: 'pastel@1',
+  templateVersion: 'pastel@2',
   promptVersion: HOROSCOPE_PROMPT_VERSION,
   limits: DAILY_LIMITS,
   recentDays: 2,
@@ -80,7 +80,7 @@ export const HOROSCOPE_SPEC: GenerationSpec = {
 
 export const WEEKLY_SPEC: GenerationSpec = {
   kind: 'weekly',
-  templateVersion: 'pastel-weekly@1',
+  templateVersion: 'pastel-weekly@2',
   promptVersion: WEEKLY_PROMPT_VERSION,
   limits: WEEKLY_LIMITS,
   recentDays: 7,
@@ -100,7 +100,7 @@ export const WEEKLY_SPEC: GenerationSpec = {
 
 export const TAROT_SPEC: GenerationSpec = {
   kind: 'tarot',
-  templateVersion: 'pastel-tarot@1',
+  templateVersion: 'pastel-tarot@2',
   promptVersion: TAROT_PROMPT_VERSION,
   limits: DAILY_LIMITS,
   recentDays: 2,

@@ -24,7 +24,6 @@ import {
   publishDueNow,
   publishPublication,
   requeueDay,
-  RetryLater,
   runMaintenance,
   sendDayPlan,
   startRender,
@@ -48,6 +47,7 @@ function harness(db: Db, now: Date) {
     return { body: {} };
   });
   const buffer = vi.fn((query: string): unknown => {
+    if (query.includes('ChannelStates')) return {data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:false}}};
     if (query.includes('createPost')) return { data: { createPost: { post: { id: 'buf-1' } } } };
     if (query.includes('account')) return { data: { account: { organizations: [{ id: 'org' }] } } };
     if (query.includes('channels(')) return { data: { channels: [{ id: 'tt-1', name: 'kozmikarkan', displayName: null, service: 'tiktok' }] } };
@@ -530,6 +530,27 @@ describe('bakım', () => {
 });
 
 describe('durum', () => {
+  it('Telegram tanısı hata verirse diğer servislerin sağlık raporunu korur', async () => {
+    await connectAll(db);
+    const {deps,instagram}=harness(db,new Date('2026-10-03T12:00:00Z'));
+    const normalFetch=deps.fetch;
+    deps.fetch=async(url,init)=>String(url).includes('getWebhookInfo') ? Response.json({ok:false,description:'Telegram unavailable'},{status:503}) : normalFetch(url,init);
+    instagram.mockImplementationOnce(()=>({body:{data:[{quota_usage:0,config:{quota_total:100}}]}}));
+    const status=await automationStatus(deps);
+    expect(status.telegram).toMatchObject({webhookOk:false,lastError:expect.stringContaining('Telegram unavailable')});
+    expect(status.instagram?.publishing.ok).toBe(true);
+  });
+  it('Instagram Reels ve TikTok sağlığını aynı Buffer isteğinde kontrol eder', async () => {
+    await saveIntegration(db,{id:'buffer',secretEncrypted:encryptSecret('BUF',KEY),account:{id:'tt-1',username:'kozmikarkan'},expiresAt:null});
+    await saveSettings(db,{automation:{tiktok:{enabled:true}}});
+    await saveIntegration(db,{id:'buffer_instagram',secretEncrypted:encryptSecret('BUF',KEY),account:{id:'ig-buf',username:'kozmikarkan'},expiresAt:null});
+    const {deps,buffer,bufferCalls}=harness(db,new Date('2026-09-29T00:00:00Z'));
+    buffer.mockImplementationOnce(()=>({data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:true}}}));
+    const status=await automationStatus(deps);
+    expect(status.instagramReels).toEqual({channel:'kozmikarkan',ok:false,error:"Buffer'da kanal kuyruğu duraklatılmış"});
+    expect(status.tiktok?.ok).toBe(true);
+    expect(bufferCalls()).toHaveLength(1);
+  });
   it('webhook, sohbet kaydı ve paylaşım kotasını raporlar; /durum komutu aynı raporu gönderir', async () => {
     await connectAll(db);
     const { deps, instagram, telegramCalls, igCalls } = harness(db, new Date('2026-09-29T00:00:00Z'));
@@ -539,6 +560,8 @@ describe('durum', () => {
       telegram: { username: 'kozmikarkan_bot', chatLinked: true, webhookOk: true, pendingUpdates: 0, lastError: null },
       instagram: { username: 'kozmikarkan', expiresAt: '2026-11-20T00:00:00.000Z', publishing: { ok: true, used: 3, total: 100 } },
       tiktok: null,
+      instagramReels: null,
+      bufferRateLimits: [],
       renderTrigger: false,
     });
     expect(igCalls()[0]).toMatchObject({ path: '/v25.0/1784/content_publishing_limit', params: { fields: 'quota_usage,config' } });
@@ -551,6 +574,39 @@ describe('durum', () => {
 });
 
 describe('TikTok (Buffer)', () => {
+  it.each([502, 200])('Buffer oluşturma sonucu belirsizse (%s) elle yeniden denemede kopya gönderi açmaz', async (status) => {
+    const tiktok=await seedTikTokDay();
+    const {deps,buffer,bufferCalls}=harness(db,new Date('2026-09-29T19:00:05Z'));
+    const normalFetch=deps.fetch;
+    deps.fetch=async(url,init)=>String(url).startsWith('https://api.buffer.com') && String(init?.body).includes('createPost') ? Response.json({errors:[{message:'Upstream timeout'}]},{status}) : normalFetch(url,init);
+    expect(await publishPublication(deps,tiktok.id)).toBe('failed');
+    expect((await getPublication(db,tiktok.id))?.publishAttemptedAt).not.toBeNull();
+    await db.update(publications).set({status:'approved',attempts:0}).where(eq(publications.id,tiktok.id));
+    deps.fetch=normalFetch;
+    expect(await publishPublication(deps,tiktok.id)).toBe('failed');
+    expect(buffer.mock.calls).toHaveLength(0);
+    expect(bufferCalls()).toHaveLength(0);
+  });
+
+  it('kota reddinde oluşturma işaretini temizler; kota yenilenince güvenle gönderir', async () => {
+    const tiktok=await seedTikTokDay();
+    const {deps}=harness(db,new Date('2026-09-29T19:00:05Z'));
+    const normalFetch=deps.fetch;
+    deps.fetch=async(url,init)=>String(url).startsWith('https://api.buffer.com') ? Response.json({errors:[{message:'Rate limit'}]},{status:429,headers:{'Retry-After':'900'}}) : normalFetch(url,init);
+    await expect(publishPublication(deps,tiktok.id)).rejects.toMatchObject({afterSeconds:900});
+    expect((await getPublication(db,tiktok.id))?.publishAttemptedAt).toBeNull();
+    deps.fetch=normalFetch;
+    expect(await publishPublication(deps,tiktok.id)).toBe('published');
+  });
+
+  it('kota beklemesi yayın penceresini aşarsa askıda bırakmadan nedenini kaydeder', async () => {
+    const tiktok=await seedTikTokDay();
+    const {deps}=harness(db,new Date('2026-09-29T19:00:05Z'));
+    const normalFetch=deps.fetch;
+    deps.fetch=async(url,init)=>String(url).startsWith('https://api.buffer.com') ? Response.json({},{status:429,headers:{'Retry-After':'2592000'}}) : normalFetch(url,init);
+    expect(await publishPublication(deps,tiktok.id)).toBe('failed');
+    expect((await getPublication(db,tiktok.id))?.error).toContain('kota');
+  });
   async function seedTikTokDay() {
     await connectAll(db);
     const { deps } = harness(db, new Date('2026-09-29T00:00:00Z'));
@@ -601,6 +657,48 @@ describe('TikTok (Buffer)', () => {
     late.buffer.mockImplementation(sending);
     expect(await publishPublication(late.deps, tiktok.id)).toBe('failed');
     expect((await getPublication(db, tiktok.id))?.error).toBe('TikTok paylaşımı zamanında tamamlanmadı (Buffer durumu: sending)');
+  });
+
+  it.each([['19:20:00', 600], ['19:45:00', 900]] as const)('uzun bekleyişte sorguları seyrekleştirir (%s)', async (clock, seconds) => {
+    const tiktok = await seedTikTokDay();
+    await db.update(publications).set({ remoteId: 'buf-existing' }).where(eq(publications.id, tiktok.id));
+    const { deps, buffer, bufferCalls } = harness(db, new Date(`2026-09-29T${clock}Z`));
+    buffer.mockImplementation(() => ({ data: { post: { id: 'buf-existing', status: 'sending', externalLink: null, error: null } } }));
+    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: seconds });
+    expect(bufferCalls().some((call) => call.path === 'createPost')).toBe(false);
+    expect(await getPublication(db, tiktok.id)).toMatchObject({ status: 'approved', remoteId: 'buf-existing' });
+  });
+
+  it('kota yanıtını entegrasyon anahtarını ve kanal kimliğini değiştirmeden saklar', async () => {
+    const tiktok = await seedTikTokDay();
+    const before = await getIntegration(db, 'buffer');
+    const { deps } = harness(db, new Date('2026-09-29T19:00:05Z'));
+    const fetchNormally = deps.fetch;
+    deps.fetch = async (url, init) => {
+      const response = await fetchNormally(url, init);
+      if (String(url).startsWith('https://api.buffer.com')) {
+        response.headers.set('RateLimit', '"monthly";r=2000;t=600');
+        response.headers.set('RateLimit-Policy', '"monthly";q=3000;w=2592000');
+      }
+      return response;
+    };
+    expect(await publishPublication(deps, tiktok.id)).toBe('published');
+    const after = await getIntegration(db, 'buffer');
+    expect(after?.secretEncrypted).toBe(before?.secretEncrypted);
+    expect(after?.account.id).toBe('tt-1');
+    expect(after?.account.rateLimits).toEqual([{ windowSeconds: 2592000, limit: 3000, remaining: 2000, resetsAt: '2026-09-29T19:10:05.000Z' }]);
+  });
+
+  it('429 alınca deneme sayısı yüksek olsa da aynı gönderiyi Retry-After süresince bekletir', async () => {
+    const tiktok = await seedTikTokDay();
+    await db.update(publications).set({ remoteId: 'buf-existing', attempts: 8 }).where(eq(publications.id, tiktok.id));
+    const { deps } = harness(db, new Date('2026-09-29T19:20:00Z'));
+    const fetchNormally = deps.fetch;
+    deps.fetch = async (url, init) => String(url).startsWith('https://api.buffer.com')
+      ? Response.json({ errors: [{ message: 'Too many requests' }] }, { status: 429, headers: { 'Retry-After': '900' } })
+      : fetchNormally(url, init);
+    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 900 });
+    expect(await getPublication(db, tiktok.id)).toMatchObject({ status: 'approved', remoteId: 'buf-existing' });
   });
 
   it('Buffer hata bildirirse paylaşımı başarısız yapar ve uyarır', async () => {

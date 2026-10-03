@@ -59,5 +59,7 @@ jobs:
           RENDER_FORCE: ${{ inputs.force }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          # Bir kez üretilen kısa konuşmalar; her gün TTS çağrısı yapılmaz.
+          SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
           APP_URL: https://burc-studio.vercel.app

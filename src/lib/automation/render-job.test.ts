@@ -23,6 +23,18 @@ beforeEach(async () => {
 });
 
 describe('günün render işi', () => {
+  it('sesli render sonucunun AI bilgisini aynı MP4 ile iki platforma ve sonradan açılan TikTok satırına taşır', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    const renderers = fakeRenderers();
+    renderers.renderReels = vi.fn(async () => ({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true }));
+    await renderDay(db, DATE, renderers);
+    expect((await listPublications(db, DATE)).find(row => row.format === 'reels')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true });
+    await saveSettings(db, { automation: { tiktok: { enabled: true } } });
+    const later = fakeRenderers();
+    await renderDay(db, DATE, later);
+    expect(later.videos).not.toHaveBeenCalled();
+    expect((await listPublications(db, DATE)).find(row => row.format === 'tiktok')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true });
+  });
   it('başlangıçtan önce eski planı zorla tetikleme dahil çizmez', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await saveSettings(db, { automation: { startDate: '2026-10-05' } });

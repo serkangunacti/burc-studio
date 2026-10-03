@@ -6,7 +6,7 @@ import { LUCKY_COLOR_IDS } from './lucky-colors';
 import type { QualityIssue } from './quality';
 import type { Audience, RecentHeadline } from './types';
 
-export const WEEKLY_PROMPT_VERSION = 'haftalik-v2';
+export const WEEKLY_PROMPT_VERSION = 'haftalik-v3';
 
 export const WEEKLY_INSTRUCTIONS = [
   "Sen Instagram'da her pazartesi paylaşılan haftalık burç yorumları yazan, Türkçe konuşan bir astroloji içerik yazarısın.",
@@ -28,8 +28,8 @@ export const WEEKLY_INSTRUCTIONS = [
   '- "puanlar": ask, para ve saglik için haftalık 1–5 arası tam sayılar.',
   `- "sansliRenk": yalnızca şu kimliklerden biri: ${LUCKY_COLOR_IDS.join(', ')}.`,
   '- "sansliSayi": 1–99 arası tam sayı.',
-  '- "kapakKanca": carousel kapağı için en fazla 60 karakterlik, haftayı özetleyen merak uyandıran cümle.',
-  '- "caption": Instagram açıklaması; en fazla 700 karakter, hashtag içermez, okuru kaydetmeye ve arkadaşını etiketlemeye davet eder.',
+  '- "kapakKanca": en fazla 60 karakter; haftalık yorumlardaki somut bir durumu ilk saniyede anlaşılır biçimde anlatsın. Belirsiz vaat veya tıklama tuzağı kullanma.',
+  '- "caption": 40–400 karakter; haftalık burç yorumunun somut temasını doğal dille anlat. Tarih, kitle başlığı, hashtag ve kaydetme/etiketleme çağrısı ekleme; bunlar platforma göre ayrıca eklenir.',
   '- "hashtagler": en fazla 3 Türkçe hashtag önerisi.',
   '- Yanıtı yalnızca istenen JSON nesnesi olarak ver; önüne ya da arkasına açıklama ekleme.',
 ].join('\n');

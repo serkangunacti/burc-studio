@@ -12,11 +12,12 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 - **Faz planları:** `docs/superpowers/plans/`. Her fazda verilen kararlar (`Ruling:`) ve ertelenen küçük işler: `docs/superpowers/ledgers/`.
 
 ## Ne üretiliyor
-- **Her gün ~05:00 TSİ cron (`/api/cron/daily`):** Kadın ve erkek günlük burç (`pastel@1`) ile kadın ve erkek günlük tarot (`pastel-tarot@1`).
-- **Pazartesi ek olarak:** Kadın ve erkek haftalık yorumlar (`pastel-weekly@1`), 4 burçluk 3 parça hâlinde üretilir.
+- **Her gün ~05:00 TSİ cron (`/api/cron/daily`):** Kadın ve erkek günlük burç (`pastel@2`) ile kadın ve erkek günlük tarot (`pastel-tarot@2`). Kullanıcı 3 Ekim'de yeni Pastel Kozmik görünümünü seçti; arşivlerin `@1` sürümleri korunur.
+- **Pazartesi ek olarak:** Kadın ve erkek haftalık yorumlar (`pastel-weekly@2`), 4 burçluk 3 parça hâlinde üretilir.
 - **Günlük plan:** Canlıdaki `settings.data.dailyPlan` alanında (4 kalem). Ayarlar sayfasından değişir.
 - **Her gönderi için:** 14 slaytlık JPEG carousel (tarayıcıda `renderStillOnWeb`), ZIP, caption ve 59 sn müzikli Reels (tarayıcıda `renderMediaOnWeb`, AAC).
 - **Reels müziği:** Kodla üretilir (`src/lib/music`). Kullanıcı sesleri onayladı; karakterini değiştirme.
+- **Otomatik videolarda konuşma:** `SERKANSES_VOICE_ASSET` GitHub secret'ındaki bir kez üretilmiş kısa giriş ve kapanışlar eklenir; müzik konuşmada düşürülür. Günlük TTS çağrısı yoktur. Secret yalnız üretilmiş MP3'ler, süreler ve SHA-256 içerir; kişisel ses referansı ve TTS anahtarı içermez. Ses eklendiğinde iki platformda `isAiGenerated` gönderilir. Secret yoksa eski müzikli akış korunur.
 
 ## Otomatik paylaşım (Faz 6, spec §14)
 - **Akış:**
@@ -31,13 +32,14 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
   6. TikTok'a yalnızca Reels videosu gider: Buffer GraphQL API (`src/lib/buffer/`) ile `shareNow`, durum `sent` olana kadar izlenir.
      - Buffer API anahtarı Ayarlar'dan girilir.
      - `automation.tiktok.enabled` ile açılıp kapanır.
+- **Buffer kota / tekrar kontrolü:** Yanıt başlıklarındaki kalan haklar şifreli anahtardan ayrı hesap JSON'unda saklanır. `429` için `Retry-After`, uzun beklemelerde 5 → 10 → 15 dakika sorgu aralığı kullanılır. Sonucu belirsiz oluşturma isteği otomatik veya elle yeniden gönderilmez; Buffer kontrolü gerekir. Açık kota reddi güvenli biçimde tekrar denenebilir.
 - **Bakım:** `/api/cron/maintenance` 00:30 TSİ'de çalışır. Onaysızları düşürür, 3 günlük medyayı siler, Instagram anahtarını yeniler.
 - **Programlı başlangıç:** `settings.automation.startDate` TSİ gününün 00:00 sınırıdır (`null`: tarih kısıtı yok). Üretim, render, Telegram onayı, kuyruk ve bakım bu tarihten önce işlem yapmaz; daha eski planlar tarih geçtikten sonra da yeniden başlatılmaz. Canlıdaki yeni başlangıç: **5 Ekim 2026 00:00 TSİ** (pazar gününün sonu); günlük saatler aynıdır.
 - **Kod:** `src/lib/automation/` (plan, carousel, repository, service, day-message, http, runtime), `src/lib/instagram/`, `src/lib/telegram/`, `src/lib/buffer/`.
-- **Arayüz:** Ayarlar → "Otomatik paylaşım" (bağlantılar ve saatler), `/paylasimlar` sayfası.
+- **Arayüz:** Ayarlar → "Otomatik paylaşım" (bağlantılar, saatler, canlı sağlık kontrolü ve kota), `/paylasimlar` (gerçek gönderi bağlantıları, oturum gerektiren 24/72 saat ölçüm CSV'si). Metrikler ücretsiz platform ekranlarından girilir; ücretli analitik sorgusu yoktur. Rehber: `docs/first-week-metrics.md`.
 - **Sırlar:**
   - Vercel: `AUTOMATION_SECRET`, `INTEGRATIONS_KEY` (Secret), `BLOB_READ_WRITE_TOKEN`.
-  - GitHub secrets: `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`, `AUTOMATION_SECRET`.
+  - GitHub secrets: `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`, `AUTOMATION_SECRET`, `SERKANSES_VOICE_ASSET`.
   - Bot ve Instagram anahtarları DB'de şifreli (`integrations`).
 - **Elle yeniden çizim:** `gh workflow run render-publications.yml -f date=YYYY-AA-GG [-f force=true]`.
 
@@ -48,14 +50,14 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
   - `src/lib/content/quality.ts`: kalite kapısı, cümle sınırında kısaltma, yasaklı ifadeler.
 - **LLM zinciri (hepsi ücretsiz ve uzak):** `src/lib/llm/providers.ts`. Sıra: Gemini → Gemini Lite → Groq → Mistral → Cohere → OrcaRouter → OpenRouter (2 model) → NVIDIA. Anahtarlar yalnızca Vercel env'de (Secret).
 - **Görsel:**
-  - Şablonlar: `src/remotion/templates/` (`pastel-v1`, `pastel-v1-reels`, `pastel-weekly-v1`, `pastel-tarot-v1`) ve `index.ts` kaydı.
+  - Şablonlar: `src/remotion/templates/` (`pastel-v1`, `pastel-v1-reels`, `pastel-weekly-v1`, `pastel-tarot-v1`, yeni `pastel-v2`) ve `index.ts` kaydı.
   - Tarot tasarım sistemi: `src/remotion/tarot/` (78 kart).
   - Studio: `npm run studio`.
 - **Veritabanı:** Neon Postgres + Drizzle. Migration: `npm run db:migrate:prod` (`.env.production.local` ile).
 
 ## Çalışma kuralları (bu projede öğrenilenler)
 - **Yerel dil modeli (Ollama vb.) ASLA kullanılmaz.** Gerçek içerik gerekiyorsa uzak ücretsiz API'ler; olmuyorsa sahte model (`LLM_MOCK=1`).
-- **Kullanıcı teknik adım yapmaz.** Merge, deploy, env, migration ve ayar güncellemesi Claude'un işi. Yalnız geri alınamaz ya da yıkıcı işlemlerde sor.
+- **Kullanıcı teknik adım yapmaz.** Merge, deploy, env, migration ve ayar güncellemesi projede çalışan ajanın işi. Yalnız geri alınamaz ya da yıkıcı işlemlerde sor.
 - **Testler:**
   - `npm test -- --maxWorkers=2` (makine yüklüyken PGlite zaman aşımı olmasın).
   - `npm run test:e2e` (Playwright, localhost:3100, sahte model).

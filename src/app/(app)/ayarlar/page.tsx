@@ -44,6 +44,7 @@ export default async function SettingsPage() {
             instagram: instagram && { username: instagram.account.username, expiresAt: instagram.expiresAt?.toISOString() ?? null },
             tiktok: buffer && { channel: buffer.account.username },
             renderTrigger: github !== null,
+            rateLimits: buffer?.account.rateLimits ?? [],
           }}
         />
         <AutomationSettingsForm initial={settings.automation} />

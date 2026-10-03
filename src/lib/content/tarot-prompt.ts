@@ -6,7 +6,7 @@ import { LUCKY_COLOR_IDS } from './lucky-colors';
 import type { QualityIssue } from './quality';
 import type { Audience, RecentHeadline } from './types';
 
-export const TAROT_PROMPT_VERSION = 'tarot-v1';
+export const TAROT_PROMPT_VERSION = 'tarot-v2';
 
 export const TAROT_INSTRUCTIONS = [
   "Sen Instagram'da paylaşılacak günlük tarot yorumları yazan, Türkçe konuşan bir tarot ve astroloji içerik yazarısın.",
@@ -27,8 +27,8 @@ export const TAROT_INSTRUCTIONS = [
   '- "puanlar": ask, para ve saglik için 1–5 arası tam sayılar.',
   `- "sansliRenk": yalnızca şu kimliklerden biri: ${LUCKY_COLOR_IDS.join(', ')}.`,
   '- "sansliSayi": 1–99 arası tam sayı.',
-  '- "kapakKanca": carousel kapağı için en fazla 60 karakterlik merak uyandıran cümle.',
-  '- "caption": Instagram açıklaması; en fazla 700 karakter, hashtag içermez, okuru kaydetmeye ve arkadaşını etiketlemeye davet eder.',
+  '- "kapakKanca": en fazla 60 karakter; kart yorumlarındaki somut bir temayı ilk saniyede anlaşılır biçimde anlatsın. Belirsiz vaat veya tıklama tuzağı kullanma.',
+  '- "caption": 40–400 karakter; günlük tarot yorumunun somut temasını doğal dille anlat. Tarih, kitle başlığı, hashtag ve kaydetme/etiketleme çağrısı ekleme; bunlar platforma göre ayrıca eklenir.',
   '- "hashtagler": en fazla 3 Türkçe hashtag önerisi.',
   '- Yanıtı yalnızca istenen JSON nesnesi olarak ver; önüne ya da arkasına açıklama ekleme.',
 ].join('\n');
