@@ -1,5 +1,5 @@
 import type { Db } from '@/db/types';
-import { BufferError, createBufferClient, type BufferClient } from '@/lib/buffer/client';
+import { BufferError, createBufferClient, type BufferClient, type BufferRateLimit } from '@/lib/buffer/client';
 import { istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
 import { istanbulInstant } from './plan';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
@@ -17,14 +17,17 @@ import {
   getIntegration,
   getPublication,
   listPublications,
+  listPendingBufferVerifications,
   markExpired,
   markForRebuild,
   markPublishAttempt,
+  markBufferSubmission,
   markFailed,
   markPublished,
   releaseForRetry,
   retryFailedGroup,
   saveIntegration,
+  saveBufferRateLimits,
   setContainer,
   setGroupSkipped,
   setRemoteId,
@@ -61,7 +64,7 @@ export class RetryLater extends Error {
 const DAY_MS = 86_400_000;
 const MAX_QUEUE_SECONDS = 7 * 86_400;
 const REELS_POLL_SECONDS = 30;
-// Buffer ücretsiz planı günde 250 API isteğine izin veriyor; gönderi durumu 5 dakikada bir sorulur.
+// İlk sorgular 5 dk aralıkla; uzun bekleyişte ve düşük aylık kotada seyrekleşir.
 const BUFFER_POLL_SECONDS = 5 * 60;
 const INLINE_STATUS_CHECKS = 3;
 const MAX_CONTAINER_REBUILDS = 1;
@@ -102,7 +105,11 @@ type BufferService = 'tiktok' | 'instagram';
 async function loadBuffer(deps: AutomationDeps, service: BufferService = 'tiktok'): Promise<{ client: BufferClient; channelId: string }> {
   const integration = await getIntegration(deps.db, 'buffer');
   if (!integration) throw new Error('Buffer bağlı değil. Ayarlar → Otomatik paylaşım bölümünden Buffer API anahtarını gir.');
-  const client = createBufferClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch);
+  const client = createBufferClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch, {
+    now: deps.now,
+    initialRateLimits: integration.account.rateLimits,
+    onRateLimits: (limits) => saveBufferRateLimits(deps.db, limits),
+  });
   if (service === 'tiktok') return { client, channelId: integration.account.id };
   // Instagram kanalı ilk kullanımda Buffer hesabından bulunur ve saklanır.
   const cached = await getIntegration(deps.db, 'buffer_instagram');
@@ -362,10 +369,20 @@ async function createCarousel(deps: AutomationDeps, instagram: InstagramClient, 
 // TikTok ve Instagram Reels Buffer üzerinden gider: gönderi paylaşım saatinde "şimdi paylaş" olarak açılır ve durumu izlenir.
 async function publishViaBuffer(deps: AutomationDeps, row: PublicationRow, service: BufferService): Promise<Published> {
   const label = service === 'tiktok' ? 'TikTok' : 'Instagram Reels';
+  if (row.publishAttemptedAt) throw new Error(`${label}: önceki Buffer oluşturma isteğinin sonucu belirsiz. Kopya paylaşımı önlemek için durduruldu; Buffer'daki gönderi kontrol edilmeli.`);
   const buffer = await loadBuffer(deps, service);
-  const share = () => {
+  const share = async () => {
     if (!row.media.videoUrl) throw new Error(`${label} videosu yok`);
-    return buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: service === 'instagram' });
+    await markBufferSubmission(deps.db,row.id,deps.now());
+    try {
+      return await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: service === 'instagram', ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}) });
+    } catch(error) {
+      if (error instanceof BufferError && (error.rateLimited || (!error.retryable && !error.outcomeUnknown))) {
+        await markBufferSubmission(deps.db,row.id,null);
+        throw error;
+      }
+      throw new Error(`${label}: Buffer oluşturma isteğinin sonucu belirsiz; kopya paylaşım engellendi. Buffer'daki gönderi kontrol edilmeli.`);
+    }
   };
   let remoteId = row.remoteId;
   if (!remoteId) {
@@ -386,7 +403,10 @@ async function publishViaBuffer(deps: AutomationDeps, row: PublicationRow, servi
     throw new Error(`${label} paylaşımı zamanında tamamlanmadı (Buffer durumu: ${post.status}${post.error ? `, ${post.error}` : ''})`);
   }
   await releaseForRetry(deps.db, row.id);
-  throw new RetryLater(BUFFER_POLL_SECONDS, `${label} paylaşımı sürüyor`);
+  const elapsed = deps.now().getTime() - row.scheduledAt.getTime();
+  const lowMonthlyQuota = buffer.client.rateLimits().some((limit) => limit.windowSeconds === 2_592_000 && limit.remaining < 200 && Date.parse(limit.resetsAt) > deps.now().getTime());
+  const pollSeconds = lowMonthlyQuota || elapsed >= 40 * 60_000 ? 900 : elapsed >= 10 * 60_000 ? 600 : BUFFER_POLL_SECONDS;
+  throw new RetryLater(pollSeconds, `${label} paylaşımı sürüyor`);
 }
 
 // Kuyruk tüketicisi: onaylı paylaşımı Instagram'a ya da TikTok'a gönderir. Aynı mesaj iki kez gelse de bir kez paylaşır.
@@ -437,6 +457,20 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
     return 'published';
   } catch (error) {
     if (error instanceof RetryLater) throw error;
+    if (error instanceof BufferError && error.rateLimited) {
+      // Oluşturma bu teslimde tamamlanmış olabilir; claim'den gelen row henüz kimliği içermez.
+      const accepted = (await getPublication(deps.db, id))?.remoteId != null;
+      if (accepted || deps.now().getTime() + (error.retryAfterSeconds ?? 300)*1000 < row.scheduledAt.getTime() + BUFFER_TIMEOUT_MS) {
+        await releaseForRetry(deps.db, id);
+        // Uzun kota beklemesinde mevcut mesajın ömrü dolabilir; günlük bakım izlemeyi yeniler.
+        const delay = accepted ? Math.min(error.retryAfterSeconds ?? 300, 43_200) : error.retryAfterSeconds ?? 300;
+        throw new RetryLater(delay, `Buffer kota beklemesi: ${error.message}`);
+      }
+      await markFailed(deps.db,id,'Buffer kotası bu paylaşımın yayın penceresinde yenilenmiyor; paylaşım durduruldu.');
+      await notify(deps,`❌ Paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>Buffer kotası yayın penceresinde yenilenmiyor.</i>`);
+      await refreshDayMessage(deps,row.date);
+      return 'failed';
+    }
     if (error instanceof InstagramError && error.rateLimited && deps.now().getTime() < row.scheduledAt.getTime() + RATE_LIMIT_WINDOW_MS) {
       await releaseForRetry(deps.db, id);
       throw new RetryLater(RATE_LIMIT_RETRY_SECONDS, `Instagram çağrı sınırı: ${error.message}`);
@@ -488,30 +522,32 @@ export async function connectInstagram(deps: AutomationDeps, token: string): Pro
 }
 
 export type AutomationStatus = {
-  telegram: { username: string | null; chatLinked: boolean; webhookOk: boolean; pendingUpdates: number; lastError: string | null } | null;
+  telegram: { username: string | null; chatLinked: boolean; webhookOk: boolean; pendingUpdates: number | null; lastError: string | null } | null;
   instagram: { username: string | null; expiresAt: string | null; publishing: { ok: true; used: number; total: number } | { ok: false; error: string } } | null;
   tiktok: { channel: string | null; enabled: boolean; ok: boolean; error: string | null } | null;
+  instagramReels: {channel:string|null;ok:boolean;error:string|null} | null;
+  bufferRateLimits: BufferRateLimit[];
   renderTrigger: boolean;
 };
 
 export async function automationStatus(deps: AutomationDeps): Promise<AutomationStatus> {
-  const [telegramRow, instagramRow, bufferRow, githubRow, settings] = await Promise.all([
+  const [telegramRow, instagramRow, bufferRow, githubRow, settings, bufferInstagramRow] = await Promise.all([
     getIntegration(deps.db, 'telegram'),
     getIntegration(deps.db, 'instagram'),
     getIntegration(deps.db, 'buffer'),
     getIntegration(deps.db, 'github'),
     getSettings(deps.db),
+    getIntegration(deps.db,'buffer_instagram'),
   ]);
   let telegram: AutomationStatus['telegram'] = null;
   if (telegramRow) {
-    const info = await createTelegramClient(decryptSecret(telegramRow.secretEncrypted, deps.integrationsKey), deps.fetch).getWebhookInfo();
-    telegram = {
-      username: telegramRow.account.username,
-      chatLinked: settings.automation.telegramChatId !== null,
-      webhookOk: info.url === `${deps.appUrl}/api/telegram/webhook`,
-      pendingUpdates: info.pending_update_count,
-      lastError: info.last_error_message ?? null,
-    };
+    const account = {username: telegramRow.account.username, chatLinked: settings.automation.telegramChatId !== null};
+    try {
+      const info = await createTelegramClient(decryptSecret(telegramRow.secretEncrypted, deps.integrationsKey), deps.fetch).getWebhookInfo();
+      telegram = {...account, webhookOk: info.url === `${deps.appUrl}/api/telegram/webhook`, pendingUpdates: info.pending_update_count, lastError: info.last_error_message ?? null};
+    } catch(error) {
+      telegram = {...account, webhookOk: false, pendingUpdates: null, lastError: error instanceof Error ? error.message : String(error)};
+    }
   }
   let instagram: AutomationStatus['instagram'] = null;
   if (instagramRow) {
@@ -522,14 +558,29 @@ export async function automationStatus(deps: AutomationDeps): Promise<Automation
     instagram = { username: instagramRow.account.username, expiresAt: instagramRow.expiresAt?.toISOString() ?? null, publishing };
   }
   let tiktok: AutomationStatus['tiktok'] = null;
+  let instagramReels: AutomationStatus['instagramReels'] = null;
+  let bufferRateLimits = bufferRow?.account.rateLimits ?? [];
   if (bufferRow) {
-    const checked = await (await loadBuffer(deps)).client
-      .channel(bufferRow.account.id)
-      .then((channel) => ({ ok: !channel.isQueuePaused, error: channel.isQueuePaused ? "Buffer'da kanal kuyruğu duraklatılmış" : null }))
-      .catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
-    tiktok = { channel: bufferRow.account.username, enabled: settings.automation.tiktok.enabled, ...checked };
+    const {client} = await loadBuffer(deps);
+    let instagramChannelId = bufferInstagramRow?.account.id;
+    let discoveryError: string | null = null;
+    if (!instagramChannelId) {
+      try { instagramChannelId = (await loadBuffer(deps,'instagram')).channelId; }
+      catch (error) { discoveryError = error instanceof Error ? error.message : String(error); }
+    }
+    try {
+      const channels = await client.channelStates([bufferRow.account.id,...(instagramChannelId ? [instagramChannelId] : [])]);
+      const checked = (channel:typeof channels[number]) => ({channel:channel.name,ok:!channel.isQueuePaused,error:channel.isQueuePaused ? "Buffer'da kanal kuyruğu duraklatılmış" : null});
+      tiktok = {...checked(channels[0]),enabled:settings.automation.tiktok.enabled};
+      instagramReels = channels[1] ? checked(channels[1]) : {channel:null,ok:false,error:discoveryError ?? 'Instagram Reels kanalı bağlı değil'};
+    } catch(error) {
+      const checked = {ok:false,error:error instanceof Error ? error.message : String(error)};
+      tiktok = {channel:bufferRow.account.username,enabled:settings.automation.tiktok.enabled,...checked};
+      instagramReels = {channel:bufferInstagramRow?.account.username ?? null,...checked};
+    }
+    bufferRateLimits = [...client.rateLimits()];
   }
-  return { telegram, instagram, tiktok, renderTrigger: githubRow !== null };
+  return { telegram, instagram, tiktok, instagramReels, bufferRateLimits, renderTrigger: githubRow !== null };
 }
 
 export function describeStatus(status: AutomationStatus): string {
@@ -553,6 +604,11 @@ export function describeStatus(status: AutomationStatus): string {
       : 'TikTok (Buffer): ❌ bağlı değil',
   );
   lines.push(status.renderTrigger ? 'Hazırlık tetikleyicisi (GitHub): ✅' : 'Hazırlık tetikleyicisi (GitHub): ❌ bağlı değil · yedek zamanlama kullanılıyor');
+  lines.push(status.instagramReels ? `Instagram Reels (Buffer): ${escapeHtml(status.instagramReels.channel ?? '?')} · ${status.instagramReels.ok ? '✅' : `❌ ${escapeHtml(status.instagramReels.error ?? '')}`}` : 'Instagram Reels (Buffer): ❌ bağlı değil');
+  for (const limit of status.bufferRateLimits) {
+    const period = limit.windowSeconds === 900 ? '15 dakika' : limit.windowSeconds === 86400 ? '24 saat' : limit.windowSeconds === 2592000 ? '30 gün' : `${limit.windowSeconds} sn`;
+    lines.push(`Buffer (${period}): ${limit.remaining}/${limit.limit} istek kaldı · kayıt yenilenmesi ${new Date(limit.resetsAt).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul'})}`);
+  }
   return lines.join('\n');
 }
 
@@ -666,6 +722,7 @@ export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceR
   const paused = automationStartReason(automation.startDate, istanbulDateKey(now), now);
   if (paused) return { expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false, skipped: paused };
   const expired = await expireUnapproved(deps.db, istanbulDateKey(now));
+  if (automation.enabled) await enqueueRows(deps, await listPendingBufferVerifications(deps.db));
   const cutoff = new Date(now.getTime() - MEDIA_RETENTION_DAYS * DAY_MS);
   const deletedImages = await deleteMediaBefore(deps.db, cutoff);
   const deletedVideos = await deps.deleteVideosBefore(cutoff);
@@ -691,4 +748,3 @@ export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceR
   }
   return { expired, deletedImages, deletedVideos, tokenRefreshed };
 }
-

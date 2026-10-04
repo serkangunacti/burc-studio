@@ -1,24 +1,31 @@
 import { Audio } from '@remotion/media';
-import { staticFile, type CalculateMetadataFunction } from 'remotion';
+import { Sequence, staticFile, type CalculateMetadataFunction } from 'remotion';
 import { REELS_FPS, REELS_SIZE, reelsDurationInFrames } from './reels';
 import { FORMAT_SIZES, SLIDE_FPS, type ReelsProps, type SlideProps } from './slide-types';
 import { getTemplate } from './templates';
+import { musicVolume, voiceTimeline, type ReelsVoice } from './voice';
 
 // Sunucu tarafı render (otomatik paylaşım) için gönderinin kendi şablon sürümüyle çizilen genel bileşimler.
 export type PostSlideProps = { templateVersion: string; props: SlideProps };
-export type PostReelsProps = { templateVersion: string; reels: ReelsProps; musicFile: string | null };
+export type PostReelsProps = { templateVersion: string; reels: ReelsProps; musicFile: string | null; voice?: ReelsVoice };
 
 export function PostSlide({ templateVersion, props }: PostSlideProps) {
   const { Slide } = getTemplate(templateVersion);
   return <Slide {...props} />;
 }
 
-export function PostReels({ templateVersion, reels, musicFile }: PostReelsProps) {
+export function PostReels({ templateVersion, reels, musicFile, voice }: PostReelsProps) {
   const { Reels } = getTemplate(templateVersion);
+  const frames = reelsDurationInFrames(reels.signs.length);
+  const timeline = voice ? voiceTimeline(voice, frames, REELS_FPS) : null;
   return (
     <>
       <Reels {...reels} />
-      {musicFile && <Audio src={staticFile(musicFile)} />}
+      {musicFile && <Audio src={staticFile(musicFile)} volume={frame => musicVolume(frame, voice, frames, REELS_FPS)} />}
+      {voice && timeline && <>
+        <Sequence from={0} durationInFrames={timeline.introFrames}><Audio src={staticFile(voice.intro.file)} /></Sequence>
+        <Sequence from={timeline.outroStart} durationInFrames={timeline.outroFrames}><Audio src={staticFile(voice.outro.file)} /></Sequence>
+      </>}
     </>
   );
 }

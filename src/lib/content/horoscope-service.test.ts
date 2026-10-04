@@ -47,9 +47,9 @@ describe('generateHoroscopeSet', () => {
     expect(result).toMatchObject({ status: 'created', providers: ['mock'] });
     const current = await getCurrentReadings(db, KEY);
     expect(current).toHaveLength(12);
-    expect(current[0]).toMatchObject({ sign: 'koc', provider: 'mock', promptVersion: 'burc-v1', meta: { luckyColor: 'lila', luckyNumber: 7 } });
+    expect(current[0]).toMatchObject({ sign: 'koc', provider: 'mock', promptVersion: 'burc-v2', meta: { luckyColor: 'lila', luckyNumber: 7 } });
     const post = await getCurrentPost(db, KEY);
-    expect(post?.post).toMatchObject({ templateVersion: 'pastel@1', format: '4x5', hashtags: ['#burç', '#astroloji', '#günlükburç', '#yıldızlar'] });
+    expect(post?.post).toMatchObject({ templateVersion: 'pastel@2', format: '4x5', hashtags: ['#burç', '#astroloji', '#günlükburç', '#yıldızlar'] });
     expect(post?.slides).toHaveLength(14);
     expect((await db.select().from(generationRuns))[0]).toMatchObject({ status: 'succeeded', trigger: 'button' });
     expect(await db.select().from(llmCalls)).toHaveLength(1);

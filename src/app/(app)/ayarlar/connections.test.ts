@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('./automation-actions', () => ({ connectTelegramAction: vi.fn(), connectInstagramAction: vi.fn(), connectBufferAction: vi.fn(), connectGitHubAction: vi.fn() }));
+vi.mock('./automation-actions', () => ({ checkConnectionsAction: vi.fn(), connectTelegramAction: vi.fn(), connectInstagramAction: vi.fn(), connectBufferAction: vi.fn(), connectGitHubAction: vi.fn() }));
 const { Connections } = await import('./connections');
 
 describe('bağlantı kartları', () => {

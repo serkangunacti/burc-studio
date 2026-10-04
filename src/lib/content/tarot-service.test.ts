@@ -23,8 +23,8 @@ describe('tarot üretimi', () => {
     const readings = await getCurrentReadings(db, KEY);
     expect(readings).toHaveLength(12);
     expect(new Set(readings.map((row) => row.meta.tarotCardId)).size).toBe(12);
-    expect(readings[0]).toMatchObject({ promptVersion: 'tarot-v1' });
-    expect((await getCurrentPost(db, KEY))?.post.templateVersion).toBe('pastel-tarot@1');
+    expect(readings[0]).toMatchObject({ promptVersion: 'tarot-v2' });
+    expect((await getCurrentPost(db, KEY))?.post.templateVersion).toBe('pastel-tarot@2');
   });
 
   it('tek burç yeniden yazılınca kartı korunur; kart yeniden çekilince diğer 11 kartla çakışmayan yeni kart gelir', async () => {

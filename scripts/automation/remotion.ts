@@ -6,6 +6,7 @@ import { openBrowser, renderMedia, renderStill, selectComposition } from '@remot
 import type { Renderers } from '@/lib/automation/render-job';
 import { REELS_FPS, reelsDurationInFrames } from '@/remotion/reels';
 import type { MusicRenderer } from './music';
+import type { decodeVoiceAsset } from './voice';
 
 export type RemotionRenderers = Renderers & { close: () => Promise<void> };
 
@@ -13,6 +14,7 @@ export async function openRemotionRenderers(input: {
   music: MusicRenderer;
   upload: (name: string, file: Buffer) => Promise<string>;
   log: (message: string) => void;
+  voice?: ReturnType<typeof decodeVoiceAsset>;
 }): Promise<RemotionRenderers> {
   const serveUrl = await bundle({
     entryPoint: path.resolve('src/remotion/index.ts'),
@@ -23,6 +25,14 @@ export async function openRemotionRenderers(input: {
   });
   const browser = await openBrowser('chrome');
   const work = await mkdtemp(path.join(os.tmpdir(), 'kozmik-'));
+  const voice = input.voice ? {
+    intro: {file:'serkanses-intro.mp3',durationSeconds:input.voice.intro.durationSeconds},
+    outro: {file:'serkanses-outro.mp3',durationSeconds:input.voice.outro.durationSeconds},
+  } : undefined;
+  if (input.voice) {
+    await writeFile(path.join(serveUrl,'public','serkanses-intro.mp3'),input.voice.intro.data);
+    await writeFile(path.join(serveUrl,'public','serkanses-outro.mp3'),input.voice.outro.data);
+  }
 
   return {
     async renderStills(templateVersion, slides) {
@@ -49,7 +59,7 @@ export async function openRemotionRenderers(input: {
       const musicFile = `music-${name}.wav`;
       // Paket klasörü sunucuda statik olarak sunulur; müzik staticFile() ile buradan okunur.
       await writeFile(path.join(serveUrl, 'public', musicFile), await input.music.render(musicSeed, seconds));
-      const inputProps = { templateVersion, reels, musicFile };
+      const inputProps = { templateVersion, reels, musicFile, voice };
       const composition = await selectComposition({ serveUrl, id: 'Post-Reels', inputProps, puppeteerInstance: browser });
       const output = path.join(work, `${name}.mp4`);
       const started = Date.now();
@@ -66,7 +76,7 @@ export async function openRemotionRenderers(input: {
       });
       const file = await readFile(output);
       input.log(`${name}.mp4: ${(file.length / 1e6).toFixed(1)} MB, ${Math.round((Date.now() - started) / 1000)} sn`);
-      return input.upload(`${name}.mp4`, file);
+      return { videoUrl: await input.upload(`${name}.mp4`, file), ...(voice ? {isAiGenerated:true} : {}) };
     },
     async close() {
       await browser.close({ silent: true });

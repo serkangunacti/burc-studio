@@ -1,7 +1,7 @@
 import type { PublicationFormat } from '@/db/schema';
 import type { Audience, ReadingAudience, ReadingKind } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
-import { formatCaption } from '@/lib/render/caption';
+import { formatPublicationCaption } from '@/lib/render/caption';
 import { AUTOMATION_KINDS, type AutomationKind, type AutomationSettings } from '@/lib/settings/schema';
 import { getSign, SIGN_SLUGS, type SignSlug } from '@/lib/zodiac/signs';
 
@@ -49,7 +49,7 @@ export function planPublications(date: DateKey, posts: readonly PlannablePost[],
   const gapMs = automation.partGapMinutes * 60_000;
   return posts.filter(isAutomated).flatMap((post): PlannedPublication[] => {
     const slot = automation.schedule[post.kind][post.audience];
-    const caption = formatCaption(post.caption, post.hashtags);
+    const captionFor = (platform: 'instagram' | 'tiktok', part?: CarouselPart) => formatPublicationCaption({ ...post, date, platform, ...(part ? { partHeading: partHeading(part) } : {}) });
     const base = { postId: post.id, kind: post.kind, audience: post.audience };
     const carouselStart = istanbulInstant(date, slot.carousel).getTime();
     // Parçalar sondan başa paylaşılır: profilde ve akışta en üstte 1/3 (Koç–Yengeç) görünsün.
@@ -59,10 +59,10 @@ export function planPublications(date: DateKey, posts: readonly PlannablePost[],
         format: 'carousel',
         part,
         scheduledAt: new Date(carouselStart + (CAROUSEL_PARTS.length - part) * gapMs),
-        caption: `${partHeading(part)}\n\n${caption}`,
+        caption: captionFor('instagram', part),
       }),
     );
-    const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, slot.reels), caption };
-    return [...carousels, { ...video, format: 'reels' }, ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const }] : [])];
+    const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, slot.reels) };
+    return [...carousels, { ...video, format: 'reels', caption: captionFor('instagram') }, ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const, caption: captionFor('tiktok') }] : [])];
   });
 }

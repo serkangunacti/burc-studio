@@ -23,10 +23,10 @@ describe('haftalık üretim', () => {
     expect(result.status).toBe('created');
     const readings = await getCurrentReadings(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' });
     expect(readings).toHaveLength(12);
-    expect(readings[0]).toMatchObject({ promptVersion: 'haftalik-v2' });
+    expect(readings[0]).toMatchObject({ promptVersion: 'haftalik-v3' });
     expect(readings.every((row) => row.body.length >= 600)).toBe(true);
     expect(new Set(readings.map((row) => row.meta.tarotCardId)).size).toBe(12);
-    expect((await getCurrentPost(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' }))?.post.templateVersion).toBe('pastel-weekly@1');
+    expect((await getCurrentPost(db, { date: MONDAY, kind: 'weekly', audience: 'kadin' }))?.post.templateVersion).toBe('pastel-weekly@2');
     expect(await getCurrentPost(db, { date: MONDAY, kind: 'horoscope', audience: 'kadin' })).toBeNull();
   });
 

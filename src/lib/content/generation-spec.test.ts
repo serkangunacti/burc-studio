@@ -24,7 +24,7 @@ describe('kart atama', () => {
     expect(new Set(SIGN_SLUGS.map((sign) => context.tarotCardId(sign))).size).toBe(12);
     expect(context.forbidden).toBeUndefined();
     expect(specFor('tarot')).toBe(TAROT_SPEC);
-    expect(TAROT_SPEC).toMatchObject({ kind: 'tarot', templateVersion: 'pastel-tarot@1', promptVersion: 'tarot-v1', chunkSize: 12 });
+    expect(TAROT_SPEC).toMatchObject({ kind: 'tarot', templateVersion: 'pastel-tarot@2', promptVersion: 'tarot-v2', chunkSize: 12 });
   });
 
   it('yalnız bir burç yeniden çekilirken yeni kart tutulan 11 kartla çakışmaz (tarot ve haftalık)', () => {

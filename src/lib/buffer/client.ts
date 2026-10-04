@@ -2,11 +2,48 @@
 const API = 'https://api.buffer.com';
 
 type Fetch = typeof fetch;
+export type BufferRateLimit = { windowSeconds: number; limit: number; remaining: number; resetsAt: string };
+type ClientOptions = {
+  now?: () => Date;
+  initialRateLimits?: readonly BufferRateLimit[];
+  onRateLimits?: (limits: BufferRateLimit[]) => void | Promise<void>;
+};
+
+function readLimits(headers: Headers, now: Date): BufferRateLimit[] {
+  const policies = new Map<string, { limit: number; windowSeconds: number }>();
+  for (const entry of (headers.get('ratelimit-policy') ?? '').split(/,\s*(?=")/)) {
+    const name = entry.match(/^\s*"([^"]+)"/)?.[1];
+    const limit = Number(entry.match(/;\s*q=(\d+)/)?.[1]);
+    const windowSeconds = Number(entry.match(/;\s*w=(\d+)/)?.[1]);
+    if (name && Number.isSafeInteger(limit) && limit > 0 && Number.isSafeInteger(windowSeconds) && windowSeconds > 0) policies.set(name, { limit, windowSeconds });
+  }
+  const result: BufferRateLimit[] = [];
+  for (const entry of (headers.get('ratelimit') ?? '').split(/,\s*(?=")/)) {
+    const name = entry.match(/^\s*"([^"]+)"/)?.[1];
+    const policy = name ? policies.get(name) : undefined;
+    const remaining = Number(entry.match(/;\s*r=(\d+)/)?.[1]);
+    const seconds = Number(entry.match(/;\s*t=(\d+)/)?.[1]);
+    if (policy && Number.isSafeInteger(remaining) && remaining >= 0 && Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= 31_536_000) {
+      result.push({ ...policy, remaining, resetsAt: new Date(now.getTime() + seconds * 1000).toISOString() });
+    }
+  }
+  return result;
+}
+
+function retryAfter(headers: Headers, now: Date): number | undefined {
+  const value = headers.get('retry-after');
+  if (!value) return undefined;
+  const seconds = /^\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : (Date.parse(value) - now.getTime()) / 1000;
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined;
+}
 
 export class BufferError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    readonly retryAfterSeconds?: number,
+    readonly rateLimited = false,
+    readonly outcomeUnknown = false,
   ) {
     super(message);
     this.name = 'BufferError';
@@ -19,22 +56,37 @@ export type BufferPost = { id: string; status: BufferPostStatus; externalLink: s
 
 export type BufferClient = ReturnType<typeof createBufferClient>;
 
-export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
+export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, options: ClientOptions = {}) {
+  const now = options.now ?? (() => new Date());
+  let limits: BufferRateLimit[] = [...(options.initialRateLimits ?? [])];
   async function gql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+    const blockedUntil = Math.max(0, ...limits.filter((limit) => limit.remaining === 0).map((limit) => Date.parse(limit.resetsAt)));
+    if (blockedUntil > now().getTime()) throw new BufferError('Buffer API kotası yenilenene kadar bekleniyor', true, Math.ceil((blockedUntil - now().getTime()) / 1000), true);
     const response = await fetchImpl(API, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ query, variables }),
     });
+    const receivedAt = now();
+    const receivedLimits = readLimits(response.headers, receivedAt);
+    if (receivedLimits.length) {
+      limits = receivedLimits;
+      try { await options.onRateLimits?.(limits); } catch { console.error('Buffer kota bilgisi kaydedilemedi'); }
+    }
     const body = (await response.json().catch(() => ({}))) as { data?: T; errors?: { message: string }[] };
     if (!response.ok || body.errors?.length || !body.data) {
       const message = body.errors?.map((error) => error.message).join('; ') || `Buffer HTTP ${response.status}`;
-      throw new BufferError(message, response.status === 429 || response.status >= 500);
+      const limited = response.status === 429;
+      const wait = limited ? retryAfter(response.headers, receivedAt) ?? 300 : undefined;
+      // GraphQL can report errors after a mutation ran, including with HTTP 200.
+      const outcomeUnknown = !limited && (response.ok || response.status >= 500 || response.status === 408);
+      throw new BufferError(message, limited || response.status >= 500, wait, limited, outcomeUnknown);
     }
     return body.data;
   }
 
   return {
+    rateLimits: (): readonly BufferRateLimit[] => limits,
     tiktokChannels(): Promise<BufferChannel[]> {
       return this.channels('tiktok');
     },
@@ -64,9 +116,22 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
       return { id: data.channel.id, name: data.channel.displayName ?? data.channel.name, isQueuePaused: data.channel.isQueuePaused };
     },
 
+    async channelStates(ids: string[]): Promise<{ id: string; name: string; isQueuePaused: boolean }[]> {
+      if (!ids.length) return [];
+      const definitions = ids.map((_,i)=>`$i${i}: ChannelInput!`).join(', ');
+      const fields = ids.map((_,i)=>`c${i}: channel(input: $i${i}) { id name displayName isQueuePaused }`).join(' ');
+      const variables = Object.fromEntries(ids.map((id,i)=>[`i${i}`,{id}]));
+      const data = await gql<Record<string,{id:string;name:string;displayName:string|null;isQueuePaused:boolean}>>(`query ChannelStates(${definitions}) { ${fields} }`,variables);
+      return ids.map((_,i)=>{
+        const channel=data[`c${i}`];
+        if (!channel) throw new BufferError('Buffer kanal bilgisi alınamadı',false);
+        return {id:channel.id,name:channel.displayName ?? channel.name,isQueuePaused:channel.isQueuePaused};
+      });
+    },
+
     // Planlama bizim kuyruğumuzda yapılır; Buffer'a paylaşım saatinde "şimdi paylaş" olarak gönderilir.
     // instagramReel: Instagram kanalında video Reels olarak (akışta da görünür) paylaşılır.
-    async shareVideoNow(input: { channelId: string; text: string; videoUrl: string; instagramReel?: boolean }): Promise<string> {
+    async shareVideoNow(input: { channelId: string; text: string; videoUrl: string; instagramReel?: boolean; isAiGenerated?: boolean }): Promise<string> {
       const data = await gql<{ createPost: { post?: { id: string }; message?: string } }>(
         `mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
@@ -82,7 +147,9 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch) {
             mode: 'shareNow',
             needsApproval: false,
             assets: [{ video: { url: input.videoUrl } }],
-            ...(input.instagramReel ? { metadata: { instagram: { type: 'reel', shouldShareToFeed: true } } } : {}),
+            ...(input.instagramReel
+              ? { metadata: { instagram: { type: 'reel', shouldShareToFeed: true, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
+              : input.isAiGenerated ? { metadata: { tiktok: { isAiGenerated: true } } } : {}),
           },
         },
       );
