@@ -17,6 +17,7 @@ import {
   getIntegration,
   getPublication,
   listPublications,
+  listPendingBufferVerifications,
   markExpired,
   markForRebuild,
   markPublishAttempt,
@@ -456,11 +457,15 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
     return 'published';
   } catch (error) {
     if (error instanceof RetryLater) throw error;
-    if (error instanceof BufferError && error.rateLimited && deps.now().getTime() + (error.retryAfterSeconds ?? 300)*1000 < row.scheduledAt.getTime() + BUFFER_TIMEOUT_MS) {
-      await releaseForRetry(deps.db, id);
-      throw new RetryLater(error.retryAfterSeconds ?? 300, `Buffer kota beklemesi: ${error.message}`);
-    }
     if (error instanceof BufferError && error.rateLimited) {
+      // Oluşturma bu teslimde tamamlanmış olabilir; claim'den gelen row henüz kimliği içermez.
+      const accepted = (await getPublication(deps.db, id))?.remoteId != null;
+      if (accepted || deps.now().getTime() + (error.retryAfterSeconds ?? 300)*1000 < row.scheduledAt.getTime() + BUFFER_TIMEOUT_MS) {
+        await releaseForRetry(deps.db, id);
+        // Uzun kota beklemesinde mevcut mesajın ömrü dolabilir; günlük bakım izlemeyi yeniler.
+        const delay = accepted ? Math.min(error.retryAfterSeconds ?? 300, 43_200) : error.retryAfterSeconds ?? 300;
+        throw new RetryLater(delay, `Buffer kota beklemesi: ${error.message}`);
+      }
       await markFailed(deps.db,id,'Buffer kotası bu paylaşımın yayın penceresinde yenilenmiyor; paylaşım durduruldu.');
       await notify(deps,`❌ Paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>Buffer kotası yayın penceresinde yenilenmiyor.</i>`);
       await refreshDayMessage(deps,row.date);
@@ -717,6 +722,7 @@ export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceR
   const paused = automationStartReason(automation.startDate, istanbulDateKey(now), now);
   if (paused) return { expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false, skipped: paused };
   const expired = await expireUnapproved(deps.db, istanbulDateKey(now));
+  if (automation.enabled) await enqueueRows(deps, await listPendingBufferVerifications(deps.db));
   const cutoff = new Date(now.getTime() - MEDIA_RETENTION_DAYS * DAY_MS);
   const deletedImages = await deleteMediaBefore(deps.db, cutoff);
   const deletedVideos = await deps.deleteVideosBefore(cutoff);

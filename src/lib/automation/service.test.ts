@@ -607,6 +607,29 @@ describe('TikTok (Buffer)', () => {
     expect(await publishPublication(deps,tiktok.id)).toBe('failed');
     expect((await getPublication(db,tiktok.id))?.error).toContain('kota');
   });
+  it('son kota isteğiyle kabul edilen gönderiyi sonraki güne kadar takip eder ve yeniden oluşturmaz', async () => {
+    const tiktok = await seedTikTokDay();
+    const { deps, bufferCalls, telegramCalls, enqueue } = harness(db, new Date('2026-09-29T19:00:05Z'));
+    const fetchNormally = deps.fetch;
+    deps.fetch = async (url, init) => {
+      const response = await fetchNormally(url, init);
+      if (String(url).startsWith('https://api.buffer.com') && String(init?.body).includes('createPost')) {
+        response.headers.set('RateLimit', '"daily";r=0;t=86400');
+        response.headers.set('RateLimit-Policy', '"daily";q=100;w=86400');
+      }
+      return response;
+    };
+    await expect(publishPublication(deps, tiktok.id)).rejects.toMatchObject({ name: 'RetryLater', afterSeconds: 43200 });
+    expect(await getPublication(db, tiktok.id)).toMatchObject({ status: 'approved', remoteId: 'buf-1' });
+    expect(telegramCalls().some((call) => String(call.params.text).includes('Paylaşılamadı'))).toBe(false);
+    deps.now = () => new Date('2026-09-30T19:00:06Z');
+    await runMaintenance(deps);
+    expect(enqueue.mock.calls).toEqual([[tiktok.id, { delaySeconds: 0, retentionSeconds: 86400 }]]);
+    deps.fetch = fetchNormally;
+    expect(await publishPublication(deps, tiktok.id)).toBe('published');
+    expect(bufferCalls().filter((call) => call.path === 'createPost')).toHaveLength(1);
+  });
+
   async function seedTikTokDay() {
     await connectAll(db);
     const { deps } = harness(db, new Date('2026-09-29T00:00:00Z'));

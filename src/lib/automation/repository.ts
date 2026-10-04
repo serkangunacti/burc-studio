@@ -67,6 +67,11 @@ export async function savePublication(
   });
 }
 
+// Buffer'ın kabul ettiği ancak kotadan dolayı doğrulanamayan gönderiler kuyruk süresi dolsa da izlenir.
+export async function listPendingBufferVerifications(db: Db): Promise<PublicationRow[]> {
+  return db.select().from(publications).where(and(eq(publications.status, 'approved'), isNotNull(publications.remoteId)));
+}
+
 export async function listPublications(db: Db, date: DateKey): Promise<PublicationRow[]> {
   return db
     .select()
