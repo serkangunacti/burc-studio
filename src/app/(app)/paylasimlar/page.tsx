@@ -40,7 +40,7 @@ export default async function PublicationsPage(props: PageProps<'/paylasimlar'>)
         </nav>
         <p className="text-sm text-muted-foreground">
           <a href={`/api/automation/metrics?tarih=${date}`} className="text-primary underline-offset-4 hover:underline">24 / 72 saat ölçüm çizelgesini indir</a>
-          {' · Görüntülenme ve izleme verilerini ücretsiz Instagram / TikTok istatistiklerinden doldur. Kontrol saatleri gerçek yayın saatine göre hesaplanır.'}
+          {' · Görüntülenme ve izleme verilerini ücretsiz Instagram / TikTok istatistiklerinden doldur. Kontrol saatleri yayın onayının kaydedildiği saate göre hesaplanır.'}
         </p>
       </div>
       {groups.length === 0 ? (

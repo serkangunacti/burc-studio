@@ -3,7 +3,7 @@ import type { PublicationRow } from './repository';
 export type MetricsPublication = Pick<PublicationRow, 'id' | 'date' | 'kind' | 'audience' | 'format' | 'part' | 'scheduledAt' | 'publishedAt' | 'status' | 'permalink' | 'caption'>;
 
 const metricNames = ['görüntülenme', 'ortalama izleme sn', 'tamamlanma %', 'kaydetme', 'paylaşma', 'yeni takipçi', 'not'];
-const columns = ['yayın kimliği', 'içerik tarihi', 'platform', 'tür', 'hedef kitle', 'format', 'parça', 'durum', 'planlanan TSİ', 'yayınlanan TSİ', 'gönderi bağlantısı', 'açıklama', '24 saat kontrolü', ...metricNames.map(name => `24s ${name}`), '72 saat kontrolü', ...metricNames.map(name => `72s ${name}`)];
+const columns = ['yayın kimliği', 'içerik tarihi', 'platform', 'tür', 'hedef kitle', 'format', 'parça', 'durum', 'planlanan TSİ', 'yayın onayı TSİ', 'gönderi bağlantısı', 'açıklama', '24 saat kontrolü', ...metricNames.map(name => `24s ${name}`), '72 saat kontrolü', ...metricNames.map(name => `72s ${name}`)];
 
 function localClock(value: Date | null): string {
   if (!value) return '';

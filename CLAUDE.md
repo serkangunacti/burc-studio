@@ -56,6 +56,8 @@ Tek kullanıcılı, özel bir astroloji içerik stüdyosu. Instagram hesabı @ko
 - **Veritabanı:** Neon Postgres + Drizzle. Migration: `npm run db:migrate:prod` (`.env.production.local` ile).
 
 ## Çalışma kuralları (bu projede öğrenilenler)
+
+- **Sosyal medya profilleri:** Kullanıcı 4 Ekim'de açıkça yasakladı. Instagram / TikTok görünen adları, kullanıcı adları, biyografiler ve profil ayarları değiştirilmez. Hazırlık ve erişim iyileştirmeleri bu alanları kapsamaz; yeni bir değişiklik ancak kullanıcının o alan için ayrı ve açık talebiyle yapılabilir.
 - **Yerel dil modeli (Ollama vb.) ASLA kullanılmaz.** Gerçek içerik gerekiyorsa uzak ücretsiz API'ler; olmuyorsa sahte model (`LLM_MOCK=1`).
 - **Kullanıcı teknik adım yapmaz.** Merge, deploy, env, migration ve ayar güncellemesi projede çalışan ajanın işi. Yalnız geri alınamaz ya da yıkıcı işlemlerde sor.
 - **Testler:**

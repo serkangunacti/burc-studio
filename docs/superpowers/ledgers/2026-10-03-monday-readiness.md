@@ -12,6 +12,7 @@ Dal: `feat/monday-readiness-20261003`; temel: `f8090b9`.
 - Günlük TTS veya ek içerik üretim çağrısı eklenmez; Serkan'ın onaylı sesi tek sefer hazırlanır ve önbellekten kullanılır.
 - Ses referansı / skill dosyaları GitHub veya Canva'ya aktarılmaz.
 - Kullanıcının ana çalışma kopyasındaki `cutoff.tmp.mjs` korunur.
+- Kullanıcının 4 Ekim'deki açık talebi: sosyal medya adları, kullanıcı adları, biyografiler ve profil ayarları değiştirilmez. Yarınki teknik hazırlık bu alanları kapsamaz.
 
 ## İşler
 
@@ -20,7 +21,7 @@ Dal: `feat/monday-readiness-20261003`; temel: `f8090b9`.
 3. Önbellekteki kişisel ses ve AI bildirim alanları — uygulandı; üretilmiş iki kısa klip GitHub secret'ına bağlandı.
 4. Canlı sağlık kontrolü, GitHub doğrudan tetikleme — kod hazır; canlı GitHub bağlantısı kaydedildi; yeni sağlık raporu deploy sonrası doğrulanacak.
 5. Üç görsel yön ve üç animasyon örneği; Canva içe aktarma — tamamlandı. Kullanıcı Pastel Kozmik'i seçti; yeni `@2` sürümleri bağlandı.
-6. Profil metinleri ve ilk hafta ölçüm düzeni — Instagram görünen adı / biyografisi kaydedildi; TikTok güncellemesi devam ediyor. Oturum gerektiren CSV ve rehber hazır.
+6. İlk hafta ölçüm düzeni — oturum gerektiren CSV ve rehber hazır. Profil düzenlemeleri kapsamdan çıkarıldı; kullanıcı TikTok değişikliğini iptal etti ve Instagram adını kendisinin geri alacağını bildirdi. Profilde başka işlem yapılmayacak.
 7. Bütün dal incelemesi, testler, merge, deploy, canlı doğrulama — devam ediyor.
 
 ## Kararlar ve kanıtlar
@@ -35,3 +36,5 @@ Dal: `feat/monday-readiness-20261003`; temel: `f8090b9`.
 - Yeni kota / belirsiz sonuç testlerinde 429 ile GraphQL HTTP 200 ve 502 ayrımı doğrulandı. İlk tüm test çalıştırmasında sağlık düğmesini içermeyen eski UI mock'u yakalandı ve güncellendi. Son tüm test çalıştırması: 88 dosyada 491 test geçti.
 - Yerel Turbopack, çalışma kopyasının dışına giden `node_modules` sembolik bağlantısını reddetti. Çalışma kopyasında webpack üretim derlemesi kullanılacak; Vercel'in gerçek bağımlılık kurulumuyla Turbopack derlemesi ayrıca deploy'da doğrulanacak. Proje yapılandırması değiştirilmedi.
 - Webpack derlemesi mevcut Queue SDK'nin geniş `Request | {request: Request}` parametre tipini Next.js route sınırında reddetti. Runtime akışı değiştirilmeden `POST` ihracının tipi `Request → Promise<Response>` olarak daraltıldı; üretim derlemesi yeniden doğrulanacak.
+- 3 Ekim'deki ilk bağımsız inceleme kullanım sınırı nedeniyle tamamlanmadı. Kullanıcı 4 Ekim'de teknik eksiklerin tamamlanıp yarına hazır olunmasını yeniden istedi; aynı hazırlık dalından devam ediliyor.
+- Ruling: CSV saatleri Buffer'ın `sent` onayının kaydedildiği `publishedAt` değerinden hesaplanır. Tam platform yayın anını vaat eden açıklamalar düzeltildi; ek API sorgusu yapılmayacak — ölçümün dakikalık hassasiyeti gerekmiyor, ancak zamanın kaynağı açık olmalı.

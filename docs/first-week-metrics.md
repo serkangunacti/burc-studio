@@ -10,7 +10,7 @@
 
 ## 24 ve 72 saat kayıtları
 
-Paylaşımlar sayfasında günü seç, **24 / 72 saat ölçüm çizelgesini indir** bağlantısını kullan. CSV, yayın kayıtlarından gelir; gerçek yayın saati +24 ve +72 saat kontrol tarihleri hesaplanır. Yayınlanmamış içerik için kontrol tarihi boş kalır.
+Paylaşımlar sayfasında günü seç, **24 / 72 saat ölçüm çizelgesini indir** bağlantısını kullan. CSV, yayın kayıtlarından gelir; yayın onayının sistemde kaydedildiği saat +24 ve +72 saat kontrol tarihleri hesaplanır. Buffer'da bu onay, durum sorgusu sırasında alındığından platformdaki yayın anından sonra kaydedilebilir. Yayınlanmamış içerik için kontrol tarihi boş kalır.
 
 Çizelgede iki kontrol için şu ücretsiz Instagram / TikTok verilerini doldur: görüntülenme, ortalama izleme süresi, tamamlanma oranı, kaydetme, paylaşma, yeni takipçi ve gözlem notu. Platformda görünmeyen bir alan boş bırakılır; sıfır yazılmaz. CSV metrikleri kendiliğinden toplamaz ve ek Buffer / içerik API isteği yapmaz. İlk pazartesi yayınlarının 24 saat kontrolü salı, 72 saat kontrolü perşembe aynı yayın saatinde yapılır.
 
