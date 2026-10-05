@@ -14,7 +14,7 @@ export function decodeReferenceChunks(chunks:string[],expectedHash:string):Buffe
   return reference;
 }
 
-export function loadVoiceReference(env:NodeJS.ProcessEnv=process.env):Buffer {
+export function loadVoiceReference(env:Record<string,string|undefined>=process.env):Buffer {
   const chunks=Array.from({length:PARTS},(_,index)=>env[`SERKANSES_REFERENCE_${String(index+1).padStart(2,'0')}`]);
   if(chunks.some(chunk=>!chunk))throw new Error('Serkanses referansı tanımlı değil; başka ses kullanılmadı');
   return decodeReferenceChunks(chunks as string[],APPROVED_SHA256);
