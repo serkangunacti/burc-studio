@@ -71,9 +71,9 @@ export function CosmicReels({kind='horoscope',...reels}:ReelsProps & {kind?:Kind
   const common={brand:reels.brand,format:'4x5' as const,variant:reels.variant};
   const timing=linearTiming({durationInFrames:TRANSITION_FRAMES});
   return <AbsoluteFill style={{backgroundColor:BACKDROPS[((reels.variant%7)+7)%7]}}><TransitionSeries>
-    <TransitionSeries.Sequence durationInFrames={INTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cover',audience:reels.audience,dateLabel:reels.dateLabel,hook:reels.hook}}}/></TransitionSeries.Sequence>
-    {reels.signs.map((sign,index)=><Fragment key={sign.sign}><TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={SIGN_FRAMES}><CosmicScene kind={kind} index={index} total={reels.signs.length} props={{...common,slide:{...sign,type:'sign',audience:reels.audience,dateLabel:reels.dateLabel,body:sign.short}}}/></TransitionSeries.Sequence></Fragment>)}
-    <TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={OUTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cta',audience:reels.audience}}}/></TransitionSeries.Sequence>
+    <TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.introFrames ?? INTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cover',audience:reels.audience,dateLabel:reels.dateLabel,hook:reels.hook}}}/></TransitionSeries.Sequence>
+    {reels.signs.map((sign,index)=><Fragment key={sign.sign}><TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.signFrames[index] ?? SIGN_FRAMES}><CosmicScene kind={kind} index={index} total={reels.signs.length} props={{...common,slide:{...sign,type:'sign',audience:reels.audience,dateLabel:reels.dateLabel,body:sign.short}}}/></TransitionSeries.Sequence></Fragment>)}
+    <TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.outroFrames ?? OUTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cta',audience:reels.audience}}}/></TransitionSeries.Sequence>
   </TransitionSeries></AbsoluteFill>;
 }
 

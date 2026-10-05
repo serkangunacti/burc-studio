@@ -7,3 +7,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Kullanıcı tercihleri
+
+- Serkan'ın bilgisayarına yerel ses/AI modelleri indirmeyin veya çalıştırmayın. Ses üretimi onaylı ücretsiz Chatterbox V3 servisiyle yapılır; animasyon/render otomasyonu GitHub Actions üzerindedir. Ağır video üretimini bu bilgisayara taşımayın.
+- Sosyal medya kullanıcı adını, görünen adını veya profil bilgilerini değiştirmeyin.

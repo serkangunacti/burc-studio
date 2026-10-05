@@ -10,6 +10,11 @@ describe('Reels zaman çizelgesi', () => {
     expect(reelsDurationInFrames(0)).toBe(150);
   });
 
+  it('ses süresine göre uzayan sahnelerin toplamından geçiş bindirmelerini çıkarır', () => {
+    expect(reelsDurationInFrames(2, {introFrames:148,signFrames:[252,296],outroFrames:130})).toBe(781);
+    expect(()=>reelsDurationInFrames(2,{introFrames:148,signFrames:[252],outroFrames:130})).toThrow();
+  });
+
   it('burç slaytından Reels sahnesi verisi üretir; uzun yorum taşınmaz', () => {
     const scene = toReelsSign(sampleSign('aslan'), 'Aslan: sahne senin ✨');
     expect(scene).toMatchObject({ sign: 'aslan', signName: 'Aslan', short: 'Aslan: sahne senin ✨', luckyNumber: 7 });

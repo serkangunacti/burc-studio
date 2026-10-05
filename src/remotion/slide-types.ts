@@ -56,4 +56,5 @@ export type ReelsSign = {
   tarotCard?: TarotCardRef;
 };
 
-export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number };
+export type ReelsSceneTiming = {introFrames:number;signFrames:number[];outroFrames:number};
+export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number; sceneTiming?:ReelsSceneTiming };

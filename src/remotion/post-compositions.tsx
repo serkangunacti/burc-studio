@@ -16,14 +16,15 @@ export function PostSlide({ templateVersion, props }: PostSlideProps) {
 
 export function PostReels({ templateVersion, reels, musicFile, voice }: PostReelsProps) {
   const { Reels } = getTemplate(templateVersion);
-  const frames = reelsDurationInFrames(reels.signs.length);
-  const timeline = voice ? voiceTimeline(voice, frames, REELS_FPS) : null;
+  const frames = reelsDurationInFrames(reels.signs.length,reels.sceneTiming);
+  const timeline = voice ? voiceTimeline(voice, frames, REELS_FPS,reels.sceneTiming) : null;
   return (
     <>
       <Reels {...reels} />
-      {musicFile && <Audio src={staticFile(musicFile)} volume={frame => musicVolume(frame, voice, frames, REELS_FPS)} />}
+      {musicFile && <Audio src={staticFile(musicFile)} volume={frame => musicVolume(frame, voice, frames, REELS_FPS,reels.sceneTiming)} />}
       {voice && timeline && <>
         <Sequence from={0} durationInFrames={timeline.introFrames}><Audio src={staticFile(voice.intro.file)} /></Sequence>
+        {timeline.signTracks?.map(track=><Sequence key={track.file} from={track.from} durationInFrames={track.durationInFrames}><Audio src={staticFile(track.file)} /></Sequence>)}
         <Sequence from={timeline.outroStart} durationInFrames={timeline.outroFrames}><Audio src={staticFile(voice.outro.file)} /></Sequence>
       </>}
     </>
@@ -39,5 +40,5 @@ export const postSlideMetadata: CalculateMetadataFunction<PostSlideProps> = ({ p
 export const postReelsMetadata: CalculateMetadataFunction<PostReelsProps> = ({ props }) => ({
   ...REELS_SIZE,
   fps: REELS_FPS,
-  durationInFrames: reelsDurationInFrames(props.reels.signs.length),
+  durationInFrames: reelsDurationInFrames(props.reels.signs.length,props.reels.sceneTiming),
 });

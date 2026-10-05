@@ -44,6 +44,9 @@ next-env.d.ts
 .data/
 /test-results/
 /playwright-report/
+
+# Günlük ses önbelleği (GitHub Actions cache; kaynak koduna eklenmez)
+/.cache/
 !.env.example
 
 # Neon entegrasyonunun kurduğu yerel ajan skill'leri

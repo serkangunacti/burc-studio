@@ -11,7 +11,7 @@ async function main() {
   const { automation } = await getSettings(getDb());
   const paused = automationStartReason(automation.startDate, date);
   const allowed = automation.enabled && !paused;
-  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `allowed=${allowed}\n`);
+  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `allowed=${allowed}\ndate=${date}\n`);
   console.log(allowed ? 'Otomasyon başlangıç kontrolü geçti.' : paused ?? 'Otomatik paylaşım kapalı.');
 }
 

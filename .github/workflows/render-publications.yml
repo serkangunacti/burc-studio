@@ -39,6 +39,14 @@ jobs:
         env:
           RENDER_DATE: ${{ inputs.date }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Tamamlanmış ve bekleyen konuşmaları geri yükle
+        uses: actions/cache/restore@v4
+        if: steps.start-window.outputs.allowed == 'true'
+        with:
+          path: .cache/serkanses
+          key: serkanses-v1-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            serkanses-v1-${{ steps.start-window.outputs.date }}-
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
         if: steps.start-window.outputs.allowed == 'true'
@@ -59,7 +67,34 @@ jobs:
           RENDER_FORCE: ${{ inputs.force }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          # Bir kez üretilen kısa konuşmalar; her gün TTS çağrısı yapılmaz.
+          # Giriş/kapanış bir kez üretilir; burç yorumları ücretsiz serviste ve runner'da hazırlanır.
           SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}
+          SERKANSES_REFERENCE_01: ${{ secrets.SERKANSES_REFERENCE_01 }}
+          SERKANSES_REFERENCE_02: ${{ secrets.SERKANSES_REFERENCE_02 }}
+          SERKANSES_REFERENCE_03: ${{ secrets.SERKANSES_REFERENCE_03 }}
+          SERKANSES_REFERENCE_04: ${{ secrets.SERKANSES_REFERENCE_04 }}
+          SERKANSES_REFERENCE_05: ${{ secrets.SERKANSES_REFERENCE_05 }}
+          SERKANSES_REFERENCE_06: ${{ secrets.SERKANSES_REFERENCE_06 }}
+          SERKANSES_REFERENCE_07: ${{ secrets.SERKANSES_REFERENCE_07 }}
+          SERKANSES_REFERENCE_08: ${{ secrets.SERKANSES_REFERENCE_08 }}
+          SERKANSES_REFERENCE_09: ${{ secrets.SERKANSES_REFERENCE_09 }}
+          SERKANSES_REFERENCE_10: ${{ secrets.SERKANSES_REFERENCE_10 }}
+          SERKANSES_REFERENCE_11: ${{ secrets.SERKANSES_REFERENCE_11 }}
+          SERKANSES_REFERENCE_12: ${{ secrets.SERKANSES_REFERENCE_12 }}
+          SERKANSES_REFERENCE_13: ${{ secrets.SERKANSES_REFERENCE_13 }}
+          SERKANSES_REFERENCE_14: ${{ secrets.SERKANSES_REFERENCE_14 }}
+          SERKANSES_REFERENCE_15: ${{ secrets.SERKANSES_REFERENCE_15 }}
+          SERKANSES_REFERENCE_16: ${{ secrets.SERKANSES_REFERENCE_16 }}
+          SERKANSES_REFERENCE_17: ${{ secrets.SERKANSES_REFERENCE_17 }}
+          SERKANSES_REFERENCE_18: ${{ secrets.SERKANSES_REFERENCE_18 }}
+          SERKANSES_REFERENCE_19: ${{ secrets.SERKANSES_REFERENCE_19 }}
+          SERKANSES_NARRATION_START: '2026-10-06'
+          SERKANSES_CACHE_DIR: .cache/serkanses
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
           APP_URL: https://burc-studio.vercel.app
+      - name: Konuşmaları hata durumunda da sakla
+        uses: actions/cache/save@v4
+        if: always() && steps.start-window.outputs.allowed == 'true'
+        with:
+          path: .cache/serkanses
+          key: serkanses-v1-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}

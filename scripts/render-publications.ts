@@ -9,6 +9,9 @@ import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { decodeVoiceAsset } from './automation/voice';
+import {createNarrator,narrationText} from './automation/narration';
+import {loadVoiceReference} from './automation/voice-reference';
+import type {ReelsSign} from '../src/remotion/slide-types';
 
 // GitHub Actions'ta her sabah çalışır: günün gönderilerini carousel parçaları ve Reels olarak çizer, onaya hazırlar.
 const { values } = parseArgs({
@@ -54,9 +57,17 @@ async function main() {
   }
 
   const music = await openMusicRenderer();
+  const narrationStart=process.env.SERKANSES_NARRATION_START || '2026-10-06';
+  if(!isDateKey(narrationStart))throw new Error('Seslendirme başlangıç tarihi geçersiz');
+  let narrator:Promise<ReturnType<typeof createNarrator>>|undefined;
+  const narrate=date>=narrationStart ? async(sign:ReelsSign)=>{
+    narrator ??= Promise.resolve().then(()=>createNarrator({reference:loadVoiceReference(),cacheDir:process.env.SERKANSES_CACHE_DIR || '.cache/serkanses',log}));
+    return (await narrator).speak(narrationText(sign));
+  } : undefined;
   const renderers = await openRemotionRenderers({
     music,
     voice: decodeVoiceAsset(process.env.SERKANSES_VOICE_ASSET),
+    narrate,
     log,
     upload: async (name, file) => (await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true })).url,
   });

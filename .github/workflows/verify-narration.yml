@@ -1,0 +1,44 @@
+name: Seslendirme doğrulaması
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --maxWorkers=2
+      - run: npx tsc --noEmit --incremental false
+      - name: Gizli referansı bulutta doğrula (ses üretimi açmaz)
+        if: github.event_name != 'pull_request'
+        run: node --import tsx -e "import {loadVoiceReference} from './scripts/automation/voice-reference.ts'; const ref=loadVoiceReference(); console.log('Onaylı referans doğrulandı:',ref.length,'bayt');"
+        env:
+          SERKANSES_REFERENCE_01: ${{ secrets.SERKANSES_REFERENCE_01 }}
+          SERKANSES_REFERENCE_02: ${{ secrets.SERKANSES_REFERENCE_02 }}
+          SERKANSES_REFERENCE_03: ${{ secrets.SERKANSES_REFERENCE_03 }}
+          SERKANSES_REFERENCE_04: ${{ secrets.SERKANSES_REFERENCE_04 }}
+          SERKANSES_REFERENCE_05: ${{ secrets.SERKANSES_REFERENCE_05 }}
+          SERKANSES_REFERENCE_06: ${{ secrets.SERKANSES_REFERENCE_06 }}
+          SERKANSES_REFERENCE_07: ${{ secrets.SERKANSES_REFERENCE_07 }}
+          SERKANSES_REFERENCE_08: ${{ secrets.SERKANSES_REFERENCE_08 }}
+          SERKANSES_REFERENCE_09: ${{ secrets.SERKANSES_REFERENCE_09 }}
+          SERKANSES_REFERENCE_10: ${{ secrets.SERKANSES_REFERENCE_10 }}
+          SERKANSES_REFERENCE_11: ${{ secrets.SERKANSES_REFERENCE_11 }}
+          SERKANSES_REFERENCE_12: ${{ secrets.SERKANSES_REFERENCE_12 }}
+          SERKANSES_REFERENCE_13: ${{ secrets.SERKANSES_REFERENCE_13 }}
+          SERKANSES_REFERENCE_14: ${{ secrets.SERKANSES_REFERENCE_14 }}
+          SERKANSES_REFERENCE_15: ${{ secrets.SERKANSES_REFERENCE_15 }}
+          SERKANSES_REFERENCE_16: ${{ secrets.SERKANSES_REFERENCE_16 }}
+          SERKANSES_REFERENCE_17: ${{ secrets.SERKANSES_REFERENCE_17 }}
+          SERKANSES_REFERENCE_18: ${{ secrets.SERKANSES_REFERENCE_18 }}
+          SERKANSES_REFERENCE_19: ${{ secrets.SERKANSES_REFERENCE_19 }}
