@@ -18,7 +18,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test -- --maxWorkers=2
-      - run: npx tsc --noEmit --incremental false
+      - run: npm run typecheck
       - name: Gizli referansı bulutta doğrula (ses üretimi açmaz)
         if: github.event_name != 'pull_request'
         run: node --import tsx -e "import {loadVoiceReference} from './scripts/automation/voice-reference.ts'; const ref=loadVoiceReference(); console.log('Onaylı referans doğrulandı:',ref.length,'bayt');"
