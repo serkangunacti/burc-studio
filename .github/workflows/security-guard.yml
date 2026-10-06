@@ -1,0 +1,27 @@
+name: Güvenlik Bekçisi (Security Guard)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  security-audit:
+    name: Statik Güvenlik ve Sızıntı Denetimi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Güvenlik Denetimini Çalıştır
+        run: node scripts/security-audit.mjs
+      - name: Bağımlılık Güvenlik Açığı Taraması (npm audit)
+        run: npm audit --audit-level=high || true
