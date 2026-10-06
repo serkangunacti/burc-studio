@@ -31,22 +31,37 @@ function mockWav() {
   return b;
 }
 
-describe('Google TTS seslendirme motoru', () => {
+describe('Google Gemini TTS seslendirme motoru', () => {
   it('burç adını bir kez söyler, emojiyi okumaz ve yorum metnini korur', () => {
     expect(narrationText({ signName: 'Koç', short: 'Koç: Bugün enerjin yüksek. ✨' })).toBe('Koç. Bugün enerjin yüksek.');
     expect(narrationText({ signName: 'Boğa', short: 'Küçük adımlarla ilerle.' })).toBe('Boğa. Küçük adımlarla ilerle.');
     expect(() => narrationText({ signName: 'Koç', short: '' })).toThrow();
   });
 
-  it('Google TTS API ile ses üretir ve önbelleğe yazar', async () => {
+  it('Gemini TTS API ile ses üretir ve önbelleğe yazar', async () => {
     const cacheDir = await cache();
     const calls: unknown[] = [];
     const fetchImpl: typeof fetch = async (_url, options) => {
       calls.push(JSON.parse(String(options?.body)));
-      return Response.json({ audioContent: mockWav().toString('base64') });
+      return Response.json({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: 'audio/wav',
+                    data: mockWav().toString('base64'),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
     };
 
-    const narrator = createGoogleNarrator({ apiKey: 'test-key', cacheDir, fetchImpl, audience: 'kadin' });
+    const narrator = createGoogleNarrator({ apiKey: 'test-key', cacheDir, fetchImpl });
     const clip1 = await narrator.speak('Koç. Bugün enerjin yüksek.');
     expect(clip1.durationSeconds).toBe(1);
     expect(clip1.cached).toBe(false);
@@ -62,13 +77,13 @@ describe('Google TTS seslendirme motoru', () => {
   it('API anahtarı yoksa hata fırlatır', async () => {
     const cacheDir = await cache();
     const narrator = createGoogleNarrator({ apiKey: '', cacheDir });
-    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('Google TTS API anahtarı');
+    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('API anahtarı');
   });
 
-  it('Google API hata döndüğünde hatayı iletir', async () => {
+  it('Gemini API hata döndüğünde hatayı iletir', async () => {
     const cacheDir = await cache();
     const fetchImpl: typeof fetch = async () => new Response('Quota exceeded', { status: 429 });
     const narrator = createGoogleNarrator({ apiKey: 'test-key', cacheDir, fetchImpl });
-    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('Google TTS hatası HTTP 429');
+    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('Google Gemini TTS hatası HTTP 429');
   });
 });

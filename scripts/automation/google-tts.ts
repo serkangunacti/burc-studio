@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const GOOGLE_TTS_ENDPOINT = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+const GEMINI_TTS_MODEL = 'gemini-3.8-flash-tts';
+const GEMINI_API_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent`;
 
 export type NarrationClip = {
   data: Buffer;
@@ -53,9 +54,6 @@ export function createGoogleNarrator(options: {
   const apiKey = options.apiKey || process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const cacheDir = options.cacheDir || '.cache/voice';
   const fetchImpl = options.fetchImpl || fetch;
-  const audience = options.audience || 'kadin';
-  const voiceName = audience === 'erkek' ? 'tr-TR-Wavenet-B' : 'tr-TR-Wavenet-A';
-  const ssmlGender = audience === 'erkek' ? 'MALE' : 'FEMALE';
 
   const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
 
@@ -63,10 +61,10 @@ export function createGoogleNarrator(options: {
     async speak(rawText: string): Promise<NarrationClip> {
       const text = rawText.trim().normalize('NFC');
       if (!text || [...text].length > 300) throw new Error('Ses metni 1–300 karakter olmalı');
-      if (!apiKey) throw new Error('Google TTS API anahtarı tanımlı değil');
+      if (!apiKey) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
 
       await mkdir(cacheDir, { recursive: true });
-      const key = hash(JSON.stringify({ text, voiceName, engine: 'google-tts-v1' }));
+      const key = hash(JSON.stringify({ text, model: GEMINI_TTS_MODEL, engine: 'gemini-tts-v1' }));
       const audioPath = path.join(cacheDir, `${key}.wav`);
 
       // 1. Önbellek kontrolü
@@ -79,45 +77,53 @@ export function createGoogleNarrator(options: {
         if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
       }
 
-      // 2. Google Cloud Text-to-Speech API çağrısı
+      // 2. Google Gemini TTS API çağrısı
       const payload = {
-        input: { text },
-        voice: {
-          languageCode: 'tr-TR',
-          name: voiceName,
-          ssmlGender,
-        },
-        audioConfig: {
-          audioEncoding: 'LINEAR16',
-          sampleRateHertz: 24000,
-          speakingRate: 1.05,
-          pitch: 0.0,
-        },
+        contents: [
+          {
+            parts: [{ text }],
+          },
+        ],
       };
 
-      const url = `${GOOGLE_TTS_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
+      const url = `${GEMINI_API_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
       const res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(20_000),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
-        throw new Error(`Google TTS hatası HTTP ${res.status}: ${errorText.slice(0, 300)}`);
+        throw new Error(`Google Gemini TTS hatası HTTP ${res.status}: ${errorText.slice(0, 300)}`);
       }
 
-      const json = (await res.json()) as { audioContent?: string };
-      if (!json.audioContent) throw new Error('Google TTS ses içeriği döndürmedi');
+      const json = (await res.json()) as {
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{
+              inlineData?: {
+                mimeType?: string;
+                data?: string;
+              };
+            }>;
+          };
+        }>;
+      };
 
-      const data = Buffer.from(json.audioContent, 'base64');
+      const base64Data = json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!base64Data) {
+        throw new Error('Google Gemini TTS geçerli ses verisi döndürmedi');
+      }
+
+      const data = Buffer.from(base64Data, 'base64');
       const durationSeconds = wavDuration(data);
 
       await writeFile(`${audioPath}.tmp`, data, { mode: 0o600 });
       await rename(`${audioPath}.tmp`, audioPath);
 
-      options.log?.(`Google TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
+      options.log?.(`Google Gemini TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
       return { data, durationSeconds, path: audioPath, cached: false };
     },
   };
