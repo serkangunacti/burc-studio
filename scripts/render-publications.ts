@@ -9,9 +9,8 @@ import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { decodeVoiceAsset } from './automation/voice';
-import {createNarrator,narrationText} from './automation/narration';
-import {loadVoiceReference} from './automation/voice-reference';
-import type {ReelsSign} from '../src/remotion/slide-types';
+import { createGoogleNarrator, narrationText } from './automation/google-tts';
+import type { ReelsSign } from '../src/remotion/slide-types';
 
 // GitHub Actions'ta her sabah çalışır: günün gönderilerini carousel parçaları ve Reels olarak çizer, onaya hazırlar.
 const { values } = parseArgs({
@@ -57,14 +56,24 @@ async function main() {
   }
 
   const music = await openMusicRenderer();
-  const narrationStart=process.env.SERKANSES_NARRATION_START || '2026-10-06';
-  if(!isDateKey(narrationStart))throw new Error('Seslendirme başlangıç tarihi geçersiz');
-  const recovery=process.env.SERKANSES_RECOVERY_ASSET ? JSON.parse(process.env.SERKANSES_RECOVERY_ASSET) as {date:string;key:string;url:string} : undefined;
-  let narrator:Promise<ReturnType<typeof createNarrator>>|undefined;
-  const narrate=date>=narrationStart ? async(sign:ReelsSign)=>{
-    narrator ??= Promise.resolve().then(()=>createNarrator({reference:loadVoiceReference(),recovered:recovery?.date===date ? recovery : undefined,cacheDir:process.env.SERKANSES_CACHE_DIR || '.cache/serkanses',log}));
-    return (await narrator).speak(narrationText(sign));
-  } : undefined;
+  const googleApiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  let narrator: ReturnType<typeof createGoogleNarrator> | undefined;
+
+  const narrate = googleApiKey
+    ? async (sign: ReelsSign) => {
+        narrator ??= createGoogleNarrator({
+          apiKey: googleApiKey,
+          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
+          log,
+        });
+        return await narrator.speak(narrationText(sign));
+      }
+    : undefined;
+
+  if (!googleApiKey) {
+    log('Google TTS anahtarı tanımlı değil; Reels müzik ve onaylı giriş/kapanış sesiyle hazırlanıyor.');
+  }
+
   const renderers = await openRemotionRenderers({
     music,
     voice: decodeVoiceAsset(process.env.SERKANSES_VOICE_ASSET),

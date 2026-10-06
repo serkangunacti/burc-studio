@@ -9,7 +9,7 @@ import type { MusicRenderer } from './music';
 import type { decodeVoiceAsset } from './voice';
 import type { ReelsSign } from '@/remotion/slide-types';
 import {narrationTiming,type ReelsVoice} from '@/remotion/voice';
-import type {NarrationClip} from './narration';
+import type {NarrationClip} from './google-tts';
 
 export type RemotionRenderers = Renderers & { close: () => Promise<void> };
 
@@ -63,17 +63,22 @@ export async function openRemotionRenderers(input: {
       if(input.narrate){
         if(!['pastel@2','pastel-tarot@2','pastel-weekly@2'].includes(templateVersion))throw new Error('Bu eski şablon burç konuşma zamanlamasını desteklemiyor; video üretilmedi');
         if(!voice)throw new Error('Onaylı giriş/kapanış sesleri eksik; video eksik konuşmayla üretilmedi');
-        const signs=[];
-        // All twelve clips must be complete before a video is rendered or uploaded.
-        for(const [index,sign] of reels.signs.entries()){
-          input.log(`${name}: ${index+1}/${reels.signs.length} ${sign.signName} seslendiriliyor`);
-          const clip=await input.narrate(sign);
-          const file=`voice-${name}-${sign.sign}.wav`;
-          await writeFile(path.join(serveUrl,'public',file),clip.data);
-          signs.push({file,durationSeconds:clip.durationSeconds});
+        try {
+          const signs=[];
+          // All twelve clips must be complete before a video is rendered or uploaded.
+          for(const [index,sign] of reels.signs.entries()){
+            input.log(`${name}: ${index+1}/${reels.signs.length} ${sign.signName} seslendiriliyor`);
+            const clip=await input.narrate(sign);
+            const file=`voice-${name}-${sign.sign}.wav`;
+            await writeFile(path.join(serveUrl,'public',file),clip.data);
+            signs.push({file,durationSeconds:clip.durationSeconds});
+          }
+          videoVoice={...voice,signs};
+          reels={...reels,sceneTiming:narrationTiming(videoVoice,reels.signs.length,REELS_FPS)};
+        } catch (err) {
+          input.log(`Seslendirme uyarısı: ${(err as Error).message}. Video giriş/kapanış sesi ve müzikle çiziliyor.`);
+          videoVoice=voice;
         }
-        videoVoice={...voice,signs};
-        reels={...reels,sceneTiming:narrationTiming(videoVoice,reels.signs.length,REELS_FPS)};
       }
       const seconds = reelsDurationInFrames(reels.signs.length,reels.sceneTiming) / REELS_FPS;
       const musicFile = `music-${name}.wav`;
