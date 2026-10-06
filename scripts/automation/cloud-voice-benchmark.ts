@@ -2,16 +2,17 @@
 import {writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {getDb,closeDb} from '../../src/db/client';
-import {sql} from 'drizzle-orm';
+import {and,eq} from 'drizzle-orm';
+import {readings} from '../../src/db/schema';
 import {loadVoiceReference} from './voice-reference';
 import {narrationText} from './narration';
 async function main(){
   if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Bu ölçüm yalnız GitHub bulut runnerında çalışır');
   const db=getDb();
   try{
-    const result=await db.execute(sql`select short from readings where date='2026-10-06' and kind='horoscope' and audience='kadin' and sign='akrep' and is_current=true limit 1`);
-    if(!result.rows.length)throw new Error('Günün Akrep yorumu yok');
-    const text=narrationText({signName:'Akrep',short:String(result.rows[0].short)}),reference=loadVoiceReference();
+    const result=await db.select({short:readings.short}).from(readings).where(and(eq(readings.date,'2026-10-06'),eq(readings.kind,'horoscope'),eq(readings.audience,'kadin'),eq(readings.sign,'akrep'),eq(readings.isCurrent,true))).limit(1);
+    if(!result.length)throw new Error('Günün Akrep yorumu yok');
+    const text=narrationText({signName:'Akrep',short:String(result[0].short)}),reference=loadVoiceReference();
     const hash=(v:string|Buffer)=>createHash('sha256').update(v).digest('hex');
     const key=hash(JSON.stringify({text,settings:{language:'tr',exaggeration:.5,temperature:.8,seed:20261002,cfgWeight:.3},reference:hash(reference),host:'https://resembleai-chatterbox-multilingual-tts-v3.hf.space'}));
     await mkdir('.cache/serkanses',{recursive:true});
