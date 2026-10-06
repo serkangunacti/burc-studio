@@ -59,9 +59,10 @@ async function main() {
   const music = await openMusicRenderer();
   const narrationStart=process.env.SERKANSES_NARRATION_START || '2026-10-06';
   if(!isDateKey(narrationStart))throw new Error('Seslendirme başlangıç tarihi geçersiz');
+  const recovery=process.env.SERKANSES_RECOVERY_ASSET ? JSON.parse(process.env.SERKANSES_RECOVERY_ASSET) as {date:string;key:string;url:string} : undefined;
   let narrator:Promise<ReturnType<typeof createNarrator>>|undefined;
   const narrate=date>=narrationStart ? async(sign:ReelsSign)=>{
-    narrator ??= Promise.resolve().then(()=>createNarrator({reference:loadVoiceReference(),cacheDir:process.env.SERKANSES_CACHE_DIR || '.cache/serkanses',log}));
+    narrator ??= Promise.resolve().then(()=>createNarrator({reference:loadVoiceReference(),recovered:recovery?.date===date ? recovery : undefined,cacheDir:process.env.SERKANSES_CACHE_DIR || '.cache/serkanses',log}));
     return (await narrator).speak(narrationText(sign));
   } : undefined;
   const renderers = await openRemotionRenderers({

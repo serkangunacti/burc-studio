@@ -1,4 +1,4 @@
-import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm,readdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach,describe,expect,it} from 'vitest';
@@ -65,6 +65,68 @@ describe('burç yorumlarının ücretsiz ses üretimi',()=>{
     const retry=createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl});
     await expect(retry.speak('Koç. Bekle.')).rejects.toThrow('belirsiz');
     expect(s.submissions).toHaveLength(1);
+  });
+  it('ayrıntılı kuyruk kota nedenini kaybetmez ve diğer işi göndermez',async()=>{
+    const cacheDir=await cache(),s=server();let queueSubmissions=0;
+    const fetchImpl:typeof fetch=async(url,options)=>{
+      const u=String(url);
+      if(u.endsWith('/config')){const c=await(await s.fetchImpl(url,options)).json();c.dependencies[0].id=1;c.dependencies[0].targets=[[14,'click']];return Response.json(c);}
+      if(u.endsWith('/queue/join')){queueSubmissions++;return Response.json({event_id:'queue-1'});}
+      if(u.includes('/queue/data?'))return new Response('data: '+JSON.stringify({msg:'process_completed',event_id:'queue-1',success:false,output:{error:'You have exceeded your GPU quota. Try again in 0:12:00'}})+'\n\n');
+      return s.fetchImpl(url,options);
+    };
+    const narrator=createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl});
+    await expect(narrator.speak('Koç. Bekle.')).rejects.toThrow('kota');
+    await expect(narrator.speak('Boğa. Bekle.')).rejects.toThrow('kota');
+    expect(queueSubmissions).toBe(1);
+  });
+  it('eski null hatasını bekleme sonrası sınırlı dener, başarılı sesleri korur',async()=>{
+    const cacheDir=await cache(),s=server('null');
+    await expect(createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl}).speak('Koç. Bekle.')).rejects.toThrow();
+    const good=server();
+    const clip=await createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:good.fetchImpl,now:()=>Date.now()+600_000}).speak('Koç. Bekle.');
+    expect(clip.durationSeconds).toBe(1);expect(good.submissions).toHaveLength(1);
+  });
+  it('null hatasına hemen veya üçüncü denemeden sonra tekrar iş açmaz',async()=>{
+    const cacheDir=await cache(),s=server('null');let time=Date.now();
+    const make=()=>createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl,now:()=>time});
+    await expect(make().speak('Koç. Bekle.')).rejects.toThrow();
+    await expect(make().speak('Koç. Bekle.')).rejects.toThrow('bekliyor');
+    time+=600_000;await expect(make().speak('Koç. Bekle.')).rejects.toThrow();
+    time+=600_000;await expect(make().speak('Koç. Bekle.')).rejects.toThrow();
+    time+=600_000;await expect(make().speak('Koç. Bekle.')).rejects.toThrow('bekliyor');
+    expect(s.submissions).toHaveLength(3);
+  });
+  it('önbellekte bekleyen null hatası yedek süreçte diğer yeni işleri de durdurur',async()=>{
+    const cacheDir=await cache(),s=server('null');
+    await expect(createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl}).speak('Koç. Bekle.')).rejects.toThrow();
+    const good=server(),retry=createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:good.fetchImpl});
+    await expect(retry.speak('Koç. Bekle.')).rejects.toThrow('bekliyor');
+    await expect(retry.speak('Boğa. Bekle.')).rejects.toThrow();
+    expect(good.submissions).toHaveLength(0);
+  });
+  it('kuyruk tamamlanma olayından WAV alır, oturumu ve aynı olayı korur',async()=>{
+    const cacheDir=await cache(),s=server();let joinBody:Record<string,unknown>|undefined;
+    const fetchImpl:typeof fetch=async(url,options)=>{
+      const u=String(url);
+      if(u.endsWith('/config')){const c=await(await s.fetchImpl(url,options)).json();c.dependencies[0].id=1;c.dependencies[0].targets=[[14,'click']];return Response.json(c);}
+      if(u.endsWith('/queue/join')){joinBody=JSON.parse(String(options?.body));return Response.json({event_id:'queue-1'});}
+      if(u.includes('/queue/data?')){
+        expect(new URL(u).searchParams.get('session_hash')).toBe(joinBody?.session_hash);
+        return new Response('data: '+JSON.stringify({msg:'process_completed',event_id:'queue-1',success:true,output:{data:[{url:host+'/gradio_api/file=voice.wav'}]}})+'\n\n');
+      }
+      return s.fetchImpl(url,options);
+    };
+    const clip=await createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl}).speak('Koç. Bekle.');
+    expect(clip.durationSeconds).toBe(1);expect(joinBody?.fn_index).toBe(1);expect(s.submissions).toHaveLength(0);
+  });
+  it('kanıtlanmış kurtarma çıktısını indirir; başarılı bulut işini tekrar açmaz',async()=>{
+    const cacheDir=await cache(),s=server('null');
+    await expect(createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl}).speak('Koç. Bekle.')).rejects.toThrow();
+    const job=(await readdir(cacheDir)).find(file=>file.endsWith('.json'))!;
+    const fetchImpl:typeof fetch=async(url,options)=>{if(!String(url).includes('/file='))throw new Error('New job forbidden');return server().fetchImpl(url,options);};
+    const clip=await createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl,recovered:{key:job.slice(0,-5),url:host+'/gradio_api/file=voice.wav'}}).speak('Koç. Bekle.');
+    expect(clip.durationSeconds).toBe(1);expect(s.submissions).toHaveLength(1);
   });
   it('tamamlanan dosyanın bozulması halinde sessizce yeni ses üretmez',async()=>{
     const cacheDir=await cache(),s=server();const narrator=createNarrator({reference:Buffer.from('reference'),cacheDir,fetchImpl:s.fetchImpl});
