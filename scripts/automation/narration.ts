@@ -150,7 +150,7 @@ export function createNarrator(input:{reference:Buffer;cacheDir:string;fetchImpl
           if(event==='error'){
 
             const quota=/quota|rate.?limit|too many requests|exceeded.*GPU/i.test(raw);
-            const message=quota ? 'Ücretsiz ses servisinin kota sınırına ulaşıldı' : `Ücretsiz ses servisi hata verdi: ${raw.slice(0,300)}`;
+            const message=quota ? `Ücretsiz ses servisinin kota sınırına ulaşıldı: ${raw.slice(0,500)}` : `Ücretsiz ses servisi hata verdi: ${raw.slice(0,300)}`;
             if(quota)quotaError=message;
             const reset=raw.match(/(?:again in|retry.*?in)\s*(\d+):(\d{2}):(\d{2})/i);
             const delay=reset ? (Number(reset[1])*3600+Number(reset[2])*60+Number(reset[3]))*1000 : 300_000;

@@ -1,0 +1,69 @@
+name: Bulut ses alternatifi ölçümü
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: render-publications
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/serkanses
+          key: serkanses-v1-2026-10-06-cloud-${{ github.run_id }}
+          restore-keys: serkanses-v1-2026-10-06-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: chatterbox-v3-5de7a54-cpu-v1
+      - name: CPU paketlerini yalnız bulutta kur
+        run: |
+          pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2
+      - name: Onaylı referansı ve tek eksik yorumu hazırla
+        run: node --import tsx scripts/automation/cloud-voice-benchmark.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SERKANSES_REFERENCE_01: ${{ secrets.SERKANSES_REFERENCE_01 }}
+          SERKANSES_REFERENCE_02: ${{ secrets.SERKANSES_REFERENCE_02 }}
+          SERKANSES_REFERENCE_03: ${{ secrets.SERKANSES_REFERENCE_03 }}
+          SERKANSES_REFERENCE_04: ${{ secrets.SERKANSES_REFERENCE_04 }}
+          SERKANSES_REFERENCE_05: ${{ secrets.SERKANSES_REFERENCE_05 }}
+          SERKANSES_REFERENCE_06: ${{ secrets.SERKANSES_REFERENCE_06 }}
+          SERKANSES_REFERENCE_07: ${{ secrets.SERKANSES_REFERENCE_07 }}
+          SERKANSES_REFERENCE_08: ${{ secrets.SERKANSES_REFERENCE_08 }}
+          SERKANSES_REFERENCE_09: ${{ secrets.SERKANSES_REFERENCE_09 }}
+          SERKANSES_REFERENCE_10: ${{ secrets.SERKANSES_REFERENCE_10 }}
+          SERKANSES_REFERENCE_11: ${{ secrets.SERKANSES_REFERENCE_11 }}
+          SERKANSES_REFERENCE_12: ${{ secrets.SERKANSES_REFERENCE_12 }}
+          SERKANSES_REFERENCE_13: ${{ secrets.SERKANSES_REFERENCE_13 }}
+          SERKANSES_REFERENCE_14: ${{ secrets.SERKANSES_REFERENCE_14 }}
+          SERKANSES_REFERENCE_15: ${{ secrets.SERKANSES_REFERENCE_15 }}
+          SERKANSES_REFERENCE_16: ${{ secrets.SERKANSES_REFERENCE_16 }}
+          SERKANSES_REFERENCE_17: ${{ secrets.SERKANSES_REFERENCE_17 }}
+          SERKANSES_REFERENCE_18: ${{ secrets.SERKANSES_REFERENCE_18 }}
+          SERKANSES_REFERENCE_19: ${{ secrets.SERKANSES_REFERENCE_19 }}
+      - name: Tek sesin üretim süresini ölç (en fazla 5 dakika)
+        run: timeout 300 python scripts/automation/cloud-voice-benchmark.py
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_PROGRESS_BARS: '1'
+          OMP_NUM_THREADS: '2'
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache/serkanses
+          key: serkanses-v1-2026-10-06-cloud-${{ github.run_id }}
