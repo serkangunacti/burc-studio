@@ -112,34 +112,59 @@ export function createGoogleNarrator(options: {
         if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
       }
 
-      // 2. Google Gemini TTS API çağrısı
+      // 2. Google Gemini TTS API çağrısı (rate-limit / backoff destekli)
       const payload = {
         contents: [
           {
             role: 'user',
-            parts: [
-              {
-                text,
-                speech_metadata: {
-                  style: 'warm, conversational, friendly and engaging Turkish astrologer',
-                },
-              },
-            ],
+            parts: [{ text }],
           },
         ],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+        },
       };
 
       const url = `${GEMINI_API_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetchImpl(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(20_000),
-      });
+      const maxRetries = 4;
+      let lastError: Error | null = null;
+      let res: Response | null = null;
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Google Gemini TTS hatası HTTP ${res.status}: ${errorText.slice(0, 300)}`);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            const delayMs = Math.min(1000 * Math.pow(2, attempt), 10_000);
+            options.log?.(`Google Gemini TTS yeniden deneniyor (${attempt}/${maxRetries - 1}), bekleme: ${delayMs}ms`);
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
+
+          res = await fetchImpl(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(30_000),
+          });
+
+          if (res.status === 429 || res.status >= 500) {
+            const errText = await res.text();
+            lastError = new Error(`Google Gemini TTS HTTP ${res.status}: ${errText.slice(0, 300)}`);
+            continue;
+          }
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Google Gemini TTS hatası HTTP ${res.status}: ${errorText.slice(0, 300)}`);
+          }
+
+          break;
+        } catch (err) {
+          lastError = err as Error;
+          if (attempt === maxRetries - 1) throw lastError;
+        }
+      }
+
+      if (!res || !res.ok) {
+        throw lastError || new Error('Google Gemini TTS isteği başarısız oldu');
       }
 
       const json = (await res.json()) as {
@@ -167,6 +192,8 @@ export function createGoogleNarrator(options: {
       await rename(`${audioPath}.tmp`, audioPath);
 
       options.log?.(`Google Gemini TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
+      // Rate-limit'e takılmamak için çağrılar arası 1.5 saniye soluklan
+      await new Promise((r) => setTimeout(r, 1500));
       return { data, durationSeconds, path: audioPath, cached: false };
     },
   };
