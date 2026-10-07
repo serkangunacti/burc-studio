@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createGoogleNarrator, narrationText } from './google-tts';
+import { createGoogleNarrator, createWavFromPcm, narrationText } from './google-tts';
 
 const dirs: string[] = [];
 async function cache() {
@@ -86,6 +86,13 @@ describe('Google Gemini TTS seslendirme motoru', () => {
     expect(calls).toHaveLength(1); // yeni çağrı yok
   });
 
+  it('PCM verisini geçerli WAV dosyasına dönüştürür ve süresini doğru hesaplar', () => {
+    const pcm = Buffer.alloc(48000); // 1 saniyelik 24kHz 16-bit mono PCM (24000 * 2 bayt)
+    const wav = createWavFromPcm(pcm, 24000, 1);
+    expect(wav.toString('ascii', 0, 4)).toBe('RIFF');
+    expect(wav.toString('ascii', 8, 12)).toBe('WAVE');
+  });
+
   it('API anahtarı yoksa hata fırlatır', async () => {
     const cacheDir = await cache();
     const narrator = createGoogleNarrator({ apiKey: '', cacheDir });
@@ -94,8 +101,8 @@ describe('Google Gemini TTS seslendirme motoru', () => {
 
   it('Gemini API hata döndüğünde hatayı iletir', async () => {
     const cacheDir = await cache();
-    const fetchImpl: typeof fetch = async () => new Response('Quota exceeded', { status: 429 });
+    const fetchImpl: typeof fetch = async () => new Response('Bad request', { status: 400 });
     const narrator = createGoogleNarrator({ apiKey: 'test-key', cacheDir, fetchImpl });
-    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('Google Gemini TTS hatası HTTP 429');
+    await expect(narrator.speak('Koç. Test.')).rejects.toThrow('Google Gemini TTS hatası HTTP 400');
   });
 });

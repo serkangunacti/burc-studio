@@ -47,9 +47,9 @@ jobs:
         if: steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v1-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v2-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            voice-v1-${{ steps.start-window.outputs.date }}-
+            voice-v2-${{ steps.start-window.outputs.date }}-
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
         if: steps.start-window.outputs.allowed == 'true'
@@ -81,4 +81,4 @@ jobs:
         if: always() && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v1-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v2-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}

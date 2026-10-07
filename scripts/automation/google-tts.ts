@@ -74,6 +74,24 @@ export function outroNarrationText(): string {
   return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın!';
 }
 
+export function createWavFromPcm(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * channels * 2, 28);
+  header.writeUInt16LE(channels * 2, 32);
+  header.writeUInt16LE(16, 34); // 16-bit
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
 export function wavDuration(bytes: Buffer): number {
   if (bytes.length < 44 || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') {
     throw new Error('Servis geçerli WAV döndürmedi');
@@ -129,11 +147,13 @@ export function createGoogleNarrator(options: {
           options.log?.(`Ses önbellekten alındı: ${path.basename(p, '.wav').slice(0, 8)} (${durationSeconds.toFixed(2)} sn)`);
           return { data: cachedData, durationSeconds, path: p, cached: true };
         } catch (err) {
-          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+            options.log?.(`Önbellekteki ses dosyası geçersiz (${path.basename(p)}): ${err instanceof Error ? err.message : String(err)}, yeniden üretilecek`);
+          }
         }
       }
 
-      // 2. Google Gemini TTS API çağrısı (çoklu model yedekleme ve hızlı failover)
+      // 2. Google Gemini TTS API çağrısı (çoklu model yedekleme ve 429 backoff)
       const payload = {
         contents: [
           {
@@ -151,12 +171,12 @@ export function createGoogleNarrator(options: {
 
       for (const model of GEMINI_TTS_MODELS) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const maxRetries = 2;
+        const maxRetries = 5;
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
           try {
             if (attempt > 0) {
-              const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 6000);
+              const delayMs = Math.min(3000 * Math.pow(2, attempt - 1), 20000);
               options.log?.(`Google Gemini TTS (${model}) yeniden deneniyor (${attempt}/${maxRetries - 1}), bekleme: ${delayMs}ms`);
               await new Promise((r) => setTimeout(r, delayMs));
             }
@@ -170,14 +190,14 @@ export function createGoogleNarrator(options: {
               method: 'POST',
               headers,
               body: JSON.stringify(payload),
-              signal: AbortSignal.timeout(35_000),
+              signal: AbortSignal.timeout(45_000),
             });
 
             if (res.status === 429) {
-              const errText = await res.text();
-              lastError = new Error(`Google Gemini TTS hatası HTTP 429 (${model}): ${errText.slice(0, 300)}`);
-              options.log?.(`Google Gemini TTS modeli (${model}) kotaya takıldı, bir sonraki modele geçiliyor`);
-              break; // Bu modelin kotası dolduysa hemen bir sonraki modele geç
+              const waitMs = (attempt + 1) * 8000;
+              options.log?.(`Google Gemini TTS (${model}) kota sınırına (429) takıldı, ${waitMs / 1000} sn beklenip aynı modelle tekrar denenecek (${attempt + 1}/${maxRetries})...`);
+              await new Promise((r) => setTimeout(r, waitMs));
+              continue;
             }
 
             if (res.status >= 500) {
@@ -188,7 +208,7 @@ export function createGoogleNarrator(options: {
 
             if (!res.ok) {
               const errorText = await res.text();
-              throw new Error(`Google Gemini TTS hatası HTTP ${res.status}: ${errorText.slice(0, 300)}`);
+              throw new Error(`Google Gemini TTS hatası HTTP ${res.status} (${model}): ${errorText.slice(0, 300)}`);
             }
 
             break;
@@ -223,15 +243,24 @@ export function createGoogleNarrator(options: {
         throw new Error('Google Gemini TTS geçerli ses verisi döndürmedi');
       }
 
-      const data = Buffer.from(base64Data, 'base64');
+      let data = Buffer.from(base64Data, 'base64');
+      // Eğer model RIFF WAVE başlığı olmadan ham PCM (L16) döndürdüyse standart WAV başlığı ekle
+      if (data.length >= 4 && data.toString('ascii', 0, 4) !== 'RIFF') {
+        const mime = json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType ?? '';
+        const rateMatch = mime.match(/rate=(\d+)/);
+        const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+        data = createWavFromPcm(data, sampleRate);
+        options.log?.(`Ham ses WAV formatına dönüştürüldü (${sampleRate} Hz)`);
+      }
+
       const durationSeconds = wavDuration(data);
 
       await writeFile(`${unifiedAudioPath}.tmp`, data, { mode: 0o600 });
       await rename(`${unifiedAudioPath}.tmp`, unifiedAudioPath);
 
       options.log?.(`Google Gemini TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
-      // Dakika başına istek (RPM) sınırına çarpmamak için çağrılar arası 3 saniye bekle
-      await new Promise((r) => setTimeout(r, 3000));
+      // Dakika başına istek (RPM) sınırına çarpmamak için çağrılar arası 4 saniye bekle
+      await new Promise((r) => setTimeout(r, 4000));
       return { data, durationSeconds, path: unifiedAudioPath, cached: false };
     },
   };
