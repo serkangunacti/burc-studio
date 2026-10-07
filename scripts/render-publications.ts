@@ -9,12 +9,17 @@ import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { decodeVoiceAsset } from './automation/voice';
-import { createGoogleNarrator, narrationText } from './automation/google-tts';
-import type { ReelsSign } from '../src/remotion/slide-types';
+import { createGoogleNarrator, introNarrationText, narrationText, outroNarrationText } from './automation/google-tts';
+import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
 
 // GitHub Actions'ta her sabah çalışır: günün gönderilerini carousel parçaları ve Reels olarak çizer, onaya hazırlar.
 const { values } = parseArgs({
-  options: { date: { type: 'string' }, force: { type: 'boolean', default: false }, 'wait-minutes': { type: 'string', default: '60' } },
+  options: {
+    date: { type: 'string' },
+    force: { type: 'boolean', default: false },
+    'wait-minutes': { type: 'string', default: '60' },
+    only: { type: 'string' },
+  },
 });
 
 const log = (message: string) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${message}`);
@@ -70,6 +75,28 @@ async function main() {
       }
     : undefined;
 
+  const narrateIntro = googleApiKey
+    ? async (reels: ReelsProps) => {
+        narrator ??= createGoogleNarrator({
+          apiKey: googleApiKey,
+          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
+          log,
+        });
+        return await narrator.speak(introNarrationText(reels));
+      }
+    : undefined;
+
+  const narrateOutro = googleApiKey
+    ? async () => {
+        narrator ??= createGoogleNarrator({
+          apiKey: googleApiKey,
+          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
+          log,
+        });
+        return await narrator.speak(outroNarrationText());
+      }
+    : undefined;
+
   if (!googleApiKey) {
     log('Google TTS anahtarı tanımlı değil; Reels müzik ve onaylı giriş/kapanış sesiyle hazırlanıyor.');
   }
@@ -78,11 +105,20 @@ async function main() {
     music,
     voice: decodeVoiceAsset(process.env.SERKANSES_VOICE_ASSET),
     narrate,
+    narrateIntro,
+    narrateOutro,
     log,
-    upload: async (name, file) => (await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true })).url,
+    upload: async (name, file) => {
+      const blob = await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true });
+      log(`REELS_VIDEO_URL: ${blob.url}`);
+      return blob.url;
+    },
   });
   try {
-    const result = await renderDay(db, date, renderers, { force: values.force || process.env.RENDER_FORCE === 'true' });
+    const result = await renderDay(db, date, renderers, {
+      force: values.force || process.env.RENDER_FORCE === 'true',
+      only: values.only || process.env.RENDER_ONLY,
+    });
     log(`Çizilen: ${result.rendered.length}, korunan: ${result.kept.length}, hata: ${result.failures.length}`);
     for (const failure of result.failures) log(`HATA ${failure}`);
     const failures = [...missing.map((item) => `${item}: gönderi üretilmedi`), ...result.failures];

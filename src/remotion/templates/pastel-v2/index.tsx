@@ -29,15 +29,16 @@ export function CosmicSlide({kind='horoscope',phase=0,reels=false,...props}:Slid
   const {slide,brand,format,variant}=props;
   const sign=slide.type==='sign' ? slide : null;
   const length=sign ? graphemeLength(sign.body) : 0;
-  const bodySize=reels ? 44 : kind==='weekly' ? length>780 ? 27 : 29 : kind==='tarot' ? 30 : length>360 ? 34 : 36;
+  const bodySize=reels ? (length>360 ? 36 : 42) : kind==='weekly' ? length>780 ? 27 : 29 : kind==='tarot' ? 30 : length>360 ? 34 : 36;
   return <AbsoluteFill lang="tr" style={{...FORMAT_SIZES[format],backgroundColor:BACKDROPS[((variant%7)+7)%7],color:INK,fontFamily:BODY_FONT,fontSize:32,lineHeight:1.35,fontStyle:'normal',fontWeight:400,letterSpacing:'normal',textAlign:'left',overflow:'hidden',padding:'64px 80px 60px'}}>
     <Orbit phase={phase}/>
     <div style={{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:`1px solid ${LINE}`,paddingBottom:24,fontSize:22,letterSpacing:2}}><span style={{display:'flex',alignItems:'center',gap:12}}><SaturnMark size={30} color={INK} strokeWidth={5}/>KOZMİK ARKAN</span>{slide.type!=='cta' && <span style={{color:ACCENT,maxWidth:480,textAlign:'right'}}>{slide.dateLabel}</span>}</div>
     <div style={{position:'relative',display:'flex',gap:16,marginTop:28,fontSize:23,letterSpacing:2}}><span style={{backgroundColor:INK,color:'#fff9ef',padding:'10px 16px'}}>{LABELS[kind]}</span><span style={{border:`1px solid ${LINE}`,padding:'10px 16px'}}>{slide.audience==='kadin'?'KADIN':'ERKEK'}</span></div>
     <div style={{position:'relative',flex:1,display:'flex',flexDirection:'column',minHeight:0,padding:'32px 0 24px'}}>
       {slide.type==='cover' && <>
-        <div style={{marginTop:64,fontSize:graphemeLength(slide.hook)>45?80:92,fontWeight:700,lineHeight:1.1,maxWidth:860}}>{slide.hook}</div>
-        <div style={{width:160,height:4,backgroundColor:ACCENT,marginTop:46}}/>
+        {reels && <div style={{display:'inline-flex',alignItems:'center',gap:8,backgroundColor:ACCENT,color:'#fff',padding:'8px 18px',borderRadius:20,fontSize:22,fontWeight:700,letterSpacing:2,marginBottom:12,alignSelf:'flex-start'}}>✨ CANLARIM CİĞERLERİM ✨</div>}
+        <div style={{marginTop:reels?12:64,fontSize:graphemeLength(slide.hook)>45?80:92,fontWeight:700,lineHeight:1.1,maxWidth:860}}>{slide.hook}</div>
+        <div style={{width:160,height:4,backgroundColor:ACCENT,marginTop:reels?24:46}}/>
         <p style={{fontSize:32,color:MUTED,lineHeight:1.5,maxWidth:740}}>{kind==='tarot'?'Günün kartını bul, sana uyan mesajı keşfet.':kind==='weekly'?'Haftanın ritmini keşfet, kendi burcuna göz at.':'Bugünün küçük molası, yarının büyük farkı olabilir.'}</p>
         <div style={{marginTop:'auto',fontSize:25,color:ACCENT}}>{slide.partLabel ?? '12 BURÇ · KENDİ YORUMUNU BUL →'}</div>
         <div style={{display:'flex',gap:22,marginTop:30}}>{SIGN_SLUGS.map(sign=><ZodiacGlyph key={sign} sign={sign} size={50} color={MUTED} strokeWidth={4}/>)}</div>
@@ -64,7 +65,63 @@ function CosmicScene({props,kind,index,total}:{props:SlideProps;kind:Kind;index?
   const frame=useCurrentFrame();
   const opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'});
   const y=Math.round(interpolate(frame,[0,18],[26,0],{extrapolateRight:'clamp'}));
-  return <AbsoluteFill style={{backgroundColor:BACKDROPS[((props.variant%7)+7)%7]}}><div style={{position:'absolute',top:120+y,left:0,width:1080,height:1350,opacity}}><CosmicSlide {...props} kind={kind} phase={frame/6} reels /></div>{index!==undefined && <div style={{position:'absolute',top:1515,left:80,width:920,color:MUTED,fontSize:24,fontFamily:BODY_FONT}}>{index+1} / {total} · Kendi burcunu bul<div style={{marginTop:16,height:3,width:Math.round(920*(index+1)/(total ?? 12)),backgroundColor:ACCENT}}/></div>}</AbsoluteFill>;
+  const baseBackdrop=BACKDROPS[((props.variant%7)+7)%7];
+
+  return <AbsoluteFill style={{
+    background: `radial-gradient(circle at 50% 12%, rgba(255, 230, 160, 0.28) 0%, transparent 50%), radial-gradient(circle at 85% 75%, rgba(189, 101, 73, 0.22) 0%, transparent 45%), linear-gradient(175deg, ${baseBackdrop} 0%, #ecdfe8 45%, #e1d3e8 100%)`,
+    overflow: 'hidden',
+  }}>
+    {Array.from({ length: 14 }).map((_, i) => {
+      const sparkle = Math.sin((frame * 0.1) + i * 1.5) * 0.5 + 0.5;
+      const x = (i * 73) % 92 + 4;
+      const yPos = (i * 61) % 90 + 5;
+      return (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            left: `${x}%`,
+            top: `${yPos}%`,
+            width: 6 + (i % 3) * 3,
+            height: 6 + (i % 3) * 3,
+            borderRadius: '50%',
+            backgroundColor: '#ffc857',
+            boxShadow: '0 0 12px rgba(255, 200, 87, 0.85)',
+            opacity: 0.25 + sparkle * 0.75,
+            transform: `scale(${0.8 + sparkle * 0.5})`,
+          }}
+        />
+      );
+    })}
+    <div style={{position:'absolute',top:120+y,left:0,width:1080,height:1350,opacity}}><CosmicSlide {...props} kind={kind} phase={frame/5} reels /></div>
+    <div style={{position:'absolute',top:1475,left:0,width:1080,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+      <span style={{fontSize:20,letterSpacing:2,color:MUTED,marginRight:8,fontWeight:600}}>CANLI ANLATIM</span>
+      {Array.from({ length: 9 }).map((_, bar) => {
+        const h = Math.round(8 + Math.abs(Math.sin((frame * 0.22) + bar * 0.85)) * 26);
+        return (
+          <div
+            key={bar}
+            style={{
+              width: 5,
+              height: h,
+              borderRadius: 3,
+              backgroundColor: ACCENT,
+              opacity: 0.75 + Math.sin(frame * 0.12 + bar) * 0.25,
+            }}
+          />
+        );
+      })}
+    </div>
+    {index!==undefined && <div style={{position:'absolute',top:1530,left:80,width:920,color:INK,fontSize:24,fontFamily:BODY_FONT,fontWeight:600}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>{index+1} / {total} · {props.slide.type==='sign' ? props.slide.signName : 'Burç Yorumu'}</span>
+        <span style={{color:ACCENT,fontSize:22}}>Kozmik Arkan ✨</span>
+      </div>
+      <div style={{marginTop:14,height:6,width:920,backgroundColor:'rgba(202, 185, 220, 0.45)',borderRadius:4,overflow:'hidden'}}>
+        <div style={{height:'100%',width:`${Math.round(100*(index+1)/(total ?? 12))}%`,backgroundColor:ACCENT,borderRadius:4}}/>
+      </div>
+    </div>}
+  </AbsoluteFill>;
 }
 
 export function CosmicReels({kind='horoscope',...reels}:ReelsProps & {kind?:Kind}) {
@@ -72,7 +129,7 @@ export function CosmicReels({kind='horoscope',...reels}:ReelsProps & {kind?:Kind
   const timing=linearTiming({durationInFrames:TRANSITION_FRAMES});
   return <AbsoluteFill style={{backgroundColor:BACKDROPS[((reels.variant%7)+7)%7]}}><TransitionSeries>
     <TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.introFrames ?? INTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cover',audience:reels.audience,dateLabel:reels.dateLabel,hook:reels.hook}}}/></TransitionSeries.Sequence>
-    {reels.signs.map((sign,index)=><Fragment key={sign.sign}><TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.signFrames[index] ?? SIGN_FRAMES}><CosmicScene kind={kind} index={index} total={reels.signs.length} props={{...common,slide:{...sign,type:'sign',audience:reels.audience,dateLabel:reels.dateLabel,body:sign.short}}}/></TransitionSeries.Sequence></Fragment>)}
+    {reels.signs.map((sign,index)=><Fragment key={sign.sign}><TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.signFrames[index] ?? SIGN_FRAMES}><CosmicScene kind={kind} index={index} total={reels.signs.length} props={{...common,slide:{...sign,type:'sign',audience:reels.audience,dateLabel:reels.dateLabel,body:sign.body || sign.short}}}/></TransitionSeries.Sequence></Fragment>)}
     <TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.outroFrames ?? OUTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cta',audience:reels.audience}}}/></TransitionSeries.Sequence>
   </TransitionSeries></AbsoluteFill>;
 }

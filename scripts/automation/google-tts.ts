@@ -12,14 +12,49 @@ export type NarrationClip = {
   cached: boolean;
 };
 
-export function narrationText(sign: { signName: string; short: string }): string {
+export function narrationText(sign: {
+  signName: string;
+  short: string;
+  body?: string;
+  headline?: string;
+  scores?: { love: number; money: number; health: number };
+  luckyColor?: { name: string; hex?: string };
+  luckyNumber?: number;
+}): string {
   let short = sign.short.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim();
   const prefix = new RegExp(`^${sign.signName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:.!,—–-]\\s*`, 'iu');
   short = short.replace(prefix, '').trim();
-  if (!short) throw new Error(`${sign.signName}: kısa yorum boş`);
+  if (!short && !sign.body) throw new Error(`${sign.signName}: kısa yorum boş`);
+
+  if (sign.body) {
+    const rawBody = sign.body.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim();
+    const cleanBody = rawBody.replace(prefix, '').trim();
+    const parts: string[] = [`Sevgili ${sign.signName} burçları;`];
+    if (sign.headline) {
+      parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
+    }
+    parts.push(cleanBody);
+    if (sign.luckyNumber && sign.luckyColor) {
+      parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
+    }
+    const text = parts.join(' ').normalize('NFC');
+    if ([...text].length > 700) {
+      return [...text].slice(0, 695).join('') + '...';
+    }
+    return text;
+  }
+
   const text = `${sign.signName}. ${short}`.normalize('NFC');
   if ([...text].length > 300) throw new Error(`${sign.signName}: ses metni 300 karakteri aşıyor; metin kesilmedi`);
   return text;
+}
+
+export function introNarrationText(reels?: { audience?: string; dateLabel?: string; hook?: string }): string {
+  return 'Canlarım ciğerlerim, günün enerjilerine hazır mısınız? Yıldızlar bakalım bugün bize neler fısıldıyor...';
+}
+
+export function outroNarrationText(): string {
+  return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın!';
 }
 
 export function wavDuration(bytes: Buffer): number {
@@ -38,7 +73,7 @@ export function wavDuration(bytes: Buffer): number {
     offset = start + size + (size % 2);
   }
   const duration = dataBytes / byteRate;
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 30) {
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 60) {
     throw new Error('Servisin konuşma süresi geçersiz');
   }
   return duration;
@@ -60,11 +95,11 @@ export function createGoogleNarrator(options: {
   return {
     async speak(rawText: string): Promise<NarrationClip> {
       const text = rawText.trim().normalize('NFC');
-      if (!text || [...text].length > 300) throw new Error('Ses metni 1–300 karakter olmalı');
+      if (!text || [...text].length > 750) throw new Error('Ses metni 1–750 karakter olmalı');
       if (!apiKey) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
 
       await mkdir(cacheDir, { recursive: true });
-      const key = hash(JSON.stringify({ text, model: GEMINI_TTS_MODEL, engine: 'gemini-tts-v1' }));
+      const key = hash(JSON.stringify({ text, model: GEMINI_TTS_MODEL, engine: 'gemini-tts-v2' }));
       const audioPath = path.join(cacheDir, `${key}.wav`);
 
       // 1. Önbellek kontrolü
@@ -81,7 +116,15 @@ export function createGoogleNarrator(options: {
       const payload = {
         contents: [
           {
-            parts: [{ text }],
+            role: 'user',
+            parts: [
+              {
+                text,
+                speech_metadata: {
+                  style: 'warm, conversational, friendly and engaging Turkish astrologer',
+                },
+              },
+            ],
           },
         ],
       };

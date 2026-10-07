@@ -32,7 +32,7 @@ export async function missingPosts(db: Db, date: DateKey): Promise<string[]> {
     .map((item) => `${item.kind}-${item.audience}`);
 }
 
-export async function renderDay(db: Db, date: DateKey, renderers: Renderers, options: { force?: boolean } = {}): Promise<RenderDayResult> {
+export async function renderDay(db: Db, date: DateKey, renderers: Renderers, options: { force?: boolean; only?: string } = {}): Promise<RenderDayResult> {
   const settings = await getSettings(db);
   if (!settings.automation.enabled || automationStartReason(settings.automation.startDate, date)) return { rendered: [], kept: [], failures: [] };
   const brand = brandFromSettings(settings);
@@ -48,6 +48,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 
   for (const post of posts) {
+    if (options.only && !`${post.kind}-${post.audience}`.includes(options.only)) continue;
     const items = plan.filter((item) => item.postId === post.id);
     if (items.length === 0) continue;
     const pending = items.filter(needsRender);
@@ -62,9 +63,18 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
       let video = existingVideo?.videoUrl ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
       const renderVideo = async () => {
         const reels = buildReelsProps(detail, brand);
+        const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
+        const enrichedSigns = reels.signs.map((sign) => {
+          const reading = readingBySign.get(sign.sign);
+          return {
+            ...sign,
+            body: reading?.body ?? sign.short,
+          };
+        });
+        const enrichedReels = { ...reels, signs: enrichedSigns };
         const rendered = await renderers.renderReels({
           templateVersion: post.templateVersion,
-          reels,
+          reels: enrichedReels,
           musicSeed: musicSeed(reels),
           name: `${date}-${post.kind}-${post.audience}`,
         });

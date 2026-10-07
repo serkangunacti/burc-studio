@@ -18,7 +18,9 @@ export async function openRemotionRenderers(input: {
   upload: (name: string, file: Buffer) => Promise<string>;
   log: (message: string) => void;
   voice?: ReturnType<typeof decodeVoiceAsset>;
-  narrate?: (sign:ReelsSign)=>Promise<NarrationClip>;
+  narrate?: (sign: ReelsSign) => Promise<NarrationClip>;
+  narrateIntro?: (reels: ReelsProps) => Promise<NarrationClip>;
+  narrateOutro?: () => Promise<NarrationClip>;
 }): Promise<RemotionRenderers> {
   const serveUrl = await bundle({
     entryPoint: path.resolve('src/remotion/index.ts'),
@@ -62,8 +64,38 @@ export async function openRemotionRenderers(input: {
       let videoVoice=voice;
       if(input.narrate){
         if(!['pastel@2','pastel-tarot@2','pastel-weekly@2'].includes(templateVersion))throw new Error('Bu eski şablon burç konuşma zamanlamasını desteklemiyor; video üretilmedi');
-        if(!voice)throw new Error('Onaylı giriş/kapanış sesleri eksik; video eksik konuşmayla üretilmedi');
         try {
+          let introVoice = voice?.intro;
+          let outroVoice = voice?.outro;
+
+          if (input.narrateIntro) {
+            try {
+              input.log(`${name}: sıcak giriş seslendiriliyor`);
+              const introClip = await input.narrateIntro(reels);
+              const file = `voice-${name}-intro.wav`;
+              await writeFile(path.join(serveUrl, 'public', file), introClip.data);
+              introVoice = { file, durationSeconds: introClip.durationSeconds };
+            } catch (err) {
+              input.log(`Giriş seslendirme uyarısı: ${(err as Error).message}`);
+            }
+          }
+
+          if (input.narrateOutro) {
+            try {
+              input.log(`${name}: samimi kapanış seslendiriliyor`);
+              const outroClip = await input.narrateOutro();
+              const file = `voice-${name}-outro.wav`;
+              await writeFile(path.join(serveUrl, 'public', file), outroClip.data);
+              outroVoice = { file, durationSeconds: outroClip.durationSeconds };
+            } catch (err) {
+              input.log(`Kapanış seslendirme uyarısı: ${(err as Error).message}`);
+            }
+          }
+
+          if (!introVoice || !outroVoice) {
+            throw new Error('Onaylı giriş/kapanış sesleri eksik; video eksik konuşmayla üretilmedi');
+          }
+
           const signs=[];
           // All twelve clips must be complete before a video is rendered or uploaded.
           for(const [index,sign] of reels.signs.entries()){
@@ -73,7 +105,7 @@ export async function openRemotionRenderers(input: {
             await writeFile(path.join(serveUrl,'public',file),clip.data);
             signs.push({file,durationSeconds:clip.durationSeconds});
           }
-          videoVoice={...voice,signs};
+          videoVoice={intro: introVoice, outro: outroVoice, signs};
           reels={...reels,sceneTiming:narrationTiming(videoVoice,reels.signs.length,REELS_FPS)};
         } catch (err) {
           input.log(`Seslendirme uyarısı: ${(err as Error).message}. Video giriş/kapanış sesi ve müzikle çiziliyor.`);

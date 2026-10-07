@@ -35,6 +35,18 @@ describe('Google Gemini TTS seslendirme motoru', () => {
   it('burç adını bir kez söyler, emojiyi okumaz ve yorum metnini korur', () => {
     expect(narrationText({ signName: 'Koç', short: 'Koç: Bugün enerjin yüksek. ✨' })).toBe('Koç. Bugün enerjin yüksek.');
     expect(narrationText({ signName: 'Boğa', short: 'Küçük adımlarla ilerle.' })).toBe('Boğa. Küçük adımlarla ilerle.');
+    expect(
+      narrationText({
+        signName: 'Koç',
+        short: 'Bugün enerjin yüksek.',
+        body: 'Yıldızlar bugün seninle. Yeni adımlar atmaktan çekinme.',
+        headline: 'Günün enerjisi',
+        luckyNumber: 7,
+        luckyColor: { name: 'Altın' },
+      })
+    ).toBe(
+      'Sevgili Koç burçları; Günün enerjisi. Yıldızlar bugün seninle. Yeni adımlar atmaktan çekinme. Şanslı sayınız 7, uğurlu renginiz Altın!'
+    );
     expect(() => narrationText({ signName: 'Koç', short: '' })).toThrow();
   });
 

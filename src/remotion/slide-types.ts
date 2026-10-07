@@ -50,6 +50,7 @@ export type ReelsSign = {
   element: Element;
   headline: string;
   short: string;
+  body?: string;
   scores: { love: number; money: number; health: number };
   luckyColor: { name: string; hex: string };
   luckyNumber: number;

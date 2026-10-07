@@ -17,6 +17,9 @@ on:
         description: 'Onaylanmamış hazır paylaşımları yeniden çiz'
         type: boolean
         default: false
+      only:
+        description: 'Yalnız bu gönderiyi çiz (ör: horoscope-kadin, boşsa tümü)'
+        required: false
 
 concurrency:
   group: render-publications
@@ -65,6 +68,7 @@ jobs:
         env:
           RENDER_DATE: ${{ inputs.date }}
           RENDER_FORCE: ${{ inputs.force }}
+          RENDER_ONLY: ${{ inputs.only }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}

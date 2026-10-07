@@ -15,7 +15,7 @@ export function reelsDurationInFrames(signCount: number, timing?:ReelsSceneTimin
   return scenes.reduce((sum,frames)=>sum+frames,0) - (sceneCount - 1) * TRANSITION_FRAMES;
 }
 
-export function toReelsSign(slide: SignSlideData, short: string): ReelsSign {
+export function toReelsSign(slide: SignSlideData, short: string, includeBody = false): ReelsSign {
   return {
     sign: slide.sign,
     signName: slide.signName,
@@ -26,6 +26,7 @@ export function toReelsSign(slide: SignSlideData, short: string): ReelsSign {
     scores: slide.scores,
     luckyColor: slide.luckyColor,
     luckyNumber: slide.luckyNumber,
+    ...(includeBody && slide.body ? { body: slide.body } : {}),
     ...(slide.tarotCard ? { tarotCard: slide.tarotCard } : {}),
   };
 }
