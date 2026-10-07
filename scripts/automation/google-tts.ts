@@ -138,9 +138,17 @@ export function createGoogleNarrator(options: {
             await new Promise((r) => setTimeout(r, delayMs));
           }
 
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          };
+          if (apiKey.startsWith('AQ.') || apiKey.startsWith('ya29.')) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
           res = await fetchImpl(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(payload),
             signal: AbortSignal.timeout(35_000),
           });
