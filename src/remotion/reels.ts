@@ -6,6 +6,8 @@ export const INTRO_FRAMES = 75;
 export const SIGN_FRAMES = 150;
 export const OUTRO_FRAMES = 90;
 export const TRANSITION_FRAMES = 15;
+export const MAX_REELS_SECONDS = 175; // 2 dk 55 sn - YouTube Shorts (180 sn) için güvenli tavan
+export const MAX_REELS_FRAMES = MAX_REELS_SECONDS * REELS_FPS;
 
 // Geçişler iki sahneyi üst üste bindirir; her geçiş toplam süreyi kısaltır.
 export function reelsDurationInFrames(signCount: number, timing?:ReelsSceneTiming): number {

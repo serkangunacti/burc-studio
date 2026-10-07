@@ -5,11 +5,11 @@ describe('önbellekteki ses yerleşimi',()=>{
   it('burç konuşmaları bitmeden sonraki sahnenin geçişini başlatmaz',()=>{
     const narrated={...voice,signs:[{file:'koc.wav',durationSeconds:6.2},{file:'boga.wav',durationSeconds:7.64}]};
     const timing=narrationTiming(narrated,2,30);
-    expect(timing).toEqual({introFrames:148,signFrames:[252,296],outroFrames:130});
-    const timeline=voiceTimeline(narrated,781,30,timing);
-    expect(timeline.signTracks).toEqual([{file:'koc.wav',from:163,durationInFrames:186},{file:'boga.wav',from:400,durationInFrames:230}]);
-    expect(timeline.outroStart).toBe(666);
-    expect(musicVolume(500,narrated,781,30,timing)).toBe(.2);
+    expect(timing).toEqual({introFrames:136,signFrames:[219,263],outroFrames:118});
+    const timeline=voiceTimeline(narrated,691,30,timing);
+    expect(timeline.signTracks).toEqual([{file:'koc.wav',from:130,durationInFrames:186},{file:'boga.wav',from:334,durationInFrames:230}]);
+    expect(timeline.outroStart).toBe(588);
+    expect(musicVolume(400,narrated,691,30,timing)).toBe(.2);
     expect(()=>narrationTiming(narrated,12,30)).toThrow();
   });
   it('her iki konuşmayı son sözcüğü kesmeden 59 sn videoya yerleştirir',()=>{

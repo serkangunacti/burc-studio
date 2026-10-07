@@ -36,13 +36,27 @@ export function narrationText(sign: {
     if (sign.headline) {
       parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
     }
-    parts.push(cleanBody);
+    const maxBodyChars = 135;
+    let bodyText = cleanBody;
+    if ([...bodyText].length > maxBodyChars) {
+      const sentences = cleanBody.split(/(?<=[.!?])\s+/);
+      let accumulated = '';
+      for (const s of sentences) {
+        if ([...(accumulated ? `${accumulated} ${s}` : s)].length <= maxBodyChars) {
+          accumulated = accumulated ? `${accumulated} ${s}` : s;
+        } else {
+          break;
+        }
+      }
+      bodyText = accumulated || [...cleanBody].slice(0, 130).join('') + '...';
+    }
+    parts.push(bodyText);
     if (sign.luckyNumber && sign.luckyColor) {
       parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
     }
     const text = parts.join(' ').normalize('NFC');
-    if ([...text].length > 700) {
-      return [...text].slice(0, 695).join('') + '...';
+    if ([...text].length > 220) {
+      return [...text].slice(0, 215).join('') + '...';
     }
     return text;
   }

@@ -1,4 +1,4 @@
-import {INTRO_FRAMES,OUTRO_FRAMES,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
+import {INTRO_FRAMES,MAX_REELS_FRAMES,OUTRO_FRAMES,reelsDurationInFrames,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
 import type {ReelsSceneTiming} from './slide-types';
 export type VoiceTrack = { file: string; durationSeconds: number };
 export type ReelsVoice = { intro: VoiceTrack; outro: VoiceTrack; signs?:VoiceTrack[] };
@@ -8,12 +8,27 @@ export function narrationTiming(voice:ReelsVoice,signCount:number,fps:number):Re
   if(!voice.signs || voice.signs.length!==signCount)throw new Error('Burç konuşmaları eksik');
   const clips=[voice.intro,...voice.signs,voice.outro];
   if(clips.some(clip=>!Number.isFinite(clip.durationSeconds)||clip.durationSeconds<=0))throw new Error('Konuşma süresi geçersiz');
-  const tail=Math.ceil(fps*.7);
-  return {
+  const lead=Math.max(6,Math.round(fps*.3));
+  const tail=Math.max(6,Math.round(fps*.3));
+  const timing: ReelsSceneTiming = {
     introFrames:Math.max(INTRO_FRAMES,Math.ceil(voice.intro.durationSeconds*fps)+tail+TRANSITION_FRAMES),
-    signFrames:voice.signs.map(clip=>Math.max(SIGN_FRAMES,Math.ceil(clip.durationSeconds*fps)+fps+tail+TRANSITION_FRAMES)),
+    signFrames:voice.signs.map(clip=>Math.max(SIGN_FRAMES,Math.ceil(clip.durationSeconds*fps)+lead+tail+TRANSITION_FRAMES)),
     outroFrames:Math.max(OUTRO_FRAMES,Math.ceil(voice.outro.durationSeconds*fps)+TRANSITION_FRAMES+tail),
   };
+  const totalFrames = reelsDurationInFrames(signCount, timing);
+  if (totalFrames > MAX_REELS_FRAMES) {
+    const tightLead = Math.max(3, Math.round(fps * 0.1));
+    const tightTail = Math.max(3, Math.round(fps * 0.1));
+    const tightened: ReelsSceneTiming = {
+      introFrames: Math.max(INTRO_FRAMES, Math.ceil(voice.intro.durationSeconds * fps) + tightTail + TRANSITION_FRAMES),
+      signFrames: voice.signs.map(clip => Math.max(SIGN_FRAMES, Math.ceil(clip.durationSeconds * fps) + tightLead + tightTail + TRANSITION_FRAMES)),
+      outroFrames: Math.max(OUTRO_FRAMES, Math.ceil(voice.outro.durationSeconds * fps) + TRANSITION_FRAMES + tightTail),
+    };
+    const tightenedTotal = reelsDurationInFrames(signCount, tightened);
+    if (tightenedTotal <= MAX_REELS_FRAMES) return tightened;
+    throw new Error(`Video süresi YouTube Shorts sınırını (175 sn / ${MAX_REELS_FRAMES} kare) aşıyor: ${totalFrames} kare`);
+  }
+  return timing;
 }
 
 export function voiceTimeline(voice: ReelsVoice, frames: number, fps: number,timing?:ReelsSceneTiming) {
@@ -23,9 +38,10 @@ export function voiceTimeline(voice: ReelsVoice, frames: number, fps: number,tim
   if(!voice.signs)return { introFrames, outroFrames, outroStart: frames - outroFrames };
   if(!timing || voice.signs.length!==timing.signFrames.length)throw new Error('Burç konuşma zamanlaması eksik');
   const signTracks:PositionedVoice[]=[];
+  const lead = Math.max(3, Math.min(Math.round(fps * 0.3), ...timing.signFrames.map((f, i) => f - Math.ceil(voice.signs![i].durationSeconds * fps) - TRANSITION_FRAMES)));
   let sceneStart=timing.introFrames-TRANSITION_FRAMES;
   voice.signs.forEach((clip,index)=>{
-    const from=sceneStart+fps;
+    const from=sceneStart+lead;
     const durationInFrames=Math.ceil(clip.durationSeconds*fps);
     if(from+durationInFrames>sceneStart+timing.signFrames[index]-TRANSITION_FRAMES)throw new Error('Burç konuşması sahneye sığmıyor');
     signTracks.push({file:clip.file,from,durationInFrames});

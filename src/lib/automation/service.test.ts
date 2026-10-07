@@ -905,3 +905,31 @@ describe('carousel tanısı', () => {
     expect(igCalls().some((call) => call.path.endsWith('/media_publish'))).toBe(false);
   });
 });
+
+describe('YouTube Shorts paylaşımı', () => {
+  it('Shorts 3 dakikayı aştığında normal video olarak paylaşmayı dener ve Telegrama bildirir', async () => {
+    await connectAll(db);
+    const post = await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    const settings = await getSettings(db);
+    for (const item of planPublications(DATE, [post], settings.automation).filter((entry) => entry.format === 'reels')) {
+      await savePublication(db, DATE, item, { videoUrl: 'https://blob.test/reels-long.mp4' });
+    }
+    const { deps, buffer, telegramCalls } = harness(db, new Date('2026-09-29T08:30:00Z'));
+    let attempt = 0;
+    buffer.mockImplementation((query) => {
+      if (query.includes('createPost')) {
+        attempt++;
+        if (attempt === 1) {
+          return { data: { createPost: { message: 'Invalid post: Video must be no longer than 3 minutes for YouTube Shorts.' } } };
+        }
+        return { data: { createPost: { post: { id: 'yt-buf-1' } } } };
+      }
+      return { data: { channel: { id: 'yt-1', name: 'kozmikarkan', displayName: 'kozmikarkan', isQueuePaused: false } } };
+    });
+    const result = await syncYouTubeShorts(deps, DATE);
+    expect(result.sent).toBe(1);
+    expect(result.errors).toHaveLength(0);
+    expect(telegramCalls().some((call) => String(call.params.text).includes("YouTube'a (video) gönderildi"))).toBe(true);
+  });
+});
+

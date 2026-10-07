@@ -491,14 +491,32 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
         const ytBuffer = await loadBuffer(deps, 'youtube');
         if (ytBuffer) {
           const ytTitle = `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts`;
-          await ytBuffer.client.shareVideoNow({
-            channelId: ytBuffer.channelId,
-            text: row.caption,
-            videoUrl: row.media.videoUrl,
-            youtube: { title: ytTitle },
-            ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
-          });
-          if (!silent) await notify(deps, `▶️ YouTube Shorts'a da gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
+          try {
+            await ytBuffer.client.shareVideoNow({
+              channelId: ytBuffer.channelId,
+              text: row.caption,
+              videoUrl: row.media.videoUrl,
+              youtube: { title: ytTitle },
+              ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+            });
+            if (!silent) await notify(deps, `▶️ YouTube Shorts'a da gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
+          } catch (shortErr) {
+            const shortMsg = shortErr instanceof Error ? shortErr.message : String(shortErr);
+            if (shortMsg.toLowerCase().includes('3 minutes') || shortMsg.toLowerCase().includes('youtube shorts')) {
+              const cleanTitle = row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 95);
+              const cleanCaption = row.caption.replace(/#shorts?\b/gi, '').trim();
+              await ytBuffer.client.shareVideoNow({
+                channelId: ytBuffer.channelId,
+                text: cleanCaption,
+                videoUrl: row.media.videoUrl,
+                youtube: { title: cleanTitle },
+                ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+              });
+              if (!silent) await notify(deps, `▶️ YouTube'a (video) gönderildi · ${escapeHtml(publicationLabel(row))}\n<i>Süre 3 dakikayı aştığı için normal video olarak paylaşıldı.</i>`, true);
+            } else {
+              throw shortErr;
+            }
+          }
         }
       } catch (ytError) {
         console.error('YouTube Shorts paylaşımı atlandı/başarısız', ytError);
@@ -747,15 +765,34 @@ export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Pr
   for (const row of rows) {
     try {
       const ytTitle = `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts`;
-      await ytBuffer.client.shareVideoNow({
-        channelId: ytBuffer.channelId,
-        text: row.caption,
-        videoUrl: row.media.videoUrl!,
-        youtube: { title: ytTitle },
-        ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
-      });
-      sent++;
-      await notify(deps, `▶️ YouTube Shorts'a gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
+      try {
+        await ytBuffer.client.shareVideoNow({
+          channelId: ytBuffer.channelId,
+          text: row.caption,
+          videoUrl: row.media.videoUrl!,
+          youtube: { title: ytTitle },
+          ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+        });
+        sent++;
+        await notify(deps, `▶️ YouTube Shorts'a gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
+      } catch (shortErr) {
+        const shortMsg = shortErr instanceof Error ? shortErr.message : String(shortErr);
+        if (shortMsg.toLowerCase().includes('3 minutes') || shortMsg.toLowerCase().includes('youtube shorts')) {
+          const cleanTitle = row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 95);
+          const cleanCaption = row.caption.replace(/#shorts?\b/gi, '').trim();
+          await ytBuffer.client.shareVideoNow({
+            channelId: ytBuffer.channelId,
+            text: cleanCaption,
+            videoUrl: row.media.videoUrl!,
+            youtube: { title: cleanTitle },
+            ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+          });
+          sent++;
+          await notify(deps, `▶️ YouTube'a (video) gönderildi · ${escapeHtml(publicationLabel(row))}\n<i>Süre 3 dakikayı aştığı için normal video olarak paylaşıldı.</i>`, true);
+        } else {
+          throw shortErr;
+        }
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       errors.push(`${publicationLabel(row)}: ${msg}`);
