@@ -126,14 +126,14 @@ export function createGoogleNarrator(options: {
       };
 
       const url = `${GEMINI_API_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
-      const maxRetries = 4;
+      const maxRetries = 6;
       let lastError: Error | null = null;
       let res: Response | null = null;
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
           if (attempt > 0) {
-            const delayMs = Math.min(1000 * Math.pow(2, attempt), 10_000);
+            const delayMs = Math.min(3000 * Math.pow(2, attempt - 1), 30_000);
             options.log?.(`Google Gemini TTS yeniden deneniyor (${attempt}/${maxRetries - 1}), bekleme: ${delayMs}ms`);
             await new Promise((r) => setTimeout(r, delayMs));
           }
@@ -142,7 +142,7 @@ export function createGoogleNarrator(options: {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(30_000),
+            signal: AbortSignal.timeout(35_000),
           });
 
           if (res.status === 429 || res.status >= 500) {
@@ -192,8 +192,8 @@ export function createGoogleNarrator(options: {
       await rename(`${audioPath}.tmp`, audioPath);
 
       options.log?.(`Google Gemini TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
-      // Rate-limit'e takılmamak için çağrılar arası 1.5 saniye soluklan
-      await new Promise((r) => setTimeout(r, 1500));
+      // Dakika başına istek (RPM) sınırına çarpmamak için çağrılar arası 3.5 saniye bekle
+      await new Promise((r) => setTimeout(r, 3500));
       return { data, durationSeconds, path: audioPath, cached: false };
     },
   };

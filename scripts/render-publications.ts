@@ -103,7 +103,7 @@ async function main() {
 
   const renderers = await openRemotionRenderers({
     music,
-    voice: decodeVoiceAsset(process.env.SERKANSES_VOICE_ASSET),
+    voice: undefined,
     narrate,
     narrateIntro,
     narrateOutro,

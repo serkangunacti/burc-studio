@@ -25,56 +25,164 @@ function Scores({slide}:{slide:SignSlideData}) {
   return <div style={{display:'flex',gap:34,paddingTop:18,borderTop:`1px solid ${LINE}`,fontSize:24,color:MUTED}}>{[['Aşk',slide.scores.love],['Para',slide.scores.money],['Sağlık',slide.scores.health]].map(([label,value])=><span key={label}>{label} <strong style={{color:INK}}>{value}/5</strong></span>)}</div>;
 }
 
+// 1080x1920 Full-Screen Canlı Sinematik Reels Sahnesi
 export function CosmicSlide({kind='horoscope',phase=0,reels=false,...props}:SlideProps & {kind?:Kind;phase?:number;reels?:boolean}) {
   const {slide,brand,format,variant}=props;
   const sign=slide.type==='sign' ? slide : null;
   const length=sign ? graphemeLength(sign.body) : 0;
-  const bodySize=reels ? (length>360 ? 36 : 42) : kind==='weekly' ? length>780 ? 27 : 29 : kind==='tarot' ? 30 : length>360 ? 34 : 36;
-  return <AbsoluteFill lang="tr" style={{...FORMAT_SIZES[format],backgroundColor:BACKDROPS[((variant%7)+7)%7],color:INK,fontFamily:BODY_FONT,fontSize:32,lineHeight:1.35,fontStyle:'normal',fontWeight:400,letterSpacing:'normal',textAlign:'left',overflow:'hidden',padding:'64px 80px 60px'}}>
-    <Orbit phase={phase}/>
-    <div style={{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:`1px solid ${LINE}`,paddingBottom:24,fontSize:22,letterSpacing:2}}><span style={{display:'flex',alignItems:'center',gap:12}}><SaturnMark size={30} color={INK} strokeWidth={5}/>KOZMİK ARKAN</span>{slide.type!=='cta' && <span style={{color:ACCENT,maxWidth:480,textAlign:'right'}}>{slide.dateLabel}</span>}</div>
-    <div style={{position:'relative',display:'flex',gap:16,marginTop:28,fontSize:23,letterSpacing:2}}><span style={{backgroundColor:INK,color:'#fff9ef',padding:'10px 16px'}}>{LABELS[kind]}</span><span style={{border:`1px solid ${LINE}`,padding:'10px 16px'}}>{slide.audience==='kadin'?'KADIN':'ERKEK'}</span></div>
-    <div style={{position:'relative',flex:1,display:'flex',flexDirection:'column',minHeight:0,padding:'32px 0 24px'}}>
-      {slide.type==='cover' && <>
-        {reels && <div style={{display:'inline-flex',alignItems:'center',gap:8,backgroundColor:ACCENT,color:'#fff',padding:'8px 18px',borderRadius:20,fontSize:22,fontWeight:700,letterSpacing:2,marginBottom:12,alignSelf:'flex-start'}}>✨ CANLARIM CİĞERLERİM ✨</div>}
-        <div style={{marginTop:reels?12:64,fontSize:graphemeLength(slide.hook)>45?80:92,fontWeight:700,lineHeight:1.1,maxWidth:860}}>{slide.hook}</div>
-        <div style={{width:160,height:4,backgroundColor:ACCENT,marginTop:reels?24:46}}/>
-        <p style={{fontSize:32,color:MUTED,lineHeight:1.5,maxWidth:740}}>{kind==='tarot'?'Günün kartını bul, sana uyan mesajı keşfet.':kind==='weekly'?'Haftanın ritmini keşfet, kendi burcuna göz at.':'Bugünün küçük molası, yarının büyük farkı olabilir.'}</p>
-        <div style={{marginTop:'auto',fontSize:25,color:ACCENT}}>{slide.partLabel ?? '12 BURÇ · KENDİ YORUMUNU BUL →'}</div>
-        <div style={{display:'flex',gap:22,marginTop:30}}>{SIGN_SLUGS.map(sign=><ZodiacGlyph key={sign} sign={sign} size={50} color={MUTED} strokeWidth={4}/>)}</div>
-      </>}
-      {sign && <>
-        <div style={{display:'flex',alignItems:'center',gap:24}}><ZodiacGlyph sign={sign.sign} size={74} color={ACCENT} strokeWidth={5}/><div><div data-slot="sign-name" style={{fontSize:82,fontWeight:700,lineHeight:1.2}}>{sign.signName}</div><div style={{fontSize:24,color:MUTED}}>{sign.dateRange}</div></div></div>
-        <div style={{display:'flex',alignItems:'center',gap:32,flex:1,minHeight:0,padding:'22px 0'}}>
-          {kind==='tarot' && sign.tarotCard && <div style={{width:reels?230:190,flexShrink:0}}><TarotCardArt cardId={sign.tarotCard.id} width={reels?230:190}/><div style={{fontSize:22,color:ACCENT,textAlign:'center',marginTop:12}}>{sign.tarotCard.name}</div></div>}
-          <div style={{flex:1,minWidth:0}}>
-            <div data-slot="headline" style={{fontSize:reels?58:kind==='weekly'?44:50,lineHeight:1.18,fontWeight:700,marginBottom:24}}>{sign.headline}</div>
-            <div data-slot="body" style={{fontSize:bodySize,lineHeight:kind==='weekly'?1.32:1.4}}>{sign.body}</div>
+  const bodySize=reels ? (length>400 ? 32 : length>280 ? 36 : 40) : kind==='weekly' ? length>780 ? 27 : 29 : kind==='tarot' ? 30 : length>360 ? 34 : 36;
+
+  // Reels değilse klasik carousel görünümünü koru
+  if (!reels) {
+    return <AbsoluteFill lang="tr" style={{...FORMAT_SIZES[format],backgroundColor:BACKDROPS[((variant%7)+7)%7],color:INK,fontFamily:BODY_FONT,fontSize:32,lineHeight:1.35,fontStyle:'normal',fontWeight:400,letterSpacing:'normal',textAlign:'left',overflow:'hidden',padding:'64px 80px 60px'}}>
+      <Orbit phase={phase}/>
+      <div style={{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:`1px solid ${LINE}`,paddingBottom:24,fontSize:22,letterSpacing:2}}><span style={{display:'flex',alignItems:'center',gap:12}}><SaturnMark size={30} color={INK} strokeWidth={5}/>KOZMİK ARKAN</span>{slide.type!=='cta' && <span style={{color:ACCENT,maxWidth:480,textAlign:'right'}}>{slide.dateLabel}</span>}</div>
+      <div style={{position:'relative',display:'flex',gap:16,marginTop:28,fontSize:23,letterSpacing:2}}><span style={{backgroundColor:INK,color:'#fff9ef',padding:'10px 16px'}}>{LABELS[kind]}</span><span style={{border:`1px solid ${LINE}`,padding:'10px 16px'}}>{slide.audience==='kadin'?'KADIN':'ERKEK'}</span></div>
+      <div style={{position:'relative',flex:1,display:'flex',flexDirection:'column',minHeight:0,padding:'32px 0 24px'}}>
+        {slide.type==='cover' && <>
+          <div style={{marginTop:64,fontSize:graphemeLength(slide.hook)>45?80:92,fontWeight:700,lineHeight:1.1,maxWidth:860}}>{slide.hook}</div>
+          <div style={{width:160,height:4,backgroundColor:ACCENT,marginTop:46}}/>
+          <p style={{fontSize:32,color:MUTED,lineHeight:1.5,maxWidth:740}}>{kind==='tarot'?'Günün kartını bul, sana uyan mesajı keşfet.':kind==='weekly'?'Haftanın ritmini keşfet, kendi burcuna göz at.':'Bugünün küçük molası, yarının büyük farkı olabilir.'}</p>
+          <div style={{marginTop:'auto',fontSize:25,color:ACCENT}}>{slide.partLabel ?? '12 BURÇ · KENDİ YORUMUNU BUL →'}</div>
+          <div style={{display:'flex',gap:22,marginTop:30}}>{SIGN_SLUGS.map(sign=><ZodiacGlyph key={sign} sign={sign} size={50} color={MUTED} strokeWidth={4}/>)}</div>
+        </>}
+        {sign && <>
+          <div style={{display:'flex',alignItems:'center',gap:24}}><ZodiacGlyph sign={sign.sign} size={74} color={ACCENT} strokeWidth={5}/><div><div data-slot="sign-name" style={{fontSize:82,fontWeight:700,lineHeight:1.2}}>{sign.signName}</div><div style={{fontSize:24,color:MUTED}}>{sign.dateRange}</div></div></div>
+          <div style={{display:'flex',alignItems:'center',gap:32,flex:1,minHeight:0,padding:'22px 0'}}>
+            {kind==='tarot' && sign.tarotCard && <div style={{width:190,flexShrink:0}}><TarotCardArt cardId={sign.tarotCard.id} width={190}/><div style={{fontSize:22,color:ACCENT,textAlign:'center',marginTop:12}}>{sign.tarotCard.name}</div></div>}
+            <div style={{flex:1,minWidth:0}}>
+              <div data-slot="headline" style={{fontSize:kind==='weekly'?44:50,lineHeight:1.18,fontWeight:700,marginBottom:24}}>{sign.headline}</div>
+              <div data-slot="body" style={{fontSize:bodySize,lineHeight:kind==='weekly'?1.32:1.4}}>{sign.body}</div>
+            </div>
+          </div>
+          <Scores slide={sign}/>
+          <div style={{display:'flex',gap:30,fontSize:24,color:MUTED,marginTop:14}}><span style={{display:'flex',alignItems:'center',gap:10}}><span style={{width:18,height:18,backgroundColor:sign.luckyColor.hex,border:`1px solid ${LINE}`,borderRadius:18}}/>{sign.luckyColor.name}</span><span>Şanslı sayı: {sign.luckyNumber}</span></div>
+        </>}
+        {slide.type==='cta' && <div style={{margin:'auto 0'}}><div style={{fontSize:90,fontWeight:700,lineHeight:1.1}}>Sana uyan<br/>notu kaydet.</div><div style={{width:160,height:4,backgroundColor:ACCENT,margin:'48px 0'}}/><div style={{fontSize:34,lineHeight:1.5,color:MUTED}}>Yarın yeni yorumlarla burada buluşalım.</div></div>}
+      </div>
+      <div style={{position:'relative',display:'flex',justifyContent:brand.position==='bottom-right'?'flex-end':'center',borderTop:`1px solid ${LINE}`,paddingTop:20,minHeight:45,fontSize:24,color:MUTED}}>{brand.enabled && brand.handle && <span data-slot="watermark" style={{display:'flex',alignItems:'center',gap:10,opacity:brand.opacity}}><SaturnMark size={28} color={INK} strokeWidth={5}/>@{brand.handle}</span>}{slide.type==='cta' && (!brand.enabled || !brand.handle) && <span>Yarın yeni yorumlarla buradayız</span>}</div>
+    </AbsoluteFill>;
+  }
+
+  // REELS: 1080x1920 Tam Ekran Sinematik Tasarım
+  return <AbsoluteFill lang="tr" style={{width:1080,height:1920,color:'#ffffff',fontFamily:BODY_FONT,padding:'100px 70px 140px',boxSizing:'border-box',display:'flex',flexDirection:'column',justifyContent:'space-between',overflow:'hidden'}}>
+    {/* Üst Bar: Logo, Kategori & Tarih */}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(255, 255, 255, 0.18)',paddingBottom:24}}>
+      <div style={{display:'flex',alignItems:'center',gap:14}}>
+        <div style={{background:'linear-gradient(135deg, #ffd166, #ff758c)',padding:10,borderRadius:16,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(255, 209, 102, 0.5)'}}>
+          <SaturnMark size={32} color="#1b102e" strokeWidth={5}/>
+        </div>
+        <div>
+          <span style={{fontSize:26,fontWeight:800,letterSpacing:3,color:'#fff',textShadow:'0 0 12px rgba(255,255,255,0.4)'}}>KOZMİK ARKAN</span>
+          <div style={{fontSize:18,color:'rgba(255, 255, 255, 0.7)',letterSpacing:1.5}}>{LABELS[kind]} · {slide.audience==='kadin'?'KADIN':'ERKEK'}</div>
+        </div>
+      </div>
+      {slide.type!=='cta' && <div style={{background:'rgba(255, 255, 255, 0.12)',backdropFilter:'blur(12px)',padding:'8px 20px',borderRadius:30,border:'1px solid rgba(255, 255, 255, 0.25)',fontSize:22,fontWeight:600,color:'#ffd166'}}>{slide.dateLabel}</div>}
+    </div>
+
+    {/* Orta Alan: İçerik */}
+    <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',minHeight:0,padding:'30px 0'}}>
+      {slide.type==='cover' && <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:28}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:10,background:'linear-gradient(90deg, #ff0844 0%, #ffb199 100%)',color:'#fff',padding:'12px 28px',borderRadius:30,fontSize:26,fontWeight:800,letterSpacing:3,boxShadow:'0 8px 30px rgba(255, 8, 68, 0.55)',animation:'pulse 2s infinite'}}>
+          ✨ CANLARIM CİĞERLERİM ✨
+        </div>
+        <div style={{fontSize:graphemeLength(slide.hook)>45?72:86,fontWeight:900,lineHeight:1.15,background:'linear-gradient(135deg, #ffffff 30%, #ffd166 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',textShadow:'0 10px 30px rgba(0,0,0,0.5)',maxWidth:940}}>
+          {slide.hook}
+        </div>
+        <div style={{width:200,height:5,background:'linear-gradient(90deg, #ffd166, #ff758c)',borderRadius:4,boxShadow:'0 0 15px #ffd166'}}/>
+        <p style={{fontSize:34,color:'rgba(255, 255, 255, 0.85)',lineHeight:1.5,maxWidth:840,margin:0,fontWeight:400}}>
+          {kind==='tarot'?'Günün tarot rehberliği ve kart enerjileri sizlerle.':'Bugünün gökyüzü enerjileri burcunuza ne fısıldıyor? Birlikte dinleyelim!'}
+        </p>
+        <div style={{marginTop:24,background:'rgba(255, 255, 255, 0.08)',backdropFilter:'blur(20px)',border:'1px solid rgba(255, 255, 255, 0.2)',padding:'20px 36px',borderRadius:24,display:'flex',gap:24,flexWrap:'wrap',justifyContent:'center',boxShadow:'0 15px 35px rgba(0,0,0,0.3)'}}>
+          {SIGN_SLUGS.map(signKey=><ZodiacGlyph key={signKey} sign={signKey} size={52} color="#ffd166" strokeWidth={4}/>)}
+        </div>
+      </div>}
+
+      {sign && <div style={{display:'flex',flexDirection:'column',gap:24}}>
+        {/* Burç Başlığı ve İkonu */}
+        <div style={{display:'flex',alignItems:'center',gap:24,background:'rgba(255, 255, 255, 0.1)',backdropFilter:'blur(20px)',border:'1px solid rgba(255, 255, 255, 0.25)',padding:'20px 32px',borderRadius:28,boxShadow:'0 12px 30px rgba(0,0,0,0.25)'}}>
+          <div style={{width:100,height:100,borderRadius:24,background:'linear-gradient(135deg, #ffd166, #ff758c)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 25px rgba(255, 209, 102, 0.6)',flexShrink:0}}>
+            <ZodiacGlyph sign={sign.sign} size={68} color="#1b102e" strokeWidth={5}/>
+          </div>
+          <div>
+            <div data-slot="sign-name" style={{fontSize:72,fontWeight:900,lineHeight:1.1,color:'#fff',textShadow:'0 2px 10px rgba(0,0,0,0.3)'}}>{sign.signName}</div>
+            <div style={{fontSize:24,color:'#ffd166',fontWeight:600,letterSpacing:1}}>{sign.dateRange}</div>
           </div>
         </div>
-        <Scores slide={sign}/>
-        <div style={{display:'flex',gap:30,fontSize:24,color:MUTED,marginTop:14}}><span style={{display:'flex',alignItems:'center',gap:10}}><span style={{width:18,height:18,backgroundColor:sign.luckyColor.hex,border:`1px solid ${LINE}`,borderRadius:18}}/>{sign.luckyColor.name}</span><span>Şanslı sayı: {sign.luckyNumber}</span></div>
-      </>}
-      {slide.type==='cta' && <div style={{margin:'auto 0'}}><div style={{fontSize:90,fontWeight:700,lineHeight:1.1}}>Sana uyan<br/>notu kaydet.</div><div style={{width:160,height:4,backgroundColor:ACCENT,margin:'48px 0'}}/><div style={{fontSize:34,lineHeight:1.5,color:MUTED}}>Yarın yeni yorumlarla burada buluşalım.</div></div>}
+
+        {/* Burç Yorum Metni Kartı */}
+        <div style={{background:'rgba(255, 255, 255, 0.08)',backdropFilter:'blur(25px)',border:'1px solid rgba(255, 255, 255, 0.18)',padding:'36px 40px',borderRadius:32,boxShadow:'0 20px 45px rgba(0,0,0,0.35)',display:'flex',flexDirection:'column',gap:20}}>
+          <div data-slot="headline" style={{fontSize:52,lineHeight:1.2,fontWeight:800,color:'#ffd166',textShadow:'0 2px 15px rgba(255, 209, 102, 0.4)'}}>
+            {sign.headline}
+          </div>
+          <div data-slot="body" style={{fontSize:bodySize,lineHeight:1.42,color:'rgba(255, 255, 255, 0.95)',fontWeight:400,textShadow:'0 2px 8px rgba(0,0,0,0.4)'}}>
+            {sign.body}
+          </div>
+        </div>
+
+        {/* Skorlar & Şanslı Bilgiler */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          <div style={{display:'flex',gap:16}}>
+            {[['Aşk',sign.scores.love,'#ff758c'],['Para',sign.scores.money,'#ffd166'],['Sağlık',sign.scores.health,'#06d6a0']].map(([label,val,col])=>(
+              <div key={label as string} style={{background:'rgba(255, 255, 255, 0.1)',backdropFilter:'blur(15px)',border:`1px solid ${col as string}66`,padding:'12px 22px',borderRadius:20,fontSize:22,fontWeight:600,display:'flex',alignItems:'center',gap:10,boxShadow:`0 4px 15px ${(col as string)}33`}}>
+                <span style={{color:'rgba(255,255,255,0.8)'}}>{label}</span>
+                <strong style={{color:col as string,fontSize:26}}>{val}/5</strong>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:14}}>
+            <div style={{background:'rgba(255, 255, 255, 0.1)',backdropFilter:'blur(15px)',border:'1px solid rgba(255, 255, 255, 0.2)',padding:'12px 22px',borderRadius:20,fontSize:22,fontWeight:600,display:'flex',alignItems:'center',gap:10}}>
+              <span style={{width:20,height:20,backgroundColor:sign.luckyColor.hex || '#ff758c',borderRadius:'50%',boxShadow:`0 0 10px ${sign.luckyColor.hex || '#ff758c'}`}}/>
+              <span>{sign.luckyColor.name}</span>
+            </div>
+            <div style={{background:'rgba(255, 255, 255, 0.1)',backdropFilter:'blur(15px)',border:'1px solid rgba(255, 255, 255, 0.2)',padding:'12px 22px',borderRadius:20,fontSize:22,fontWeight:600,color:'#ffd166'}}>
+              Şans: <strong>{sign.luckyNumber}</strong>
+            </div>
+          </div>
+        </div>
+      </div>}
+
+      {slide.type==='cta' && <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:32}}>
+        <div style={{fontSize:88,fontWeight:900,lineHeight:1.15,background:'linear-gradient(135deg, #ffffff 40%, #ffd166 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+          Sana Uyan Mesajı<br/>Kaydetmeyi Unutma ✨
+        </div>
+        <div style={{width:180,height:5,background:'linear-gradient(90deg, #ffd166, #ff758c)',borderRadius:4}}/>
+        <div style={{fontSize:36,lineHeight:1.5,color:'rgba(255, 255, 255, 0.85)',maxWidth:780}}>
+          Yarın yeni gökyüzü rehberliği ve burç yorumlarında buluşmak üzere, sevgiyle kalın!
+        </div>
+      </div>}
     </div>
-    <div style={{position:'relative',display:'flex',justifyContent:brand.position==='bottom-right'?'flex-end':'center',borderTop:`1px solid ${LINE}`,paddingTop:20,minHeight:45,fontSize:24,color:MUTED}}>{brand.enabled && brand.handle && <span data-slot="watermark" style={{display:'flex',alignItems:'center',gap:10,opacity:brand.opacity}}><SaturnMark size={28} color={INK} strokeWidth={5}/>@{brand.handle}</span>}{slide.type==='cta' && (!brand.enabled || !brand.handle) && <span>Yarın yeni yorumlarla buradayız</span>}</div>
+
+    {/* Alt Bar: Watermark */}
+    <div style={{display:'flex',justifyContent:'center',alignItems:'center',borderTop:'1px solid rgba(255, 255, 255, 0.18)',paddingTop:24}}>
+      <span style={{display:'flex',alignItems:'center',gap:12,fontSize:26,fontWeight:700,letterSpacing:2,color:'#ffd166',textShadow:'0 0 15px rgba(255, 209, 102, 0.6)'}}>
+        <SaturnMark size={32} color="#ffd166" strokeWidth={5}/>
+        @{brand.handle || 'kozmikarkan'}
+      </span>
+    </div>
   </AbsoluteFill>;
 }
 
 function CosmicScene({props,kind,index,total}:{props:SlideProps;kind:Kind;index?:number;total?:number}) {
   const frame=useCurrentFrame();
-  const opacity=interpolate(frame,[0,12],[0,1],{extrapolateRight:'clamp'});
-  const y=Math.round(interpolate(frame,[0,18],[26,0],{extrapolateRight:'clamp'}));
-  const baseBackdrop=BACKDROPS[((props.variant%7)+7)%7];
+  const opacity=interpolate(frame,[0,10],[0,1],{extrapolateRight:'clamp'});
+  const scale=interpolate(frame,[0,15],[0.97,1],{extrapolateRight:'clamp'});
+
+  // Hareketli Aurora ve Nebula Gradyanı
+  const auroraOffset = Math.sin(frame * 0.04) * 80;
+  const glowPulse = Math.sin(frame * 0.08) * 0.2 + 0.8;
 
   return <AbsoluteFill style={{
-    background: `radial-gradient(circle at 50% 12%, rgba(255, 230, 160, 0.28) 0%, transparent 50%), radial-gradient(circle at 85% 75%, rgba(189, 101, 73, 0.22) 0%, transparent 45%), linear-gradient(175deg, ${baseBackdrop} 0%, #ecdfe8 45%, #e1d3e8 100%)`,
+    background: `radial-gradient(circle at ${50 + auroraOffset * 0.2}% 20%, rgba(138, 43, 226, 0.65) 0%, transparent 55%), radial-gradient(circle at ${80 - auroraOffset * 0.15}% 75%, rgba(255, 20, 147, 0.5) 0%, transparent 50%), radial-gradient(circle at 25% 85%, rgba(0, 191, 255, 0.45) 0%, transparent 45%), linear-gradient(180deg, #0c071e 0%, #170d36 50%, #090417 100%)`,
     overflow: 'hidden',
   }}>
-    {Array.from({ length: 14 }).map((_, i) => {
-      const sparkle = Math.sin((frame * 0.1) + i * 1.5) * 0.5 + 0.5;
-      const x = (i * 73) % 92 + 4;
-      const yPos = (i * 61) % 90 + 5;
+    {/* 24 Adet Parıldayan Sinematik Yıldız Parçacıkları */}
+    {Array.from({ length: 24 }).map((_, i) => {
+      const sparkle = Math.sin((frame * 0.12) + i * 1.3) * 0.5 + 0.5;
+      const x = (i * 47) % 94 + 3;
+      const yPos = (i * 59) % 92 + 4;
+      const size = 4 + (i % 4) * 2.5;
+      const starColor = i % 3 === 0 ? '#ffd166' : i % 3 === 1 ? '#00f5d4' : '#ff758c';
       return (
         <div
           key={i}
@@ -82,52 +190,61 @@ function CosmicScene({props,kind,index,total}:{props:SlideProps;kind:Kind;index?
             position: 'absolute',
             left: `${x}%`,
             top: `${yPos}%`,
-            width: 6 + (i % 3) * 3,
-            height: 6 + (i % 3) * 3,
+            width: size,
+            height: size,
             borderRadius: '50%',
-            backgroundColor: '#ffc857',
-            boxShadow: '0 0 12px rgba(255, 200, 87, 0.85)',
-            opacity: 0.25 + sparkle * 0.75,
-            transform: `scale(${0.8 + sparkle * 0.5})`,
+            backgroundColor: starColor,
+            boxShadow: `0 0 ${size * 3}px ${starColor}`,
+            opacity: 0.2 + sparkle * 0.8,
+            transform: `scale(${0.7 + sparkle * 0.6})`,
           }}
         />
       );
     })}
-    <div style={{position:'absolute',top:120+y,left:0,width:1080,height:1350,opacity}}><CosmicSlide {...props} kind={kind} phase={frame/5} reels /></div>
-    <div style={{position:'absolute',top:1475,left:0,width:1080,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-      <span style={{fontSize:20,letterSpacing:2,color:MUTED,marginRight:8,fontWeight:600}}>CANLI ANLATIM</span>
-      {Array.from({ length: 9 }).map((_, bar) => {
-        const h = Math.round(8 + Math.abs(Math.sin((frame * 0.22) + bar * 0.85)) * 26);
-        return (
-          <div
-            key={bar}
-            style={{
-              width: 5,
-              height: h,
-              borderRadius: 3,
-              backgroundColor: ACCENT,
-              opacity: 0.75 + Math.sin(frame * 0.12 + bar) * 0.25,
-            }}
-          />
-        );
-      })}
+
+    {/* Tam Ekran Slide Katmanı */}
+    <div style={{position:'absolute',top:0,left:0,width:1080,height:1920,opacity,transform:`scale(${scale})`}}>
+      <CosmicSlide {...props} kind={kind} phase={frame/4} reels />
     </div>
-    {index!==undefined && <div style={{position:'absolute',top:1530,left:80,width:920,color:INK,fontSize:24,fontFamily:BODY_FONT,fontWeight:600}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <span>{index+1} / {total} · {props.slide.type==='sign' ? props.slide.signName : 'Burç Yorumu'}</span>
-        <span style={{color:ACCENT,fontSize:22}}>Kozmik Arkan ✨</span>
+
+    {/* Alt Kısım: Dinamik Ses Frekansı (Audio Waveform) */}
+    <div style={{position:'absolute',bottom:80,left:0,width:1080,display:'flex',flexDirection:'column',alignItems:'center',gap:12,pointerEvents:'none'}}>
+      <div style={{display:'flex',alignItems:'center',gap:5}}>
+        {Array.from({ length: 17 }).map((_, bar) => {
+          const h = Math.round(10 + Math.abs(Math.sin((frame * 0.28) + bar * 0.65)) * 34 * glowPulse);
+          return (
+            <div
+              key={bar}
+              style={{
+                width: 6,
+                height: h,
+                borderRadius: 4,
+                background: 'linear-gradient(180deg, #ffd166 0%, #ff758c 100%)',
+                boxShadow: '0 0 10px rgba(255, 209, 102, 0.7)',
+              }}
+            />
+          );
+        })}
       </div>
-      <div style={{marginTop:14,height:6,width:920,backgroundColor:'rgba(202, 185, 220, 0.45)',borderRadius:4,overflow:'hidden'}}>
-        <div style={{height:'100%',width:`${Math.round(100*(index+1)/(total ?? 12))}%`,backgroundColor:ACCENT,borderRadius:4}}/>
-      </div>
-    </div>}
+
+      {/* İlerleme Çubuğu */}
+      {index!==undefined && <div style={{width:940,display:'flex',flexDirection:'column',gap:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:20,fontWeight:700,letterSpacing:1.5,color:'rgba(255, 255, 255, 0.8)'}}>
+          <span>{index + 1} / {total} · {props.slide.type==='sign' ? props.slide.signName : 'Burç'}</span>
+          <span style={{color:'#ffd166'}}>Kozmik Anlatım 🎙️</span>
+        </div>
+        <div style={{height:6,width:'100%',backgroundColor:'rgba(255, 255, 255, 0.15)',borderRadius:4,overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${Math.round(100*(index+1)/(total ?? 12))}%`,background:'linear-gradient(90deg, #ffd166, #ff758c)',borderRadius:4,boxShadow:'0 0 10px #ffd166'}}/>
+        </div>
+      </div>}
+    </div>
   </AbsoluteFill>;
 }
 
 export function CosmicReels({kind='horoscope',...reels}:ReelsProps & {kind?:Kind}) {
   const common={brand:reels.brand,format:'4x5' as const,variant:reels.variant};
   const timing=linearTiming({durationInFrames:TRANSITION_FRAMES});
-  return <AbsoluteFill style={{backgroundColor:BACKDROPS[((reels.variant%7)+7)%7]}}><TransitionSeries>
+  return <AbsoluteFill style={{backgroundColor:'#0c071e'}}><TransitionSeries>
     <TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.introFrames ?? INTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cover',audience:reels.audience,dateLabel:reels.dateLabel,hook:reels.hook}}}/></TransitionSeries.Sequence>
     {reels.signs.map((sign,index)=><Fragment key={sign.sign}><TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.signFrames[index] ?? SIGN_FRAMES}><CosmicScene kind={kind} index={index} total={reels.signs.length} props={{...common,slide:{...sign,type:'sign',audience:reels.audience,dateLabel:reels.dateLabel,body:sign.body || sign.short}}}/></TransitionSeries.Sequence></Fragment>)}
     <TransitionSeries.Transition presentation={fade()} timing={timing}/><TransitionSeries.Sequence durationInFrames={reels.sceneTiming?.outroFrames ?? OUTRO_FRAMES}><CosmicScene kind={kind} props={{...common,slide:{type:'cta',audience:reels.audience}}}/></TransitionSeries.Sequence>

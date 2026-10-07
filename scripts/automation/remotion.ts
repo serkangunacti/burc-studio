@@ -61,58 +61,49 @@ export async function openRemotionRenderers(input: {
       return images;
     },
     async renderReels({ templateVersion, reels, musicSeed, name }) {
-      let videoVoice=voice;
-      if(input.narrate){
-        if(!['pastel@2','pastel-tarot@2','pastel-weekly@2'].includes(templateVersion))throw new Error('Bu eski şablon burç konuşma zamanlamasını desteklemiyor; video üretilmedi');
-        try {
-          let introVoice = voice?.intro;
-          let outroVoice = voice?.outro;
-
-          if (input.narrateIntro) {
-            try {
-              input.log(`${name}: sıcak giriş seslendiriliyor`);
-              const introClip = await input.narrateIntro(reels);
-              const file = `voice-${name}-intro.wav`;
-              await writeFile(path.join(serveUrl, 'public', file), introClip.data);
-              introVoice = { file, durationSeconds: introClip.durationSeconds };
-            } catch (err) {
-              input.log(`Giriş seslendirme uyarısı: ${(err as Error).message}`);
-            }
-          }
-
-          if (input.narrateOutro) {
-            try {
-              input.log(`${name}: samimi kapanış seslendiriliyor`);
-              const outroClip = await input.narrateOutro();
-              const file = `voice-${name}-outro.wav`;
-              await writeFile(path.join(serveUrl, 'public', file), outroClip.data);
-              outroVoice = { file, durationSeconds: outroClip.durationSeconds };
-            } catch (err) {
-              input.log(`Kapanış seslendirme uyarısı: ${(err as Error).message}`);
-            }
-          }
-
-          if (!introVoice || !outroVoice) {
-            throw new Error('Onaylı giriş/kapanış sesleri eksik; video eksik konuşmayla üretilmedi');
-          }
-
-          const signs=[];
-          // All twelve clips must be complete before a video is rendered or uploaded.
-          for(const [index,sign] of reels.signs.entries()){
-            input.log(`${name}: ${index+1}/${reels.signs.length} ${sign.signName} seslendiriliyor`);
-            const clip=await input.narrate(sign);
-            const file=`voice-${name}-${sign.sign}.wav`;
-            await writeFile(path.join(serveUrl,'public',file),clip.data);
-            signs.push({file,durationSeconds:clip.durationSeconds});
-          }
-          videoVoice={intro: introVoice, outro: outroVoice, signs};
-          reels={...reels,sceneTiming:narrationTiming(videoVoice,reels.signs.length,REELS_FPS)};
-        } catch (err) {
-          input.log(`Seslendirme uyarısı: ${(err as Error).message}. Video giriş/kapanış sesi ve müzikle çiziliyor.`);
-          videoVoice=voice;
+      let videoVoice: typeof voice = undefined;
+      if (input.narrate) {
+        if (!['pastel@2', 'pastel-tarot@2', 'pastel-weekly@2'].includes(templateVersion)) {
+          throw new Error('Bu eski şablon burç konuşma zamanlamasını desteklemiyor; video üretilmedi');
         }
+
+        let introVoice: { file: string; durationSeconds: number } | undefined;
+        let outroVoice: { file: string; durationSeconds: number } | undefined;
+
+        if (input.narrateIntro) {
+          input.log(`${name}: sıcak giriş Google TTS ile seslendiriliyor`);
+          const introClip = await input.narrateIntro(reels);
+          const file = `voice-${name}-intro.wav`;
+          await writeFile(path.join(serveUrl, 'public', file), introClip.data);
+          introVoice = { file, durationSeconds: introClip.durationSeconds };
+        }
+
+        if (input.narrateOutro) {
+          input.log(`${name}: samimi kapanış Google TTS ile seslendiriliyor`);
+          const outroClip = await input.narrateOutro();
+          const file = `voice-${name}-outro.wav`;
+          await writeFile(path.join(serveUrl, 'public', file), outroClip.data);
+          outroVoice = { file, durationSeconds: outroClip.durationSeconds };
+        }
+
+        if (!introVoice || !outroVoice) {
+          throw new Error('Google TTS giriş ve kapanış sesleri üretilemedi; video eksik konuşmayla üretilmeyecek');
+        }
+
+        const signs = [];
+        // Tüm burç yorumları Google TTS ile seslendirilmelidir
+        for (const [index, sign] of reels.signs.entries()) {
+          input.log(`${name}: ${index + 1}/${reels.signs.length} ${sign.signName} Google TTS ile seslendiriliyor`);
+          const clip = await input.narrate(sign);
+          const file = `voice-${name}-${sign.sign}.wav`;
+          await writeFile(path.join(serveUrl, 'public', file), clip.data);
+          signs.push({ file, durationSeconds: clip.durationSeconds });
+        }
+
+        videoVoice = { intro: introVoice, outro: outroVoice, signs };
+        reels = { ...reels, sceneTiming: narrationTiming(videoVoice, reels.signs.length, REELS_FPS) };
       }
-      const seconds = reelsDurationInFrames(reels.signs.length,reels.sceneTiming) / REELS_FPS;
+      const seconds = reelsDurationInFrames(reels.signs.length, reels.sceneTiming) / REELS_FPS;
       const musicFile = `music-${name}.wav`;
       // Paket klasörü sunucuda statik olarak sunulur; müzik staticFile() ile buradan okunur.
       await writeFile(path.join(serveUrl, 'public', musicFile), await input.music.render(musicSeed, seconds));
