@@ -16,8 +16,9 @@ const SECRET_PATTERNS = [
   { name: 'Private Key Block', regex: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
 ];
 
-const IGNORE_DIRS = new Set(['.git', 'node_modules', '.next', '.cache', 'dist', 'build']);
+const IGNORE_DIRS = new Set(['.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'public', '.remotion', '.vercel', 'out']);
 const IGNORE_FILES = new Set(['package-lock.json']);
+const SCANNABLE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.md', '.env', '.sh', '.sql']);
 
 const errors = [];
 const warnings = [];
@@ -31,6 +32,8 @@ async function scanFiles(dir) {
       await scanFiles(fullPath);
     } else if (entry.isFile()) {
       if (IGNORE_FILES.has(entry.name)) continue;
+      const ext = path.extname(entry.name);
+      if (!SCANNABLE_EXTS.has(ext) && !entry.name.startsWith('.env')) continue;
       await scanFile(fullPath);
     }
   }

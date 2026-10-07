@@ -44,7 +44,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   const needsRender = (item: PlannedPublication) => {
     const status = existing.get(slotKey(item))?.status;
     if (options.only) return true;
-    return status === undefined || (options.force === true && (status === 'ready' || status === 'approved'));
+    return status === undefined || (options.force === true && (status === 'ready' || status === 'approved' || status === 'published' || status === 'failed'));
   };
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 
@@ -61,7 +61,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
       const parts = new Map(splitCarousel(buildSlideProps(detail, brand)).map((entry) => [entry.part, entry.slides]));
       // TikTok, Reels ile aynı videoyu paylaşır; video bir kez çizilir.
       const existingVideo = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media;
-      let video = existingVideo?.videoUrl ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
+      let video = existingVideo?.videoUrl && !options.force ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
       const renderVideo = async () => {
         const reels = buildReelsProps(detail, brand);
         const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
@@ -87,11 +87,11 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
           const slides = parts.get(item.part as 1 | 2 | 3);
           if (!slides) throw new Error(`Carousel parçası yok: ${item.part}`);
           const images = await renderers.renderStills(post.templateVersion, slides);
-          await savePublication(db, date, item, { images });
+          await savePublication(db, date, item, { images }, { force: options.force });
         } else if (item.format === 'reels') {
-          await savePublication(db, date, item, await renderVideo());
+          await savePublication(db, date, item, await renderVideo(), { force: options.force });
         } else {
-          await savePublication(db, date, item, video ?? (await renderVideo()));
+          await savePublication(db, date, item, video ?? (await renderVideo()), { force: options.force });
         }
         result.rendered.push(slotKey(item));
       }

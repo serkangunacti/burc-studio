@@ -20,6 +20,7 @@ export async function savePublication(
   date: DateKey,
   planned: PlannedPublication,
   media: RenderedMedia,
+  options: { force?: boolean } = {},
 ): Promise<PublicationRow | null> {
   return db.transaction(async (tx) => {
     const [existing] = await tx
@@ -34,15 +35,23 @@ export async function savePublication(
           eq(publications.part, planned.part),
         ),
       );
-    if (existing && !(REPLACEABLE as readonly string[]).includes(existing.status)) return null;
+    const replaceable = options.force
+      ? (['ready', 'approved', 'published', 'failed', 'skipped'] as const)
+      : REPLACEABLE;
+    if (existing && !(replaceable as readonly string[]).includes(existing.status)) return null;
+    const isPublishedReset = Boolean(options.force && existing?.status === 'published');
     const values = {
       postId: planned.postId,
-      scheduledAt: planned.scheduledAt,
+      scheduledAt: isPublishedReset && planned.scheduledAt.getTime() < Date.now() ? new Date() : planned.scheduledAt,
       caption: planned.caption,
-      status: (existing?.status === 'approved' ? 'approved' : 'ready') as const,
+      status: (isPublishedReset ? 'ready' : (existing?.status === 'approved' ? 'approved' : 'ready')) as const,
       media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,
+      remoteId: isPublishedReset ? null : (existing?.remoteId ?? null),
+      permalink: isPublishedReset ? null : (existing?.permalink ?? null),
+      publishedAt: isPublishedReset ? null : (existing?.publishedAt ?? null),
+      approvedAt: isPublishedReset ? null : (existing?.approvedAt ?? null),
       updatedAt: new Date(),
     };
     const [row] = existing
