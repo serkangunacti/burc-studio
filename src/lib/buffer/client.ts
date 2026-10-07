@@ -157,7 +157,7 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
             ...(input.instagramReel
               ? { metadata: { instagram: { type: 'reel', shouldShareToFeed: true, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
               : input.youtube
-              ? { metadata: { youtube: { title: input.youtube.title.slice(0, 95), privacy: 'public', madeForKids: false, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
+              ? { metadata: { youtube: { title: input.youtube.title.slice(0, 95), categoryId: '24', privacy: 'public', madeForKids: false, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
               : input.isAiGenerated ? { metadata: { tiktok: { isAiGenerated: true } } } : {}),
           },
         },

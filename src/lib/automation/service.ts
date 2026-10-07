@@ -225,6 +225,15 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       );
       return;
     }
+    if (command === '/shorts') {
+      const result = await syncYouTubeShorts(deps, istanbulDateKey(deps.now()));
+      if (result.errors.length > 0) {
+        await client.sendMessage(from, `⚠️ YouTube Shorts işlemi:\n• Gönderilen: ${result.sent}\n• Hatalar:\n${result.errors.map((e) => `  - ${escapeHtml(e)}`).join('\n')}`);
+      } else {
+        await client.sendMessage(from, `✅ ${result.sent} video YouTube Shorts olarak Buffer'a iletildi.`);
+      }
+      return;
+    }
     return;
   }
 
@@ -482,6 +491,8 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
         }
       } catch (ytError) {
         console.error('YouTube Shorts paylaşımı atlandı/başarısız', ytError);
+        const ytMsg = ytError instanceof Error ? ytError.message : String(ytError);
+        await notify(deps, `⚠️ YouTube Shorts paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(ytMsg)}</i>`, true);
       }
     }
     if (!silent) {
@@ -713,6 +724,34 @@ export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{
   const approved = rows.filter((row) => row.status === 'approved');
   await enqueueRows(deps, [...approved, ...retried]);
   return { requeued: approved.length, retried: retried.length };
+}
+
+// Günün hazır ya da yayınlanmış Reels videolarını YouTube Shorts olarak Buffer kuyruğuna gönderir.
+export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Promise<{ sent: number; errors: string[] }> {
+  const rows = (await listPublications(deps.db, date)).filter((row) => row.format === 'reels' && row.media.videoUrl);
+  if (rows.length === 0) return { sent: 0, errors: ['Günün hazır veya yayınlanmış Reels videosu bulunamadı.'] };
+  const ytBuffer = await loadBuffer(deps, 'youtube');
+  let sent = 0;
+  const errors: string[] = [];
+  for (const row of rows) {
+    try {
+      const ytTitle = `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts`;
+      await ytBuffer.client.shareVideoNow({
+        channelId: ytBuffer.channelId,
+        text: row.caption,
+        videoUrl: row.media.videoUrl!,
+        youtube: { title: ytTitle },
+        ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+      });
+      sent++;
+      await notify(deps, `▶️ YouTube Shorts'a gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      errors.push(`${publicationLabel(row)}: ${msg}`);
+      await notify(deps, `⚠️ YouTube Shorts gönderilemedi · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(msg)}</i>`, true);
+    }
+  }
+  return { sent, errors };
 }
 
 export type PublishNowResult = { id: string; label: string; outcome: PublishOutcome | 'retry'; message?: string };

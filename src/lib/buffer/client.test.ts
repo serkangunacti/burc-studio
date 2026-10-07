@@ -67,7 +67,7 @@ describe('Buffer istemcisi', () => {
       })
     ).toBe('p2');
     expect((calls[0].variables.input as any).metadata).toEqual({
-      youtube: { title: 'Koç Burcu Günlük Yorumu #Shorts', privacy: 'public', madeForKids: false },
+      youtube: { title: 'Koç Burcu Günlük Yorumu #Shorts', categoryId: '24', privacy: 'public', madeForKids: false },
     });
   });
 
