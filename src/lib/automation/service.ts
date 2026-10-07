@@ -87,7 +87,7 @@ const BUFFER_TIMEOUT_MS = 4 * 60 * 60_000;
 // Reels işleme için ~10 dakika; geçici Instagram hataları için 5 deneme.
 const MAX_PROCESSING_ATTEMPTS = 20;
 const MAX_TRANSIENT_ATTEMPTS = 5;
-const MEDIA_RETENTION_DAYS = 3;
+const MEDIA_RETENTION_DAYS = 1;
 const TOKEN_REFRESH_WINDOW_MS = 20 * DAY_MS;
 const INSTAGRAM_TOKEN_LIFETIME_MS = 60 * DAY_MS;
 
@@ -215,6 +215,15 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     if (command === '/bugun') {
       const result = await sendDayPlan(deps, istanbulDateKey(deps.now()));
       if (!result.sent && result.reason) await client.sendMessage(from, escapeHtml(result.reason));
+      return;
+    }
+    if (command === '/temizle' || command === '/bakim') {
+      const result = await runMaintenance(deps);
+      await client.sendMessage(
+        from,
+        `🧹 <b>Bakım ve temizlik tamamlandı</b>\n• ${result.deletedVideos} eski video depodan silindi\n• ${result.deletedImages} eski görsel temizlendi\n• ${result.expired} süresi geçen kayıt kapatıldı${result.tokenRefreshed ? '\n• Instagram anahtarı yenilendi' : ''}`,
+      );
+      return;
     }
     return;
   }

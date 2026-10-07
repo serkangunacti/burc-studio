@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { put } from '@vercel/blob';
+import { del, list, put } from '@vercel/blob';
 import { closeDb, getDb } from '../src/db/client';
 import { missingPosts, renderDay } from '../src/lib/automation/render-job';
 import { hasPlanMessage } from '../src/lib/automation/repository';
@@ -43,6 +43,24 @@ async function main() {
   const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
   const db = getDb();
+  // Vercel Blob ücretsiz kotasını (1 GB) korumak için 24 saatten eski geçici videoları temizle.
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60_000);
+    let cursor: string | undefined;
+    let totalDeleted = 0;
+    do {
+      const page = await list({ prefix: 'reels/', cursor, limit: 1000 });
+      const old = page.blobs.filter((b) => b.uploadedAt < cutoff).map((b) => b.url);
+      if (old.length > 0) {
+        await del(old);
+        totalDeleted += old.length;
+      }
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    if (totalDeleted > 0) log(`Vercel Blob temizliği: ${totalDeleted} eski video silindi.`);
+  } catch (cleanError) {
+    log(`Vercel Blob temizliği atlandı: ${cleanError instanceof Error ? cleanError.message : String(cleanError)}`);
+  }
   const { automation } = await getSettings(db);
   const paused = automationStartReason(automation.startDate, date);
   if (!automation.enabled || paused) {
