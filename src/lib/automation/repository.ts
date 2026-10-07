@@ -44,7 +44,7 @@ export async function savePublication(
       postId: planned.postId,
       scheduledAt: isPublishedReset && planned.scheduledAt.getTime() < Date.now() ? new Date() : planned.scheduledAt,
       caption: planned.caption,
-      status: (isPublishedReset ? 'ready' : (existing?.status === 'approved' ? 'approved' : 'ready')) as const,
+      status: (isPublishedReset ? ('ready' as const) : (existing?.status === 'approved' ? ('approved' as const) : ('ready' as const))),
       media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,

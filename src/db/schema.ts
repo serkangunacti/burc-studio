@@ -215,7 +215,7 @@ export const mediaFiles = pgTable(
   (t) => [uniqueIndex('media_files_position_uq').on(t.publicationId, t.position)],
 );
 
-export const INTEGRATION_IDS = ['instagram', 'telegram', 'buffer', 'buffer_instagram', 'github'] as const;
+export const INTEGRATION_IDS = ['instagram', 'telegram', 'buffer', 'buffer_instagram', 'buffer_youtube', 'github'] as const;
 export type IntegrationId = (typeof INTEGRATION_IDS)[number];
 export type IntegrationAccount = { id: string; username: string | null; rateLimits?: { windowSeconds: number; limit: number; remaining: number; resetsAt: string }[] };
 

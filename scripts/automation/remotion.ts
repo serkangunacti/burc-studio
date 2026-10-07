@@ -7,7 +7,7 @@ import type { Renderers } from '@/lib/automation/render-job';
 import { REELS_FPS, reelsDurationInFrames } from '@/remotion/reels';
 import type { MusicRenderer } from './music';
 import type { decodeVoiceAsset } from './voice';
-import type { ReelsSign } from '@/remotion/slide-types';
+import type { ReelsSign, ReelsProps } from '@/remotion/slide-types';
 import {narrationTiming,type ReelsVoice} from '@/remotion/voice';
 import type {NarrationClip} from './google-tts';
 

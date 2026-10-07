@@ -142,7 +142,7 @@ export function CosmicSlide({kind='horoscope',phase=0,reels=false,...props}:Slid
       </div>
 
       {/* Alt Bar: Watermark */}
-      <div style={{position:'relative',display:'flex',justify:brand.position==='bottom-right'?'flex-end':'center',borderTop:'1px solid rgba(255, 255, 255, 0.18)',paddingTop:16,minHeight:40,fontSize:22,color:'#ffd166',fontWeight:700}}>
+      <div style={{position:'relative',display:'flex',justifyContent:brand.position==='bottom-right'?'flex-end':'center',borderTop:'1px solid rgba(255, 255, 255, 0.18)',paddingTop:16,minHeight:40,fontSize:22,color:'#ffd166',fontWeight:700}}>
         {brand.enabled && brand.handle && <span data-slot="watermark" style={{display:'flex',alignItems:'center',gap:10,opacity:brand.opacity}}><SaturnMark size={24} color="#ffd166" strokeWidth={5}/>@{brand.handle}</span>}
         {slide.type==='cta' && (!brand.enabled || !brand.handle) && <span>Yarın yeni yorumlarla buradayız</span>}
       </div>
