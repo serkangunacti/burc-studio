@@ -43,7 +43,8 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   // yeniden çizilmez (Telegram'daki "yeniden dene" ile gönderilir): geç gelen bir tetikleme onları onaysız duruma çekmesin.
   const needsRender = (item: PlannedPublication) => {
     const status = existing.get(slotKey(item))?.status;
-    return status === undefined || (options.force === true && status === 'ready');
+    if (options.only) return true;
+    return status === undefined || (options.force === true && (status === 'ready' || status === 'approved'));
   };
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 

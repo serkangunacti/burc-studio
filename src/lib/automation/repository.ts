@@ -10,8 +10,8 @@ export type PublicationRow = typeof publications.$inferSelect;
 export type IntegrationRow = typeof integrations.$inferSelect;
 export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string; isAiGenerated?: boolean };
 
-// Yalnız onaylanmamış satır yeniden çizimle ezilir: onaylanmış, paylaşılmış ya da paylaşımda başarısız içerik sessizce değişmesin.
-const REPLACEABLE = ['ready'] as const;
+// Yalnız onaylanmamış veya zorla yenilenen satır yeniden çizimle ezilir.
+const REPLACEABLE = ['ready', 'approved'] as const;
 // Sonuç yazılmadan düşen bir paylaşım bu süreden sonra yeniden sahiplenilebilir.
 const PUBLISH_LEASE_MS = 10 * 60_000;
 
@@ -39,7 +39,7 @@ export async function savePublication(
       postId: planned.postId,
       scheduledAt: planned.scheduledAt,
       caption: planned.caption,
-      status: 'ready' as const,
+      status: (existing?.status === 'approved' ? 'approved' : 'ready') as const,
       media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,
