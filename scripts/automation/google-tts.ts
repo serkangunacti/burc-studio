@@ -142,9 +142,6 @@ export function createGoogleNarrator(options: {
             'Content-Type': 'application/json',
             'x-goog-api-key': apiKey,
           };
-          if (apiKey.startsWith('AQ.') || apiKey.startsWith('ya29.')) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-          }
 
           res = await fetchImpl(url, {
             method: 'POST',
