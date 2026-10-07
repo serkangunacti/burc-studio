@@ -48,6 +48,9 @@ export async function savePublication(
       media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,
+      publishAttemptedAt: isPublishedReset ? null : (existing?.publishAttemptedAt ?? null),
+      attempts: isPublishedReset ? 0 : (existing?.attempts ?? 0),
+      rebuilds: isPublishedReset ? 0 : (existing?.rebuilds ?? 0),
       remoteId: isPublishedReset ? null : (existing?.remoteId ?? null),
       permalink: isPublishedReset ? null : (existing?.permalink ?? null),
       publishedAt: isPublishedReset ? null : (existing?.publishedAt ?? null),
@@ -243,7 +246,16 @@ export async function retryFailedGroup(db: Db, input: { postId: string; format: 
   return db
     .update(publications)
     // Yayın denemesi ve Buffer gönderisi korunur: yeniden deneme önce bunların sonucunu doğrular, kopya paylaşım açmaz.
-    .set({ status: 'approved', error: null, attempts: 0, rebuilds: 0, approvedAt: now, updatedAt: now })
+    .set({
+      status: 'approved',
+      error: null,
+      attempts: 0,
+      rebuilds: 0,
+      publishAttemptedAt: null,
+      igContainerId: null,
+      approvedAt: now,
+      updatedAt: now,
+    })
     .where(and(eq(publications.postId, input.postId), eq(publications.format, input.format), eq(publications.status, 'failed')))
     .returning();
 }

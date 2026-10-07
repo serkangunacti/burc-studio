@@ -16,7 +16,7 @@ const STATUS_ICONS: Record<PublicationStatus, string> = {
   failed: '❌',
 };
 const FORMAT_CODES: Record<PublicationFormat, string> = { carousel: 'c', reels: 'r', tiktok: 't' };
-const FORMAT_NAMES: Record<PublicationFormat, string> = { carousel: 'carousel', reels: 'Reels', tiktok: 'TikTok' };
+const FORMAT_NAMES: Record<PublicationFormat, string> = { carousel: 'carousel', reels: 'Reels & Shorts', tiktok: 'TikTok' };
 
 export type PublicationGroup = { postId: string; kind: string; audience: string; format: PublicationFormat; rows: PublicationRow[]; status: PublicationStatus };
 
