@@ -71,7 +71,7 @@ export function introNarrationText(reels?: { audience?: string; dateLabel?: stri
 }
 
 export function outroNarrationText(): string {
-  return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın!';
+  return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın! Takip etmeyi unutmayın!';
 }
 
 export function createWavFromPcm(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer {

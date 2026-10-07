@@ -227,13 +227,16 @@ export function CosmicSlide({kind='horoscope',phase=0,reels=false,...props}:Slid
         </div>
       </div>}
 
-      {slide.type==='cta' && <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:32}}>
-        <div style={{fontSize:88,fontWeight:900,lineHeight:1.15,background:'linear-gradient(135deg, #ffffff 40%, #ffd166 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+      {slide.type==='cta' && <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:28}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:12,background:'linear-gradient(90deg, #ff0844 0%, #ffb199 100%)',color:'#fff',padding:'12px 30px',borderRadius:30,fontSize:26,fontWeight:800,letterSpacing:2,boxShadow:'0 8px 30px rgba(255, 8, 68, 0.55)'}}>
+          ➕ TAKİP ETMEYİ UNUTMAYIN 🔔
+        </div>
+        <div style={{fontSize:86,fontWeight:900,lineHeight:1.15,background:'linear-gradient(135deg, #ffffff 40%, #ffd166 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
           Sana Uyan Mesajı<br/>Kaydetmeyi Unutma ✨
         </div>
         <div style={{width:180,height:5,background:'linear-gradient(90deg, #ffd166, #ff758c)',borderRadius:4}}/>
-        <div style={{fontSize:36,lineHeight:1.5,color:'rgba(255, 255, 255, 0.85)',maxWidth:780}}>
-          Yarın yeni gökyüzü rehberliği ve burç yorumlarında buluşmak üzere, sevgiyle kalın!
+        <div style={{fontSize:34,lineHeight:1.5,color:'rgba(255, 255, 255, 0.85)',maxWidth:780}}>
+          Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın!
         </div>
       </div>}
     </div>
