@@ -91,7 +91,7 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
       return this.channels('tiktok');
     },
 
-    async channels(service: 'tiktok' | 'instagram' | 'youtube'): Promise<BufferChannel[]> {
+    async allChannels(): Promise<BufferChannel[]> {
       const { account } = await gql<{ account: { organizations: { id: string }[] } }>('query { account { organizations { id } } }');
       const channels: BufferChannel[] = [];
       for (const organization of account.organizations) {
@@ -100,12 +100,19 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
           { input: { organizationId: organization.id } },
         );
         channels.push(
-          ...data.channels
-            .filter((channel) => channel.service.toLowerCase() === service)
-            .map((channel) => ({ id: channel.id, name: channel.displayName ?? channel.name, service: channel.service })),
+          ...data.channels.map((channel) => ({ id: channel.id, name: channel.displayName ?? channel.name, service: channel.service })),
         );
       }
       return channels;
+    },
+
+    async channels(service: 'tiktok' | 'instagram' | 'youtube'): Promise<BufferChannel[]> {
+      const all = await this.allChannels();
+      return all.filter((channel) => {
+        const s = channel.service.toLowerCase();
+        if (service === 'youtube') return s.includes('youtube') || s.includes('google');
+        return s === service || s.includes(service);
+      });
     },
 
     async channel(id: string): Promise<{ id: string; name: string; isQueuePaused: boolean }> {

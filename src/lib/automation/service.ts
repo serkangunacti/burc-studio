@@ -114,8 +114,15 @@ async function loadBuffer(deps: AutomationDeps, service: BufferService = 'tiktok
   if (service === 'youtube') {
     const cached = await getIntegration(deps.db, 'buffer_youtube');
     if (cached) return { client, channelId: cached.account.id };
-    const [channel] = await client.channels('youtube');
-    if (!channel) throw new Error("Buffer hesabında bağlı YouTube kanalı yok. Buffer'da Channels → Connect → YouTube ile Kozmik Arkan kanalını bağla.");
+    const all = await client.allChannels();
+    const channel = all.find((c) => {
+      const s = c.service.toLowerCase();
+      return s.includes('youtube') || s.includes('google');
+    });
+    if (!channel) {
+      const channelSummary = all.map((c) => `${c.name} (${c.service})`).join(', ') || 'hiçbir kanal bulunamadı';
+      throw new Error(`Buffer hesabında bağlı YouTube kanalı bulunamadı. Buffer'daki bağlı kanallar: ${channelSummary}. Buffer'da Channels → Connect → YouTube ile kanalı bağla.`);
+    }
     await saveIntegration(deps.db, { id: 'buffer_youtube', secretEncrypted: integration.secretEncrypted, account: { id: channel.id, username: channel.name }, expiresAt: null });
     return { client, channelId: channel.id };
   }
@@ -226,11 +233,15 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       return;
     }
     if (command === '/shorts') {
-      const result = await syncYouTubeShorts(deps, istanbulDateKey(deps.now()));
-      if (result.errors.length > 0) {
-        await client.sendMessage(from, `⚠️ YouTube Shorts işlemi:\n• Gönderilen: ${result.sent}\n• Hatalar:\n${result.errors.map((e) => `  - ${escapeHtml(e)}`).join('\n')}`);
-      } else {
-        await client.sendMessage(from, `✅ ${result.sent} video YouTube Shorts olarak Buffer'a iletildi.`);
+      try {
+        const result = await syncYouTubeShorts(deps, istanbulDateKey(deps.now()));
+        if (result.errors.length > 0) {
+          await client.sendMessage(from, `⚠️ YouTube Shorts işlemi:\n• Gönderilen: ${result.sent}\n• Hatalar:\n${result.errors.map((e) => `  - ${escapeHtml(e)}`).join('\n')}`);
+        } else {
+          await client.sendMessage(from, `✅ ${result.sent} video YouTube Shorts olarak Buffer'a iletildi.`);
+        }
+      } catch (error) {
+        await client.sendMessage(from, `❌ YouTube Shorts işlemi başarısız:\n<i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
       }
       return;
     }
