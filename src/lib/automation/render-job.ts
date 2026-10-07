@@ -1,5 +1,8 @@
 import { getCurrentPostsForDate } from '@/lib/content/repository';
 import { packageItemsFor } from '@/lib/content/daily-package';
+import { specFor } from '@/lib/content/generation-spec';
+import { posts as postsTable } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import type { DateKey } from '@/lib/date/istanbul';
 import { musicSeed } from '@/lib/music/compose';
 import { buildReelsProps } from '@/lib/posts/reels-props';
@@ -50,18 +53,23 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
 
   for (const post of posts) {
     if (options.only && !`${post.kind}-${post.audience}`.includes(options.only)) continue;
+    const targetTemplateVersion = specFor(post.kind)?.templateVersion ?? post.templateVersion;
+    const templateOutdated = post.templateVersion !== targetTemplateVersion;
     const items = plan.filter((item) => item.postId === post.id);
     if (items.length === 0) continue;
-    const pending = items.filter(needsRender);
-    result.kept.push(...items.filter((item) => !needsRender(item)).map(slotKey));
+    const pending = items.filter((item) => needsRender(item) || templateOutdated);
+    result.kept.push(...items.filter((item) => !needsRender(item) && !templateOutdated).map(slotKey));
     if (pending.length === 0) continue;
     try {
       const detail = await getPostDetail(db, post.id);
       if (!detail) throw new Error('Gönderi bulunamadı');
+      if (templateOutdated) {
+        await db.update(postsTable).set({ templateVersion: targetTemplateVersion }).where(eq(postsTable.id, post.id));
+      }
       const parts = new Map(splitCarousel(buildSlideProps(detail, brand)).map((entry) => [entry.part, entry.slides]));
       // TikTok, Reels ile aynı videoyu paylaşır; video bir kez çizilir.
       const existingVideo = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media;
-      let video = existingVideo?.videoUrl && !options.force ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
+      let video = existingVideo?.videoUrl && !options.force && !templateOutdated ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
       const renderVideo = async () => {
         const reels = buildReelsProps(detail, brand);
         const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
@@ -74,7 +82,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         });
         const enrichedReels = { ...reels, signs: enrichedSigns };
         const rendered = await renderers.renderReels({
-          templateVersion: post.templateVersion,
+          templateVersion: targetTemplateVersion,
           reels: enrichedReels,
           musicSeed: musicSeed(reels),
           name: `${date}-${post.kind}-${post.audience}`,
@@ -86,12 +94,12 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         if (item.format === 'carousel') {
           const slides = parts.get(item.part as 1 | 2 | 3);
           if (!slides) throw new Error(`Carousel parçası yok: ${item.part}`);
-          const images = await renderers.renderStills(post.templateVersion, slides);
-          await savePublication(db, date, item, { images }, { force: options.force });
+          const images = await renderers.renderStills(targetTemplateVersion, slides);
+          await savePublication(db, date, item, { images }, { force: options.force || templateOutdated });
         } else if (item.format === 'reels') {
-          await savePublication(db, date, item, await renderVideo(), { force: options.force });
+          await savePublication(db, date, item, await renderVideo(), { force: options.force || templateOutdated });
         } else {
-          await savePublication(db, date, item, video ?? (await renderVideo()), { force: options.force });
+          await savePublication(db, date, item, video ?? (await renderVideo()), { force: options.force || templateOutdated });
         }
         result.rendered.push(slotKey(item));
       }

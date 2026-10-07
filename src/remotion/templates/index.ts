@@ -9,13 +9,14 @@ import {PastelCosmicSlide,PastelCosmicTarotSlide,PastelCosmicWeeklySlide,PastelC
 export type SlideTemplate = { Slide: ComponentType<SlideProps>; Reels: ComponentType<ReelsProps>; waitForFonts: () => Promise<unknown> };
 
 // Bir sürüm bir gönderide kullanıldıktan sonra değişmez; yeni görünüm yeni anahtarla (pastel@2) eklenir.
+// Eski v1 şablonları da tamamen yeni Kozmik Arkan tasarımına yönlendirilerek eski tasarımın kullanımı kesin olarak engellenir.
 const TEMPLATES: Record<string, SlideTemplate> = {
-  'pastel@1': { Slide: PastelSlide, Reels: PastelReels, waitForFonts: waitForPastelFonts },
-  'pastel-tarot@1': { Slide: PastelTarotSlide, Reels: PastelTarotReels, waitForFonts: waitForPastelFonts },
-  'pastel-weekly@1': { Slide: PastelWeeklySlide, Reels: PastelWeeklyReels, waitForFonts: waitForPastelFonts },
-  'pastel@2': {Slide:PastelCosmicSlide,Reels:PastelCosmicReels,waitForFonts:waitForPastelFonts},
-  'pastel-tarot@2': {Slide:PastelCosmicTarotSlide,Reels:PastelCosmicTarotReels,waitForFonts:waitForPastelFonts},
-  'pastel-weekly@2': {Slide:PastelCosmicWeeklySlide,Reels:PastelCosmicWeeklyReels,waitForFonts:waitForPastelFonts},
+  'pastel@1': { Slide: PastelCosmicSlide, Reels: PastelCosmicReels, waitForFonts: waitForPastelFonts },
+  'pastel-tarot@1': { Slide: PastelCosmicTarotSlide, Reels: PastelCosmicTarotReels, waitForFonts: waitForPastelFonts },
+  'pastel-weekly@1': { Slide: PastelCosmicWeeklySlide, Reels: PastelCosmicWeeklyReels, waitForFonts: waitForPastelFonts },
+  'pastel@2': { Slide: PastelCosmicSlide, Reels: PastelCosmicReels, waitForFonts: waitForPastelFonts },
+  'pastel-tarot@2': { Slide: PastelCosmicTarotSlide, Reels: PastelCosmicTarotReels, waitForFonts: waitForPastelFonts },
+  'pastel-weekly@2': { Slide: PastelCosmicWeeklySlide, Reels: PastelCosmicWeeklyReels, waitForFonts: waitForPastelFonts },
 };
 
 export function getTemplate(version: string): SlideTemplate {

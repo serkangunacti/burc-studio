@@ -7,6 +7,8 @@ export async function dispatchRenderWorkflow(input: {
   token: string | undefined;
   repository: string;
   date: DateKey;
+  force?: boolean;
+  only?: string;
   fetch?: typeof fetch;
 }): Promise<{ dispatched: boolean; reason?: string }> {
   if (!input.token) return { dispatched: false, reason: 'GitHub anahtarı bağlı değil' };
@@ -18,7 +20,7 @@ export async function dispatchRenderWorkflow(input: {
       'x-github-api-version': '2022-11-28',
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ ref: 'main', inputs: { date: input.date } }),
+    body: JSON.stringify({ ref: 'main', inputs: { date: input.date, force: input.force ? 'true' : 'false', ...(input.only ? { only: input.only } : {}) } }),
   });
   if (response.status === 204) return { dispatched: true };
   return { dispatched: false, reason: `GitHub ${response.status}: ${(await response.text()).slice(0, 200)}` };

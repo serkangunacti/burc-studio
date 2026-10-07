@@ -50,34 +50,33 @@ describe('günün render işi', () => {
     expect(await missingPosts(db, DATE)).toEqual(['horoscope-erkek', 'tarot-kadin', 'tarot-erkek']);
   });
 
-  it('her gönderi için 3 carousel parçası (6 görsel) ve bir Reels çizer, şablon sürümünü korur', async () => {
+  it('her gönderi için video çizer, şablon sürümünü pastel@2 olarak günceller', async () => {
     await seedPost(db, { date: DATE, kind: 'tarot', audience: 'erkek' });
     const renderers = fakeRenderers();
     const result = await renderDay(db, DATE, renderers);
     expect(result.failures).toEqual([]);
-    expect(result.rendered).toHaveLength(4);
-    expect(renderers.stills).toHaveBeenCalledTimes(3);
-    expect(renderers.stills.mock.calls.every(([version, slides]) => version === 'pastel-tarot@1' && slides.length === 6)).toBe(true);
-    expect(renderers.videos).toHaveBeenCalledWith(expect.objectContaining({ templateVersion: 'pastel-tarot@1', name: `${DATE}-tarot-erkek` }));
+    expect(result.rendered).toHaveLength(1);
+    expect(renderers.stills).not.toHaveBeenCalled();
+    expect(renderers.videos).toHaveBeenCalledWith(expect.objectContaining({ templateVersion: 'pastel-tarot@2', name: `${DATE}-tarot-erkek` }));
     const rows = await listPublications(db, DATE);
-    expect(rows.map((row) => row.status)).toEqual(['ready', 'ready', 'ready', 'ready']);
-    expect(rows[3].media.videoUrl).toBe(`https://blob.example/${DATE}-tarot-erkek.mp4`);
+    expect(rows.map((row) => row.status)).toEqual(['ready']);
+    expect(rows[0].media.videoUrl).toBe(`https://blob.example/${DATE}-tarot-erkek.mp4`);
   });
 
-  it('haftalık gönderiyi de üç parçaya böler ve haftalık şablonla çizer', async () => {
+  it('haftalık gönderiyi haftalık şablonla video olarak çizer', async () => {
     await seedPost(db, { date: '2026-09-28', kind: 'weekly', audience: 'kadin' });
     const renderers = fakeRenderers();
     const result = await renderDay(db, '2026-09-28', renderers);
     expect(result.failures).toEqual([]);
-    expect(renderers.stills.mock.calls.map(([version, slides]) => [version, slides.length])).toEqual(Array(3).fill(['pastel-weekly@1', 6]));
-    expect(renderers.videos).toHaveBeenCalledWith(expect.objectContaining({ templateVersion: 'pastel-weekly@1' }));
+    expect(renderers.stills).not.toHaveBeenCalled();
+    expect(renderers.videos).toHaveBeenCalledWith(expect.objectContaining({ templateVersion: 'pastel-weekly@2' }));
   });
 
   it('yeniden çalışınca hazır ve onaylı satırları yeniden çizmez; zorlanınca yalnız hazırları yeniler', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await renderDay(db, DATE, fakeRenderers());
     const again = fakeRenderers();
-    expect((await renderDay(db, DATE, again)).kept).toHaveLength(4);
+    expect((await renderDay(db, DATE, again)).kept).toHaveLength(1);
     expect(again.stills).not.toHaveBeenCalled();
     await approveDay(db, DATE);
     const forced = fakeRenderers();
@@ -92,7 +91,7 @@ describe('günün render işi', () => {
     renderers.videos.mockRejectedValueOnce(new Error('kodlayıcı çöktü'));
     const result = await renderDay(db, DATE, renderers);
     expect(result.failures).toEqual(['horoscope-kadin: kodlayıcı çöktü']);
-    expect(result.rendered).toHaveLength(7);
+    expect(result.rendered).toHaveLength(1);
   });
 
   it('TikTok, Reels videosunu yeniden çizmeden kullanır; sonradan açılınca mevcut videoyu alır', async () => {

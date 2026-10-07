@@ -89,9 +89,9 @@ export const DEFAULT_SETTINGS: Settings = {
     startDate: null,
     telegramChatId: null,
     schedule: {
-      horoscope: { kadin: { carousel: '08:30', reels: '19:00' }, erkek: { carousel: '09:30', reels: '20:00' } },
-      tarot: { kadin: { carousel: '12:30', reels: '21:00' }, erkek: { carousel: '13:30', reels: '22:00' } },
-      weekly: { kadin: { carousel: '10:30', reels: '17:00' }, erkek: { carousel: '11:30', reels: '18:00' } },
+      horoscope: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '09:30', reels: '09:30' } },
+      tarot: { kadin: { carousel: '11:30', reels: '11:30' }, erkek: { carousel: '12:30', reels: '12:30' } },
+      weekly: { kadin: { carousel: '07:30', reels: '07:30' }, erkek: { carousel: '08:00', reels: '08:00' } },
     },
     partGapMinutes: 3,
     cutoffTime: '22:15',

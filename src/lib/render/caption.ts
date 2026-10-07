@@ -23,7 +23,7 @@ export function formatPublicationCaption(input: { date: DateKey; kind: Automatio
     `${period} · ${labels[input.kind]} · ${input.audience === 'kadin' ? 'Kadın' : 'Erkek'}`,
     input.partHeading,
     input.caption.trim(),
-    input.platform === 'instagram' ? 'Günün notunu sonra okumak için kaydet.' : questions[input.kind],
   ].filter(Boolean).join('\n\n');
-  return formatCaption(text, mergeHashtags(base[input.kind], suggestions));
+  const extra = input.platform === 'tiktok' ? ['#yapayzeka', '#ai'] : [];
+  return formatCaption(text, mergeHashtags([...base[input.kind], ...extra], suggestions));
 }

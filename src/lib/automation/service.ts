@@ -243,6 +243,18 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       } catch (error) {
         await client.sendMessage(from, `❌ YouTube Shorts işlemi başarısız:\n<i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
       }
+    if (command === '/ciz' || command === '/yenile') {
+      try {
+        const today = istanbulDateKey(deps.now());
+        const result = await startRender(deps, today, { force: true });
+        if (result.dispatched) {
+          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Yeni modern Kozmik Arkan şablonu (pastel@2)\n• Yeni Google TTS seslendirmesi\n• YouTube Shorts 175 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
+        } else {
+          await client.sendMessage(from, `❌ Çizim başlatılamadı: ${result.reason ?? 'Bilinmeyen hata'}`);
+        }
+      } catch (error) {
+        await client.sendMessage(from, `❌ Çizim başlatılamadı: <i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
+      }
       return;
     }
     return;
@@ -412,7 +424,7 @@ async function publishViaBuffer(deps: AutomationDeps, row: PublicationRow, servi
     if (!row.media.videoUrl) throw new Error(`${label} videosu yok`);
     await markBufferSubmission(deps.db,row.id,deps.now());
     try {
-      return await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: service === 'instagram', ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}) });
+      return await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: service === 'instagram', isAiGenerated: true });
     } catch(error) {
       if (error instanceof BufferError && (error.rateLimited || (!error.retryable && !error.outcomeUnknown))) {
         await markBufferSubmission(deps.db,row.id,null);
@@ -497,7 +509,7 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
               text: row.caption,
               videoUrl: row.media.videoUrl,
               youtube: { title: ytTitle },
-              ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+              isAiGenerated: true,
             });
             if (!silent) await notify(deps, `▶️ YouTube Shorts'a da gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
           } catch (shortErr) {
@@ -510,7 +522,7 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
                 text: cleanCaption,
                 videoUrl: row.media.videoUrl,
                 youtube: { title: cleanTitle },
-                ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
+                isAiGenerated: true,
               });
               if (!silent) await notify(deps, `▶️ YouTube'a (video) gönderildi · ${escapeHtml(publicationLabel(row))}\n<i>Süre 3 dakikayı aştığı için normal video olarak paylaşıldı.</i>`, true);
             } else {
@@ -730,13 +742,13 @@ export async function connectGitHub(deps: AutomationDeps, token: string): Promis
   return { repository: deps.repository };
 }
 
-export async function startRender(deps: AutomationDeps, date: DateKey): Promise<{ dispatched: boolean; reason?: string }> {
+export async function startRender(deps: AutomationDeps, date: DateKey, options: { force?: boolean; only?: string } = {}): Promise<{ dispatched: boolean; reason?: string }> {
   const { automation } = await getSettings(deps.db);
   const paused = automationStartReason(automation.startDate, date, deps.now());
   if (!automation.enabled || paused) return { dispatched: false, reason: paused ?? 'Otomatik paylaşım kapalı.' };
   const integration = await getIntegration(deps.db, 'github');
   const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
-  return dispatchRenderWorkflow({ token, repository: deps.repository, date, fetch: deps.fetch });
+  return dispatchRenderWorkflow({ token, repository: deps.repository, date, force: options.force, only: options.only, fetch: deps.fetch });
 }
 
 // Kuyruk mesajları gönderildikleri yayın sürümünde işlenir; gün içinde yayınlanan düzeltmenin bekleyen paylaşımlara

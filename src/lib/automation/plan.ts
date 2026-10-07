@@ -46,23 +46,14 @@ function isAutomated(post: PlannablePost): post is PlannablePost & { kind: Autom
 }
 
 export function planPublications(date: DateKey, posts: readonly PlannablePost[], automation: AutomationSettings): PlannedPublication[] {
-  const gapMs = automation.partGapMinutes * 60_000;
   return posts.filter(isAutomated).flatMap((post): PlannedPublication[] => {
     const slot = automation.schedule[post.kind][post.audience];
-    const captionFor = (platform: 'instagram' | 'tiktok', part?: CarouselPart) => formatPublicationCaption({ ...post, date, platform, ...(part ? { partHeading: partHeading(part) } : {}) });
+    const captionFor = (platform: 'instagram' | 'tiktok') => formatPublicationCaption({ ...post, date, platform });
     const base = { postId: post.id, kind: post.kind, audience: post.audience };
-    const carouselStart = istanbulInstant(date, slot.carousel).getTime();
-    // Parçalar sondan başa paylaşılır: profilde ve akışta en üstte 1/3 (Koç–Yengeç) görünsün.
-    const carousels = CAROUSEL_PARTS.map(
-      (part): PlannedPublication => ({
-        ...base,
-        format: 'carousel',
-        part,
-        scheduledAt: new Date(carouselStart + (CAROUSEL_PARTS.length - part) * gapMs),
-        caption: captionFor('instagram', part),
-      }),
-    );
     const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, slot.reels) };
-    return [...carousels, { ...video, format: 'reels', caption: captionFor('instagram') }, ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const, caption: captionFor('tiktok') }] : [])];
+    return [
+      { ...video, format: 'reels' as const, caption: captionFor('instagram') },
+      ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const, caption: captionFor('tiktok') }] : []),
+    ];
   });
 }
