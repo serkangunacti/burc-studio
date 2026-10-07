@@ -47,10 +47,10 @@ function harness(db: Db, now: Date) {
     return { body: {} };
   });
   const buffer = vi.fn((query: string): unknown => {
-    if (query.includes('ChannelStates')) return {data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:false}}};
+    if (query.includes('ChannelStates')) return {data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:false},c2:{id:'yt-buf',name:'kozmikarkan',displayName:null,isQueuePaused:false}}};
     if (query.includes('createPost')) return { data: { createPost: { post: { id: 'buf-1' } } } };
     if (query.includes('account')) return { data: { account: { organizations: [{ id: 'org' }] } } };
-    if (query.includes('channels(')) return { data: { channels: [{ id: 'tt-1', name: 'kozmikarkan', displayName: null, service: 'tiktok' }] } };
+    if (query.includes('channels(')) return { data: { channels: [{ id: 'tt-1', name: 'kozmikarkan', displayName: null, service: 'tiktok' }, { id: 'ig-buf', name: 'kozmikarkan', displayName: null, service: 'instagram' }, { id: 'yt-buf', name: 'kozmikarkan', displayName: null, service: 'youtube' }] } };
     if (query.includes('channel(')) return { data: { channel: { id: 'tt-1', name: 'kozmikarkan', displayName: null, isQueuePaused: false } } };
     return { data: { post: { id: 'buf-1', status: 'sent', externalLink: 'https://www.tiktok.com/@kozmikarkan/video/9', error: null } } };
   });
@@ -540,15 +540,17 @@ describe('durum', () => {
     expect(status.telegram).toMatchObject({webhookOk:false,lastError:expect.stringContaining('Telegram unavailable')});
     expect(status.instagram?.publishing.ok).toBe(true);
   });
-  it('Instagram Reels ve TikTok sağlığını aynı Buffer isteğinde kontrol eder', async () => {
+  it('Instagram Reels, TikTok ve YouTube Shorts sağlığını aynı Buffer isteğinde kontrol eder', async () => {
     await saveIntegration(db,{id:'buffer',secretEncrypted:encryptSecret('BUF',KEY),account:{id:'tt-1',username:'kozmikarkan'},expiresAt:null});
     await saveSettings(db,{automation:{tiktok:{enabled:true}}});
     await saveIntegration(db,{id:'buffer_instagram',secretEncrypted:encryptSecret('BUF',KEY),account:{id:'ig-buf',username:'kozmikarkan'},expiresAt:null});
+    await saveIntegration(db,{id:'buffer_youtube',secretEncrypted:encryptSecret('BUF',KEY),account:{id:'yt-buf',username:'kozmikarkan'},expiresAt:null});
     const {deps,buffer,bufferCalls}=harness(db,new Date('2026-09-29T00:00:00Z'));
-    buffer.mockImplementationOnce(()=>({data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:true}}}));
+    buffer.mockImplementationOnce(()=>({data:{c0:{id:'tt-1',name:'kozmikarkan',displayName:null,isQueuePaused:false},c1:{id:'ig-buf',name:'kozmikarkan',displayName:null,isQueuePaused:true},c2:{id:'yt-buf',name:'kozmikarkan',displayName:null,isQueuePaused:false}}}));
     const status=await automationStatus(deps);
     expect(status.instagramReels).toEqual({channel:'kozmikarkan',ok:false,error:"Buffer'da kanal kuyruğu duraklatılmış"});
     expect(status.tiktok?.ok).toBe(true);
+    expect(status.youtube?.ok).toBe(true);
     expect(bufferCalls()).toHaveLength(1);
   });
   it('webhook, sohbet kaydı ve paylaşım kotasını raporlar; /durum komutu aynı raporu gönderir', async () => {
@@ -561,6 +563,7 @@ describe('durum', () => {
       instagram: { username: 'kozmikarkan', expiresAt: '2026-11-20T00:00:00.000Z', publishing: { ok: true, used: 3, total: 100 } },
       tiktok: null,
       instagramReels: null,
+      youtube: null,
       bufferRateLimits: [],
       renderTrigger: false,
     });

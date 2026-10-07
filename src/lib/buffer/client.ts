@@ -91,7 +91,7 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
       return this.channels('tiktok');
     },
 
-    async channels(service: 'tiktok' | 'instagram'): Promise<BufferChannel[]> {
+    async channels(service: 'tiktok' | 'instagram' | 'youtube'): Promise<BufferChannel[]> {
       const { account } = await gql<{ account: { organizations: { id: string }[] } }>('query { account { organizations { id } } }');
       const channels: BufferChannel[] = [];
       for (const organization of account.organizations) {
@@ -131,7 +131,14 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
 
     // Planlama bizim kuyruğumuzda yapılır; Buffer'a paylaşım saatinde "şimdi paylaş" olarak gönderilir.
     // instagramReel: Instagram kanalında video Reels olarak (akışta da görünür) paylaşılır.
-    async shareVideoNow(input: { channelId: string; text: string; videoUrl: string; instagramReel?: boolean; isAiGenerated?: boolean }): Promise<string> {
+    async shareVideoNow(input: {
+      channelId: string;
+      text: string;
+      videoUrl: string;
+      instagramReel?: boolean;
+      youtube?: { title: string };
+      isAiGenerated?: boolean;
+    }): Promise<string> {
       const data = await gql<{ createPost: { post?: { id: string }; message?: string } }>(
         `mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
@@ -149,6 +156,8 @@ export function createBufferClient(apiKey: string, fetchImpl: Fetch = fetch, opt
             assets: [{ video: { url: input.videoUrl } }],
             ...(input.instagramReel
               ? { metadata: { instagram: { type: 'reel', shouldShareToFeed: true, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
+              : input.youtube
+              ? { metadata: { youtube: { title: input.youtube.title.slice(0, 95), privacy: 'public', madeForKids: false, ...(input.isAiGenerated ? { isAiGenerated: true } : {}) } } }
               : input.isAiGenerated ? { metadata: { tiktok: { isAiGenerated: true } } } : {}),
           },
         },

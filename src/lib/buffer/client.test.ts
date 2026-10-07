@@ -56,6 +56,21 @@ describe('Buffer istemcisi', () => {
     });
   });
 
+  it('YouTube Shorts için başlık ve ayarları içeren gönderi oluşturur', async () => {
+    const { impl, calls } = fakeFetch([{ body: { data: { createPost: { post: { id: 'p2' } } } } }]);
+    expect(
+      await createBufferClient('KEY', impl).shareVideoNow({
+        channelId: 'yt1',
+        text: 'Açıklama',
+        videoUrl: 'https://blob/v.mp4',
+        youtube: { title: 'Koç Burcu Günlük Yorumu #Shorts' },
+      })
+    ).toBe('p2');
+    expect((calls[0].variables.input as any).metadata).toEqual({
+      youtube: { title: 'Koç Burcu Günlük Yorumu #Shorts', privacy: 'public', madeForKids: false },
+    });
+  });
+
   it('gönderi durumunu ve bağlantısını okur', async () => {
     const { impl } = fakeFetch([{ body: { data: { post: { id: 'p1', status: 'sent', externalLink: 'https://www.tiktok.com/@kozmikarkan/video/1', error: null } } } }]);
     expect(await createBufferClient('KEY', impl).post('p1')).toEqual({
