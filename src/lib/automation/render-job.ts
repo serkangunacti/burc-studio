@@ -1,8 +1,8 @@
 import { getCurrentPostsForDate } from '@/lib/content/repository';
 import { packageItemsFor } from '@/lib/content/daily-package';
 import { specFor } from '@/lib/content/generation-spec';
-import { posts as postsTable } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { posts as postsTable, publications as publicationsTable } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
 import type { DateKey } from '@/lib/date/istanbul';
 import { musicSeed } from '@/lib/music/compose';
 import { buildReelsProps } from '@/lib/posts/reels-props';
@@ -41,6 +41,8 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   const brand = brandFromSettings(settings);
   const posts = await getCurrentPostsForDate(db, date);
   const plan = planPublications(date, posts, settings.automation);
+  // Eski carousel formatındaki satırları tamamen temizle (artık yalnızca reels/video paylaşılıyor).
+  await db.delete(publicationsTable).where(and(eq(publicationsTable.date, date), eq(publicationsTable.format, 'carousel')));
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
   // Yalnız hiç çizilmemiş paylaşımlar çizilir; zorlanırsa onaylanmamış hazırlar da yenilenir. Paylaşımda başarısız olanlar
   // yeniden çizilmez (Telegram'daki "yeniden dene" ile gönderilir): geç gelen bir tetikleme onları onaysız duruma çekmesin.
