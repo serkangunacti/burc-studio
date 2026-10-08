@@ -16,7 +16,7 @@ export function narrationTiming(voice:ReelsVoice,signCount:number,fps:number):Re
     outroFrames:Math.max(OUTRO_FRAMES,Math.ceil(voice.outro.durationSeconds*fps)+TRANSITION_FRAMES+tail),
   };
   const totalFrames = reelsDurationInFrames(signCount, timing);
-  const shortsLimitFrames = 180 * fps; // 3 dakika YouTube Shorts sınırı
+  const shortsLimitFrames = MAX_REELS_FRAMES; // YouTube Shorts 175 sn kesin tavanı (180 sn altı)
   if (totalFrames > shortsLimitFrames) {
     const tightLead = Math.max(2, Math.round(fps * 0.08));
     const tightTail = Math.max(2, Math.round(fps * 0.08));
@@ -27,8 +27,7 @@ export function narrationTiming(voice:ReelsVoice,signCount:number,fps:number):Re
     };
     const tightenedTotal = reelsDurationInFrames(signCount, tightened);
     if (tightenedTotal <= shortsLimitFrames) return tightened;
-    if (tightenedTotal <= MAX_REELS_FRAMES) return tightened;
-    throw new Error(`Video süresi tavan sınırı (${MAX_REELS_FRAMES} kare) aşıyor: ${tightenedTotal} kare`);
+    throw new Error(`Video süresi YouTube Shorts tavan sınırını (${MAX_REELS_SECONDS} sn / ${MAX_REELS_FRAMES} kare) aşıyor: ${tightenedTotal} kare`);
   }
   return timing;
 }

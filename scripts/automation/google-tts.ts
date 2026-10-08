@@ -36,7 +36,7 @@ export function narrationText(sign: {
     if (sign.headline) {
       parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
     }
-    const maxBodyChars = 135;
+    const maxBodyChars = 110;
     let bodyText = cleanBody;
     if ([...bodyText].length > maxBodyChars) {
       const sentences = cleanBody.split(/(?<=[.!?])\s+/);
@@ -48,15 +48,15 @@ export function narrationText(sign: {
           break;
         }
       }
-      bodyText = accumulated || [...cleanBody].slice(0, 130).join('') + '...';
+      bodyText = accumulated || [...cleanBody].slice(0, 105).join('') + '...';
     }
     parts.push(bodyText);
     if (sign.luckyNumber && sign.luckyColor) {
       parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
     }
     const text = parts.join(' ').normalize('NFC');
-    if ([...text].length > 220) {
-      return [...text].slice(0, 215).join('') + '...';
+    if ([...text].length > 185) {
+      return [...text].slice(0, 180).join('') + '...';
     }
     return text;
   }
