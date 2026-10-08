@@ -51,8 +51,8 @@ jobs:
           key: voice-v2-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             voice-v2-${{ steps.start-window.outputs.date }}-
-      # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
+      # Emoji yazı tipi ve MP4 süre kontrolü için ffprobe (ffmpeg paketi).
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji ffmpeg && ffprobe -version
         if: steps.start-window.outputs.allowed == 'true'
       - uses: actions/cache@v4
         if: steps.start-window.outputs.allowed == 'true'
