@@ -8,8 +8,9 @@ import { REELS_FPS, reelsDurationInFrames } from '@/remotion/reels';
 import type { MusicRenderer } from './music';
 import type { decodeVoiceAsset } from './voice';
 import type { ReelsSign, ReelsProps } from '@/remotion/slide-types';
-import {narrationTiming,type ReelsVoice} from '@/remotion/voice';
+import {narrationTiming,reelsFrameRanges,type ReelsVoice} from '@/remotion/voice';
 import type {NarrationClip} from './google-tts';
+import {probeVideoDuration} from './video-duration';
 
 export type RemotionRenderers = Renderers & { close: () => Promise<void> };
 
@@ -109,25 +110,42 @@ export async function openRemotionRenderers(input: {
       await writeFile(path.join(serveUrl, 'public', musicFile), await input.music.render(musicSeed, seconds));
       const inputProps = { templateVersion, reels, musicFile, voice:videoVoice };
       const composition = await selectComposition({ serveUrl, id: 'Post-Reels', inputProps, puppeteerInstance: browser });
-      const output = path.join(work, `${name}.mp4`);
-      const started = Date.now();
-      await renderMedia({
-        serveUrl,
-        composition,
-        inputProps,
-        codec: 'h264',
-        audioCodec: 'aac',
-        crf: 22,
-        imageFormat: 'jpeg',
-        jpegQuality: 82,
-        concurrency: 2,
-        pixelFormat: 'yuv420p',
-        outputLocation: output,
-        puppeteerInstance: browser,
-      });
-      const file = await readFile(output);
-      input.log(`${name}.mp4: ${(file.length / 1e6).toFixed(1)} MB, ${Math.round((Date.now() - started) / 1000)} sn`);
-      return { videoUrl: await input.upload(`${name}.mp4`, file), ...(videoVoice ? {isAiGenerated:true} : {}) };
+      const ranges = reelsFrameRanges(reels.signs.length, reels.sceneTiming, REELS_FPS, videoVoice);
+      if (composition.durationInFrames !== reelsDurationInFrames(reels.signs.length, reels.sceneTiming)) {
+        throw new Error('Video kompozisyon süresi konuşma zamanlamasıyla uyuşmuyor');
+      }
+      const outputs: {fileName: string; output: string; durationSeconds: number}[] = [];
+      for (const [index, frameRange] of ranges.entries()) {
+        const fileName = ranges.length === 1 ? `${name}.mp4` : `${name}-part-${index + 1}.mp4`;
+        const output = path.join(work, fileName);
+        const started = Date.now();
+        await renderMedia({
+          serveUrl,
+          composition,
+          inputProps,
+          frameRange,
+          codec: 'h264',
+          audioCodec: 'aac',
+          crf: 22,
+          imageFormat: 'jpeg',
+          jpegQuality: 82,
+          concurrency: 2,
+          pixelFormat: 'yuv420p',
+          outputLocation: output,
+          puppeteerInstance: browser,
+        });
+        // Measure the encoded file, rather than assuming its requested frame count is its duration.
+        const durationSeconds = await probeVideoDuration(output);
+        input.log(`${fileName}: ${durationSeconds.toFixed(2)} sn video, ${Math.round((Date.now() - started) / 1000)} sn render`);
+        outputs.push({fileName, output, durationSeconds});
+      }
+      // No part is exposed for publishing until all parts have passed the duration gate.
+      const parts: {videoUrl: string; durationSeconds: number}[] = [];
+      for (const output of outputs) {
+        const file = await readFile(output.output);
+        parts.push({videoUrl: await input.upload(output.fileName, file), durationSeconds: output.durationSeconds});
+      }
+      return { ...parts[0], ...(videoVoice ? {isAiGenerated:true} : {}), ...(parts.length > 1 ? {parts} : {}) };
     },
     async close() {
       await browser.close({ silent: true });
