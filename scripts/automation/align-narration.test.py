@@ -22,6 +22,23 @@ class AlignmentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.scene_starts([segment], ["Metin."])
 
+    def test_accepts_overlapping_word_bounds_when_scene_boundaries_are_ordered(self):
+        scenes = ["İlk sahne.", "İkinci sahne."]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 5.2}, {"start": 4.9, "end": 5.5}]},
+            {"text": scenes[1], "words": [{"start": 5.1, "end": 7.0}]},
+        ]
+        self.assertEqual(module.scene_starts(segments, scenes), [0.0, 5.1])
+
+    def test_rejects_unordered_scene_boundaries(self):
+        scenes = ["İlk sahne.", "İkinci sahne."]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 5.2}]},
+            {"text": scenes[1], "words": [{"start": 0.0, "end": 7.0}]},
+        ]
+        with self.assertRaises(ValueError):
+            module.scene_starts(segments, scenes)
+
 
 if __name__ == "__main__":
     unittest.main()

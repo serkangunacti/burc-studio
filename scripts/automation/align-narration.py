@@ -14,7 +14,7 @@ def scene_starts(segments, scenes):
     if len(segments) != len(scenes):
         raise ValueError("Konuşma zamanlaması: bütün sahneler eşleşmedi")
     starts = []
-    previous_end = 0.0
+    previous_scene_start = -1.0
     for index, (segment, text) in enumerate(zip(segments, scenes)):
         if " ".join(segment["text"].split()) != " ".join(text.split()):
             raise ValueError("Konuşma zamanlaması: mevcut metin eşleşmedi")
@@ -23,10 +23,13 @@ def scene_starts(segments, scenes):
             raise ValueError("Konuşma zamanlaması: sözcükler eksik")
         for word in words:
             start, end = word["start"], word["end"]
-            if not math.isfinite(start) or not math.isfinite(end) or end <= start or start < previous_end - 0.04:
+            if not isinstance(start, (int, float)) or not isinstance(end, (int, float)) or not math.isfinite(start) or not math.isfinite(end) or end <= start:
                 raise ValueError("Konuşma zamanlaması: sözcük süresi geçersiz")
-            previous_end = end
-        starts.append(0.0 if index == 0 else words[0]["start"])
+        scene_start = 0.0 if index == 0 else words[0]["start"]
+        if not math.isfinite(scene_start) or scene_start <= previous_scene_start:
+            raise ValueError("Konuşma zamanlaması: sahne başlangıçları sıralı değil")
+        starts.append(scene_start)
+        previous_scene_start = scene_start
     return starts
 
 
