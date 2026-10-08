@@ -6,7 +6,7 @@ export const INTRO_FRAMES = 75;
 export const SIGN_FRAMES = 150;
 export const OUTRO_FRAMES = 90;
 export const TRANSITION_FRAMES = 15;
-export const MAX_REELS_SECONDS = 175; // 2 dk 55 sn tavan (YouTube Shorts kesin sınırı: 180 sn, güvenlik payıyla 175 sn)
+export const MAX_REELS_SECONDS = 179; // Tek MP4, YouTube Shorts sınırının altında.
 export const MAX_REELS_FRAMES = MAX_REELS_SECONDS * REELS_FPS;
 
 // Geçişler iki sahneyi üst üste bindirir; her geçiş toplam süreyi kısaltır.
