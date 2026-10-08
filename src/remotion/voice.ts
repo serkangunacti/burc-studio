@@ -16,17 +16,19 @@ export function narrationTiming(voice:ReelsVoice,signCount:number,fps:number):Re
     outroFrames:Math.max(OUTRO_FRAMES,Math.ceil(voice.outro.durationSeconds*fps)+TRANSITION_FRAMES+tail),
   };
   const totalFrames = reelsDurationInFrames(signCount, timing);
-  if (totalFrames > MAX_REELS_FRAMES) {
-    const tightLead = Math.max(3, Math.round(fps * 0.1));
-    const tightTail = Math.max(3, Math.round(fps * 0.1));
+  const shortsLimitFrames = 180 * fps; // 3 dakika YouTube Shorts sınırı
+  if (totalFrames > shortsLimitFrames) {
+    const tightLead = Math.max(2, Math.round(fps * 0.08));
+    const tightTail = Math.max(2, Math.round(fps * 0.08));
     const tightened: ReelsSceneTiming = {
       introFrames: Math.max(INTRO_FRAMES, Math.ceil(voice.intro.durationSeconds * fps) + tightTail + TRANSITION_FRAMES),
       signFrames: voice.signs.map(clip => Math.max(SIGN_FRAMES, Math.ceil(clip.durationSeconds * fps) + tightLead + tightTail + TRANSITION_FRAMES)),
       outroFrames: Math.max(OUTRO_FRAMES, Math.ceil(voice.outro.durationSeconds * fps) + TRANSITION_FRAMES + tightTail),
     };
     const tightenedTotal = reelsDurationInFrames(signCount, tightened);
+    if (tightenedTotal <= shortsLimitFrames) return tightened;
     if (tightenedTotal <= MAX_REELS_FRAMES) return tightened;
-    throw new Error(`Video süresi YouTube Shorts sınırını (175 sn / ${MAX_REELS_FRAMES} kare) aşıyor: ${totalFrames} kare`);
+    throw new Error(`Video süresi tavan sınırı (${MAX_REELS_FRAMES} kare) aşıyor: ${tightenedTotal} kare`);
   }
   return timing;
 }
