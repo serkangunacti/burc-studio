@@ -42,7 +42,6 @@ export function voiceTimeline(voice: ReelsVoice, frames: number, fps: number,tim
 export function musicVolume(frame: number, voice: ReelsVoice | undefined, frames: number, fps: number,timing?:ReelsSceneTiming): number {
   if (!voice) return 1;
   const { introFrames, outroStart,signTracks } = voiceTimeline(voice, frames, fps,timing);
-  // Konuşmada müziği düşür, ardından 0,4 sn içinde eski seviyesine getir.
   const ramp = Math.round(fps * 0.4);
   if(signTracks){
     const windows=[{from:0,durationInFrames:introFrames},...signTracks,{from:outroStart,durationInFrames:frames-outroStart}];
@@ -53,34 +52,12 @@ export function musicVolume(frame: number, voice: ReelsVoice | undefined, frames
   return 0.2 + 0.8 * Math.min(1, (frame - introFrames) / ramp, (outroStart - frame) / ramp);
 }
 
-
-// Ranges are inclusive and contiguous: every original frame and every voice sample belongs to one part.
+// One continuous MP4 only. Overlength content fails without cutting frames or narration.
 export function reelsFrameRanges(signCount:number,timing:ReelsSceneTiming|undefined,fps:number,voice?:ReelsVoice):[number,number][] {
   if(!Number.isFinite(fps)||fps<=0)throw new Error('Video kare hızı geçersiz');
   const total=reelsDurationInFrames(signCount,timing);
   const limit=Math.floor(MAX_REELS_SECONDS*fps);
-  const scenes=timing ? [timing.introFrames,...timing.signFrames,timing.outroFrames] : [INTRO_FRAMES,...Array<number>(signCount).fill(SIGN_FRAMES),OUTRO_FRAMES];
-  const boundaries=[0];
-  let from=0;
-  for(const scene of scenes.slice(0,-1)) {
-    from+=scene-TRANSITION_FRAMES;
-    boundaries.push(from);
-  }
-  boundaries.push(total);
-  if(voice){
-    const timeline=voiceTimeline(voice,total,fps,timing);
-    const tracks=[{from:0,durationInFrames:timeline.introFrames},...(timeline.signTracks ?? []),{from:timeline.outroStart,durationInFrames:timeline.outroFrames}];
-    for(const boundary of boundaries.slice(1,-1)) {
-      if(tracks.some(track=>boundary>track.from&&boundary<track.from+track.durationInFrames))throw new Error('Sahne sınırı konuşmayı kesiyor');
-    }
-  }
-  const ranges:[number,number][]=[];
-  let start=0;
-  while(start<total){
-    const end=boundaries.filter(boundary=>boundary>start&&boundary-start<=limit).at(-1);
-    if(end===undefined)throw new Error('Tek sahne YouTube Shorts güvenli süresine sığmıyor; konuşma kesilmedi');
-    ranges.push([start,end-1]);
-    start=end;
-  }
-  return ranges;
+  if(total>limit)throw new Error('Video tek parça halinde 3 dakikanın altında oluşturulamıyor; içerik ve seslendirme kesilmedi');
+  if(voice)voiceTimeline(voice,total,fps,timing);
+  return [[0,total-1]];
 }
