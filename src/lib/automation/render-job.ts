@@ -44,6 +44,16 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   // Eski carousel formatındaki satırları tamamen temizle (artık yalnızca reels/video paylaşılıyor).
   await db.delete(publicationsTable).where(and(eq(publicationsTable.date, date), eq(publicationsTable.format, 'carousel')));
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
+  // Mevcut paylaşımların saatlerini yeni plana eşitle:
+  for (const item of plan) {
+    const row = existing.get(slotKey(item));
+    if (row && row.scheduledAt.getTime() !== item.scheduledAt.getTime() && row.status !== 'published') {
+      await db.update(publicationsTable)
+        .set({ scheduledAt: item.scheduledAt })
+        .where(eq(publicationsTable.id, row.id));
+      row.scheduledAt = item.scheduledAt;
+    }
+  }
   // Yalnız hiç çizilmemiş paylaşımlar çizilir; zorlanırsa onaylanmamış hazırlar da yenilenir. Paylaşımda başarısız olanlar
   // yeniden çizilmez (Telegram'daki "yeniden dene" ile gönderilir): geç gelen bir tetikleme onları onaysız duruma çekmesin.
   const needsRender = (item: PlannedPublication) => {
