@@ -121,7 +121,16 @@ export function createGoogleNarrator(options: {
   fetchImpl?: typeof fetch;
   log?: (message: string) => void;
 }) {
-  const apiKey = options.apiKey || process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  const apiKeys = [
+    ...new Set(
+      [options.apiKey, process.env.GOOGLE_TTS_API_KEY, process.env.GOOGLE_GENERATIVE_AI_API_KEY]
+        .filter((k): k is string => Boolean(k?.trim()))
+        .flatMap((k) => k.split(/[,;\s]+/))
+        .map((k) => k.trim())
+        .filter(Boolean)
+    ),
+  ];
+
   const cacheDir = options.cacheDir || '.cache/voice';
   const fetchImpl = options.fetchImpl || fetch;
 
@@ -131,7 +140,7 @@ export function createGoogleNarrator(options: {
     async speak(rawText: string): Promise<NarrationClip> {
       const text = rawText.trim().normalize('NFC');
       if (!text || [...text].length > 750) throw new Error('Ses metni 1–750 karakter olmalı');
-      if (!apiKey) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
+      if (apiKeys.length === 0) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
 
       await mkdir(cacheDir, { recursive: true });
       const legacyKey = hash(JSON.stringify({ text, model: 'gemini-3.8-flash-tts', engine: 'gemini-tts-v2' }));
@@ -153,7 +162,7 @@ export function createGoogleNarrator(options: {
         }
       }
 
-      // 2. Google Gemini TTS API çağrısı (çoklu model yedekleme ve 429 backoff)
+      // 2. Google Gemini TTS API çağrısı (çoklu API anahtarı ve model yedekleme)
       const payload = {
         contents: [
           {
@@ -169,60 +178,67 @@ export function createGoogleNarrator(options: {
       let res: Response | null = null;
       let lastError: Error | null = null;
 
-      for (const model of GEMINI_TTS_MODELS) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const maxRetries = 8;
+      keyLoop: for (const apiKey of apiKeys) {
+        for (const model of GEMINI_TTS_MODELS) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const maxRetries = 6;
 
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-          try {
-            if (attempt > 0) {
-              const delayMs = Math.min(3000 * Math.pow(2, attempt - 1), 20000);
-              options.log?.(`Google Gemini TTS (${model}) yeniden deneniyor (${attempt}/${maxRetries - 1}), bekleme: ${delayMs}ms`);
-              await new Promise((r) => setTimeout(r, delayMs));
+          for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+              if (attempt > 0) {
+                const delayMs = Math.min(3000 * Math.pow(2, attempt - 1), 20000);
+                options.log?.(`Google Gemini TTS (${model}) yeniden deneniyor (${attempt}/${maxRetries - 1}), bekleme: ${delayMs}ms`);
+                await new Promise((r) => setTimeout(r, delayMs));
+              }
+
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+              };
+
+              res = await fetchImpl(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(45_000),
+              });
+
+              if (res.status === 429) {
+                const errBody = await res.text().catch(() => '');
+                const retryMatch = errBody.match(/"retryDelay":\s*"(\d+)s"/);
+                const retrySec = retryMatch ? parseInt(retryMatch[1], 10) : 0;
+                if (retrySec > 120) {
+                  options.log?.(`Google Gemini API anahtarının günlük kotası doldu (${Math.round(retrySec / 3600)} saat sonra sıfırlanacak), sonraki anahtara geçiliyor...`);
+                  lastError = new Error(`Google Gemini TTS günlük kotası doldu (${Math.round(retrySec / 3600)} saat sonra sıfırlanacak)`);
+                  continue keyLoop;
+                }
+                const waitMs = Math.min(60_000, Math.max(retrySec * 1000, 30_000 + attempt * 5_000));
+                lastError = new Error(`Google Gemini TTS kota sınırı (429): ${errBody.slice(0, 200)}`);
+                options.log?.(`Google Gemini TTS (${model}) kota sınırına (429) takıldı, kota penceresinin açılması için ${waitMs / 1000} sn bekleniyor (${attempt + 1}/${maxRetries})...`);
+                await new Promise((r) => setTimeout(r, waitMs));
+                continue;
+              }
+
+              if (res.status >= 500) {
+                const errText = await res.text();
+                lastError = new Error(`Google Gemini TTS HTTP ${res.status} (${model}): ${errText.slice(0, 300)}`);
+                continue;
+              }
+
+              if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Google Gemini TTS hatası HTTP ${res.status} (${model}): ${errorText.slice(0, 300)}`);
+              }
+
+              break;
+            } catch (err) {
+              lastError = err as Error;
+              if (attempt === maxRetries - 1) break;
             }
-
-            const headers: Record<string, string> = {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey,
-            };
-
-            res = await fetchImpl(url, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify(payload),
-              signal: AbortSignal.timeout(45_000),
-            });
-
-            if (res.status === 429) {
-              const errBody = await res.text().catch(() => '');
-              const retryMatch = errBody.match(/"retryDelay":\s*"(\d+)s"/);
-              const retrySec = retryMatch ? parseInt(retryMatch[1], 10) : 0;
-              const waitMs = Math.max(retrySec * 1000, 45_000 + attempt * 10_000);
-              lastError = new Error(`Google Gemini TTS kota sınırı (429): ${errBody.slice(0, 200)}`);
-              options.log?.(`Google Gemini TTS (${model}) kota sınırına (429) takıldı, kota penceresinin açılması için ${waitMs / 1000} sn bekleniyor (${attempt + 1}/${maxRetries})...`);
-              await new Promise((r) => setTimeout(r, waitMs));
-              continue;
-            }
-
-            if (res.status >= 500) {
-              const errText = await res.text();
-              lastError = new Error(`Google Gemini TTS HTTP ${res.status} (${model}): ${errText.slice(0, 300)}`);
-              continue;
-            }
-
-            if (!res.ok) {
-              const errorText = await res.text();
-              throw new Error(`Google Gemini TTS hatası HTTP ${res.status} (${model}): ${errorText.slice(0, 300)}`);
-            }
-
-            break;
-          } catch (err) {
-            lastError = err as Error;
-            if (attempt === maxRetries - 1) break;
           }
-        }
 
-        if (res && res.ok) break;
+          if (res && res.ok) break keyLoop;
+        }
       }
 
       if (!res || !res.ok) {

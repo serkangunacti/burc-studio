@@ -72,7 +72,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}
-          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           VOICE_CACHE_DIR: .cache/voice
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
           APP_URL: https://burc-studio.vercel.app
