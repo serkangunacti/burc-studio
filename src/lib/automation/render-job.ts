@@ -79,7 +79,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         const video = typeof rendered==='string'?{videoUrl:rendered}:rendered;
         videos = 'parts' in video && video.parts?.length ? video.parts.map(part=>({...part,...(video.isAiGenerated?{isAiGenerated:true}:{})})) : [video];
       }
-      if (videos.some(video=>video.durationSeconds!==undefined && (!Number.isFinite(video.durationSeconds)||video.durationSeconds<=0||video.durationSeconds>175))) throw new Error('Video 175 saniyelik süre kontrolünü geçemedi');
+      if (videos.some(video=>video.durationSeconds!==undefined && (!Number.isFinite(video.durationSeconds)||video.durationSeconds<=0||video.durationSeconds>179))) throw new Error('Video 179 saniyelik süre kontrolünü geçemedi');
       for (const item of pending) {
         for (const [part,video] of videos.entries()) {
           const planned = {...item,part,scheduledAt:new Date(item.scheduledAt.getTime()+part*settings.automation.partGapMinutes*60_000)};
