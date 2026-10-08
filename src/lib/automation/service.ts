@@ -105,9 +105,9 @@ export function immediatePublishAllowed(date: DateKey, now: Date): boolean {
 export function videoSafetyError(row: PublicationRow): string | null {
   if (row.format === 'carousel') return 'Kart/carousel paylaşımı kapalı.';
   if (!row.media.videoUrl) return 'Video dosyası eksik.';
-  const duration = row.media.durationSeconds;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > 175) {
-    return 'Video süresi doğrulanmadı veya 175 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
+  if (row.part !== 0 || (row.media.partCount !== undefined && row.media.partCount !== 1)) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.'; const duration = row.media.durationSeconds;
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > 179) {
+    return 'Video süresi doğrulanmadı veya 179 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
   }
   return null;
 }
@@ -332,7 +332,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
         const today = istanbulDateKey(deps.now());
         const result = await startRender(deps, today, { force: true });
         if (result.dispatched) {
-          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Mevcut şablon, içerik ve seslendirme korunuyor\n• YouTube Shorts 175 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
+          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Mevcut şablon, içerik ve seslendirme korunuyor\n• YouTube Shorts 179 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
         } else {
           await client.sendMessage(from, `❌ Çizim başlatılamadı: ${result.reason ?? 'Bilinmeyen hata'}`);
         }
