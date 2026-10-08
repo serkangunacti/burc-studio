@@ -71,11 +71,17 @@ def scene_starts(segments, scenes, duration_seconds, minimum_scene_gap_seconds):
         remaining_scene_count = len(scenes) - last_anchor_index
         if total_weight <= 0 or remaining_seconds < remaining_scene_count * minimum_scene_gap_seconds:
             raise ValueError("Konuşma zamanlaması: son sahneler için ses aralığı kalmadı")
+        distributable_seconds = remaining_seconds - remaining_scene_count * minimum_scene_gap_seconds
         elapsed_weight = 0
         previous_start = last_anchor_time
         for boundary in range(last_anchor_index + 1, len(scenes)):
             elapsed_weight += weights[boundary - 1]
-            starts[boundary] = last_anchor_time + remaining_seconds * elapsed_weight / total_weight
+            elapsed_minimum = (boundary - last_anchor_index) * minimum_scene_gap_seconds
+            starts[boundary] = (
+                last_anchor_time
+                + elapsed_minimum
+                + distributable_seconds * elapsed_weight / total_weight
+            )
             if starts[boundary] - previous_start < minimum_scene_gap_seconds:
                 raise ValueError("Konuşma zamanlaması: son sahneler için ses aralığı kalmadı")
             previous_start = starts[boundary]

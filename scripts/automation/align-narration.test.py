@@ -17,7 +17,7 @@ class AlignmentTests(unittest.TestCase):
         ]
         starts = module.scene_starts(segments, scenes, 14.0, 1.0)
         self.assertEqual(starts[:2], [0.0, 5.0])
-        self.assertAlmostEqual(starts[2], 8.0)
+        self.assertAlmostEqual(starts[2], 25 / 3)
         self.assertLess(starts[2], 14.0)
 
     def test_rejects_a_late_anchor_that_leaves_too_little_time_for_the_trailing_scenes(self):
@@ -29,11 +29,23 @@ class AlignmentTests(unittest.TestCase):
         ]
         starts = module.scene_starts(segments, scenes, 14.0, 1.0)
         self.assertEqual(starts[0], 0.0)
-        self.assertAlmostEqual(starts[1], 70 / 17)
-        self.assertAlmostEqual(starts[2], 126 / 17)
+        self.assertAlmostEqual(starts[1], 72 / 17)
+        self.assertAlmostEqual(starts[2], 133 / 17)
         self.assertGreaterEqual(starts[1], 1.0)
         self.assertGreaterEqual(starts[2] - starts[1], 1.0)
         self.assertGreaterEqual(14.0 - starts[2], 1.0)
+
+    def test_reserves_the_minimum_duration_for_a_short_unaligned_closing_scene(self):
+        long_comment = "Uzun yorum " + "kelime " * 150
+        scenes = ["Giriş", long_comment, "Kapanış."]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 1.0}]},
+            {"text": scenes[1], "words": [{"start": 100.0, "end": 105.0}]},
+            {"text": scenes[2], "words": [{"start": 119.68, "end": 119.68}]},
+        ]
+        starts = module.scene_starts(segments, scenes, 119.68, 1.0)
+        self.assertGreaterEqual(starts[2] - starts[1], 1.0)
+        self.assertGreaterEqual(119.68 - starts[2], 1.0)
 
     def test_does_not_hide_an_unaligned_scene_before_a_later_valid_anchor(self):
         scenes = ["Giriş", "İlk yorum", "İkinci yorum", "Kapanış"]
