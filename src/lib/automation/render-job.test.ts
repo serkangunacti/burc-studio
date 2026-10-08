@@ -23,6 +23,35 @@ beforeEach(async () => {
 });
 
 describe('günün render işi', () => {
+  it('uzun içeriğin bütün video parçalarını aynı sırayla iki platforma kaydeder ve yeniden çizmez', async () => {
+    await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
+    await saveSettings(db, { automation: { tiktok: { enabled: true } } });
+    const renderers = fakeRenderers();
+    renderers.renderReels = vi.fn(async () => ({ videoUrl: 'https://blob.example/1.mp4', durationSeconds: 160, parts: [
+      {videoUrl: 'https://blob.example/1.mp4', durationSeconds: 160},
+      {videoUrl: 'https://blob.example/2.mp4', durationSeconds: 45},
+    ] }));
+    expect((await renderDay(db, DATE, renderers)).failures).toEqual([]);
+    const rows = await listPublications(db, DATE);
+    expect(rows.map(r => [r.format,r.part,r.media.videoUrl,r.media.durationSeconds,r.media.partCount])).toEqual([
+      ['reels',0,'https://blob.example/1.mp4',160,2], ['tiktok',0,'https://blob.example/1.mp4',160,2],
+      ['reels',1,'https://blob.example/2.mp4',45,2], ['tiktok',1,'https://blob.example/2.mp4',45,2],
+    ]);
+    const again = fakeRenderers();
+    await renderDay(db, DATE, again);
+    expect(again.videos).not.toHaveBeenCalled();
+    expect(await listPublications(db, DATE)).toHaveLength(4);
+  });
+  it('zorla yeniden render onaylı eski videoyu yayın kuyruğundan çıkarır ve dış kimliklerini sıfırlar', async () => {
+    await seedPost(db, {date: DATE,kind:'horoscope',audience:'kadin'});
+    await renderDay(db,DATE,fakeRenderers());
+    await approveDay(db,DATE);
+    const [row] = await listPublications(db,DATE);
+    await db.update(publications).set({remoteId:'old-buffer',publishedAt:new Date(),publishAttemptedAt:new Date()}).where(eq(publications.id,row.id));
+    await renderDay(db,DATE,fakeRenderers(),{force:true});
+    expect((await listPublications(db,DATE))[0]).toMatchObject({status:'ready',remoteId:null,publishAttemptedAt:null,publishedAt:null,approvedAt:null});
+  });
+
   it('sesli render sonucunun AI bilgisini aynı MP4 ile iki platforma ve sonradan açılan TikTok satırına taşır', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     const renderers = fakeRenderers();

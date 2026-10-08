@@ -7,19 +7,18 @@ import type { DateKey } from '@/lib/date/istanbul';
 import { musicSeed } from '@/lib/music/compose';
 import { buildReelsProps } from '@/lib/posts/reels-props';
 import { getPostDetail } from '@/lib/posts/repository';
-import { brandFromSettings, buildSlideProps } from '@/lib/posts/slide-props';
+import { brandFromSettings } from '@/lib/posts/slide-props';
 import { getSettings } from '@/lib/settings/repository';
 import type { Db } from '@/db/types';
 import type { ReelsProps, SlideProps } from '@/remotion/slide-types';
-import { splitCarousel } from './carousel';
-import { planPublications, type PlannedPublication } from './plan';
+import { planPublications } from './plan';
 import { listPublications, savePublication } from './repository';
 import { automationStartReason } from './start';
 
 export type Renderers = {
   renderStills: (templateVersion: string, slides: SlideProps[]) => Promise<Uint8Array[]>;
   // Videoyu üretip herkese açık adresini döndürür.
-  renderReels: (input: { templateVersion: string; reels: ReelsProps; musicSeed: number; name: string }) => Promise<string | { videoUrl: string; isAiGenerated?: boolean }>;
+  renderReels: (input: { templateVersion: string; reels: ReelsProps; musicSeed: number; name: string }) => Promise<string | { videoUrl: string; durationSeconds?: number; isAiGenerated?: boolean; parts?: {videoUrl: string; durationSeconds: number}[] }>;
 };
 
 export type RenderDayResult = { rendered: string[]; kept: string[]; failures: string[] };
@@ -44,79 +43,57 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   // Eski carousel formatındaki satırları tamamen temizle (artık yalnızca reels/video paylaşılıyor).
   await db.delete(publicationsTable).where(and(eq(publicationsTable.date, date), eq(publicationsTable.format, 'carousel')));
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
-  // Mevcut paylaşımların saatlerini yeni plana eşitle:
-  for (const item of plan) {
-    const row = existing.get(slotKey(item));
-    if (row && row.scheduledAt.getTime() !== item.scheduledAt.getTime() && row.status !== 'published') {
-      await db.update(publicationsTable)
-        .set({ scheduledAt: item.scheduledAt })
-        .where(eq(publicationsTable.id, row.id));
-      row.scheduledAt = item.scheduledAt;
-    }
-  }
-  // Yalnız hiç çizilmemiş paylaşımlar çizilir; zorlanırsa onaylanmamış hazırlar da yenilenir. Paylaşımda başarısız olanlar
-  // yeniden çizilmez (Telegram'daki "yeniden dene" ile gönderilir): geç gelen bir tetikleme onları onaysız duruma çekmesin.
-  const needsRender = (item: PlannedPublication) => {
-    const status = existing.get(slotKey(item))?.status;
-    if (options.only) return true;
-    return status === undefined || (options.force === true && (status === 'ready' || status === 'approved' || status === 'published' || status === 'failed'));
-  };
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
-
   for (const post of posts) {
-    if (options.only && !`${post.kind}-${post.audience}`.includes(options.only)) continue;
+    if (options.only && `${post.kind}-${post.audience}` !== options.only) continue;
+    const items = plan.filter(item => item.postId === post.id);
+    if (!items.length) continue;
     const targetTemplateVersion = (post.kind !== 'special' ? specFor(post.kind)?.templateVersion : undefined) ?? post.templateVersion;
     const templateOutdated = post.templateVersion !== targetTemplateVersion;
-    const items = plan.filter((item) => item.postId === post.id);
-    if (items.length === 0) continue;
-    const pending = items.filter((item) => needsRender(item) || templateOutdated);
-    result.kept.push(...items.filter((item) => !needsRender(item) && !templateOutdated).map(slotKey));
-    if (pending.length === 0) continue;
+    const oldVideos = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels').sort((a,b) => a.part-b.part);
+    const replace = options.force === true || !!options.only || templateOutdated;
+    const partCount = oldVideos[0]?.media.partCount ?? 1;
+    const pending = items.filter(item => replace || Array.from({length:partCount},(_,part)=>existing.get(slotKey({...item,part}))).some(row=>!row));
+    if (!pending.length) {
+      result.kept.push(...[...existing.values()].filter(row=>row.postId===post.id).map(slotKey));
+      continue;
+    }
+    // Eski kuyruk teslimleri render sürerken eski videoyu yayınlamasın.
+    if (replace) {
+      const active = [...existing.values()].filter(row=>row.postId===post.id && row.status==='publishing');
+      if (active.length) { result.failures.push(`${post.kind}-${post.audience}: paylaşım sürüyor; yeniden render bekletildi`); continue; }
+      await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video yeniden render ediliyor'}).where(and(eq(publicationsTable.date,date),eq(publicationsTable.postId,post.id)));
+    }
     try {
-      const detail = await getPostDetail(db, post.id);
-      if (!detail) throw new Error('Gönderi bulunamadı');
-      if (templateOutdated) {
-        await db.update(postsTable).set({ templateVersion: targetTemplateVersion }).where(eq(postsTable.id, post.id));
+      let videos: {videoUrl:string;durationSeconds?:number;isAiGenerated?:boolean}[];
+      if (!replace && oldVideos.length===partCount && oldVideos.every(row=>row.media.videoUrl)) {
+        videos = oldVideos.map(row=>({videoUrl:row.media.videoUrl!, ...(row.media.durationSeconds!==undefined?{durationSeconds:row.media.durationSeconds}:{}), ...(row.media.isAiGenerated?{isAiGenerated:true}:{})}));
+      } else {
+        const detail = await getPostDetail(db,post.id);
+        if (!detail) throw new Error('Gönderi bulunamadı');
+        if (templateOutdated) await db.update(postsTable).set({templateVersion:targetTemplateVersion}).where(eq(postsTable.id,post.id));
+        const reels = buildReelsProps(detail,brand);
+        const readingBySign = new Map(detail.slides.flatMap(s=>s.reading?[[s.reading.sign,s.reading] as const]:[]));
+        const enrichedReels = {...reels,signs:reels.signs.map(sign=>({...sign,body:readingBySign.get(sign.sign)?.body??sign.short}))};
+        const rendered = await renderers.renderReels({templateVersion:targetTemplateVersion,reels:enrichedReels,musicSeed:musicSeed(reels),name:`${date}-${post.kind}-${post.audience}`});
+        const video = typeof rendered==='string'?{videoUrl:rendered}:rendered;
+        videos = 'parts' in video && video.parts?.length ? video.parts.map(part=>({...part,...(video.isAiGenerated?{isAiGenerated:true}:{})})) : [video];
       }
-      const parts = new Map(splitCarousel(buildSlideProps(detail, brand)).map((entry) => [entry.part, entry.slides]));
-      // TikTok, Reels ile aynı videoyu paylaşır; video bir kez çizilir.
-      const existingVideo = existing.get(slotKey({ ...items[0], format: 'reels', part: 0 }))?.media;
-      let video = existingVideo?.videoUrl && !options.force && !templateOutdated ? { videoUrl: existingVideo.videoUrl, ...(existingVideo.isAiGenerated ? { isAiGenerated: true } : {}) } : undefined;
-      const renderVideo = async () => {
-        const reels = buildReelsProps(detail, brand);
-        const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
-        const enrichedSigns = reels.signs.map((sign) => {
-          const reading = readingBySign.get(sign.sign);
-          return {
-            ...sign,
-            body: reading?.body ?? sign.short,
-          };
-        });
-        const enrichedReels = { ...reels, signs: enrichedSigns };
-        const rendered = await renderers.renderReels({
-          templateVersion: targetTemplateVersion,
-          reels: enrichedReels,
-          musicSeed: musicSeed(reels),
-          name: `${date}-${post.kind}-${post.audience}`,
-        });
-        video = typeof rendered === 'string' ? { videoUrl: rendered } : rendered;
-        return video;
-      };
+      if (videos.some(video=>video.durationSeconds!==undefined && (!Number.isFinite(video.durationSeconds)||video.durationSeconds<=0||video.durationSeconds>175))) throw new Error('Video 175 saniyelik süre kontrolünü geçemedi');
       for (const item of pending) {
-        if (item.format === 'carousel') {
-          const slides = parts.get(item.part as 1 | 2 | 3);
-          if (!slides) throw new Error(`Carousel parçası yok: ${item.part}`);
-          const images = await renderers.renderStills(targetTemplateVersion, slides);
-          await savePublication(db, date, item, { images }, { force: options.force || templateOutdated });
-        } else if (item.format === 'reels') {
-          await savePublication(db, date, item, await renderVideo(), { force: options.force || templateOutdated });
-        } else {
-          await savePublication(db, date, item, video ?? (await renderVideo()), { force: options.force || templateOutdated });
+        for (const [part,video] of videos.entries()) {
+          const planned = {...item,part,scheduledAt:new Date(item.scheduledAt.getTime()+part*settings.automation.partGapMinutes*60_000)};
+          const media = {...video,...(video.durationSeconds!==undefined?{partCount:videos.length}:{})};
+          const saved = await savePublication(db,date,planned,media,{force:replace});
+          if (saved) result.rendered.push(slotKey(planned));
         }
-        result.rendered.push(slotKey(item));
+        if (replace) {
+          const stale = [...existing.values()].filter(row=>row.postId===post.id && row.format===item.format && row.part>=videos.length);
+          for (const row of stale) await db.update(publicationsTable).set({status:'expired',error:'Yeni render sürümünde bu parça yok'}).where(eq(publicationsTable.id,row.id));
+        }
       }
     } catch (error) {
-      result.failures.push(`${post.kind}-${post.audience}: ${error instanceof Error ? error.message : String(error)}`);
+      result.failures.push(`${post.kind}-${post.audience}: ${error instanceof Error?error.message:String(error)}`);
     }
   }
   return result;

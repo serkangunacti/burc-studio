@@ -91,7 +91,7 @@ export const DEFAULT_SETTINGS: Settings = {
     schedule: {
       horoscope: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
       tarot: { kadin: { carousel: '09:00', reels: '09:00' }, erkek: { carousel: '09:15', reels: '09:15' } },
-      weekly: { kadin: { carousel: '07:30', reels: '07:30' }, erkek: { carousel: '08:00', reels: '08:00' } },
+      weekly: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
     },
     partGapMinutes: 3,
     cutoffTime: '22:15',

@@ -5,7 +5,7 @@ import { isDateKey } from '@/lib/date/istanbul';
 import { isPostId } from '@/lib/posts/repository';
 import { getMediaFile } from './repository';
 import { telegramWebhookSecret } from './secrets';
-import { automationStatus, bufferPostStatus, instagramRecentMedia, diagnoseCarousel, handleTelegramUpdate, publishDayNow, publishDueNow, requeueDay, runMaintenance, sendDayPlan, type AutomationDeps, type TelegramUpdate } from './service';
+import { completeReadyDay, automationStatus, bufferPostStatus, instagramRecentMedia, diagnoseCarousel, handleTelegramUpdate, requeueDay, runMaintenance, type AutomationDeps, type TelegramUpdate } from './service';
 
 const readySchema = z.object({ date: z.string().refine(isDateKey), failures: z.array(z.string()).max(50).default([]) });
 
@@ -14,7 +14,7 @@ export async function handleReady(request: Request, deps: AutomationDeps): Promi
   if (!isAuthorizedCronRequest(request.headers, deps.automationSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
   const parsed = readySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
-  const result = await sendDayPlan(deps, parsed.data.date, parsed.data.failures);
+  const result = await completeReadyDay(deps, parsed.data.date, parsed.data.failures);
   return Response.json(result, { status: result.sent ? 200 : 409 });
 }
 
@@ -70,7 +70,7 @@ export async function handlePublishNow(request: Request, deps: AutomationDeps): 
   if (!isAuthorizedCronRequest(request.headers, deps.automationSecret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
   const parsed = z.object({ date: z.string().refine(isDateKey), limit: z.number().int().min(1).max(5).default(2) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Geçersiz istek.' }, { status: 400 });
-  return Response.json(await publishDayNow(deps, parsed.data.date));
+  return Response.json({ error: 'Bugün yalnız Telegram /hemen onayıyla paylaşılabilir. Sonraki günler otomatik paylaşılır.' }, { status: 409 });
 }
 
 export async function handleDiagnoseCarousel(request: Request, deps: AutomationDeps): Promise<Response> {

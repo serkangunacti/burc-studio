@@ -1,4 +1,4 @@
-import {INTRO_FRAMES,MAX_REELS_FRAMES,OUTRO_FRAMES,reelsDurationInFrames,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
+import {INTRO_FRAMES,MAX_REELS_SECONDS,OUTRO_FRAMES,reelsDurationInFrames,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
 import type {ReelsSceneTiming} from './slide-types';
 export type VoiceTrack = { file: string; durationSeconds: number };
 export type ReelsVoice = { intro: VoiceTrack; outro: VoiceTrack; signs?:VoiceTrack[] };
@@ -15,20 +15,6 @@ export function narrationTiming(voice:ReelsVoice,signCount:number,fps:number):Re
     signFrames:voice.signs.map(clip=>Math.max(SIGN_FRAMES,Math.ceil(clip.durationSeconds*fps)+lead+tail+TRANSITION_FRAMES)),
     outroFrames:Math.max(OUTRO_FRAMES,Math.ceil(voice.outro.durationSeconds*fps)+TRANSITION_FRAMES+tail),
   };
-  const totalFrames = reelsDurationInFrames(signCount, timing);
-  const shortsLimitFrames = MAX_REELS_FRAMES; // YouTube Shorts 175 sn kesin tavanı (180 sn altı)
-  if (totalFrames > shortsLimitFrames) {
-    const tightLead = Math.max(2, Math.round(fps * 0.08));
-    const tightTail = Math.max(2, Math.round(fps * 0.08));
-    const tightened: ReelsSceneTiming = {
-      introFrames: Math.max(INTRO_FRAMES, Math.ceil(voice.intro.durationSeconds * fps) + tightTail + TRANSITION_FRAMES),
-      signFrames: voice.signs.map(clip => Math.max(SIGN_FRAMES, Math.ceil(clip.durationSeconds * fps) + tightLead + tightTail + TRANSITION_FRAMES)),
-      outroFrames: Math.max(OUTRO_FRAMES, Math.ceil(voice.outro.durationSeconds * fps) + TRANSITION_FRAMES + tightTail),
-    };
-    const tightenedTotal = reelsDurationInFrames(signCount, tightened);
-    if (tightenedTotal <= shortsLimitFrames) return tightened;
-    throw new Error(`Video süresi YouTube Shorts tavan sınırını (${MAX_REELS_SECONDS} sn / ${MAX_REELS_FRAMES} kare) aşıyor: ${tightenedTotal} kare`);
-  }
   return timing;
 }
 
@@ -65,4 +51,36 @@ export function musicVolume(frame: number, voice: ReelsVoice | undefined, frames
   }
   if (frame < introFrames || frame >= outroStart) return 0.2;
   return 0.2 + 0.8 * Math.min(1, (frame - introFrames) / ramp, (outroStart - frame) / ramp);
+}
+
+
+// Ranges are inclusive and contiguous: every original frame and every voice sample belongs to one part.
+export function reelsFrameRanges(signCount:number,timing:ReelsSceneTiming|undefined,fps:number,voice?:ReelsVoice):[number,number][] {
+  if(!Number.isFinite(fps)||fps<=0)throw new Error('Video kare hızı geçersiz');
+  const total=reelsDurationInFrames(signCount,timing);
+  const limit=Math.floor(MAX_REELS_SECONDS*fps);
+  const scenes=timing ? [timing.introFrames,...timing.signFrames,timing.outroFrames] : [INTRO_FRAMES,...Array<number>(signCount).fill(SIGN_FRAMES),OUTRO_FRAMES];
+  const boundaries=[0];
+  let from=0;
+  for(const scene of scenes.slice(0,-1)) {
+    from+=scene-TRANSITION_FRAMES;
+    boundaries.push(from);
+  }
+  boundaries.push(total);
+  if(voice){
+    const timeline=voiceTimeline(voice,total,fps,timing);
+    const tracks=[{from:0,durationInFrames:timeline.introFrames},...(timeline.signTracks ?? []),{from:timeline.outroStart,durationInFrames:timeline.outroFrames}];
+    for(const boundary of boundaries.slice(1,-1)) {
+      if(tracks.some(track=>boundary>track.from&&boundary<track.from+track.durationInFrames))throw new Error('Sahne sınırı konuşmayı kesiyor');
+    }
+  }
+  const ranges:[number,number][]=[];
+  let start=0;
+  while(start<total){
+    const end=boundaries.filter(boundary=>boundary>start&&boundary-start<=limit).at(-1);
+    if(end===undefined)throw new Error('Tek sahne YouTube Shorts güvenli süresine sığmıyor; konuşma kesilmedi');
+    ranges.push([start,end-1]);
+    start=end;
+  }
+  return ranges;
 }

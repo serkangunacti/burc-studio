@@ -8,7 +8,7 @@ import type { PlannedPublication } from './plan';
 
 export type PublicationRow = typeof publications.$inferSelect;
 export type IntegrationRow = typeof integrations.$inferSelect;
-export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string; isAiGenerated?: boolean };
+export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string; durationSeconds?: number; partCount?: number; isAiGenerated?: boolean };
 
 // Yalnız onaylanmamış veya zorla yenilenen satır yeniden çizimle ezilir.
 const REPLACEABLE = ['ready', 'approved'] as const;
@@ -39,13 +39,13 @@ export async function savePublication(
       ? (['ready', 'approved', 'published', 'failed', 'skipped'] as const)
       : REPLACEABLE;
     if (existing && !(replaceable as readonly string[]).includes(existing.status)) return null;
-    const isPublishedReset = Boolean(options.force && existing?.status === 'published');
+    const isPublishedReset = Boolean(options.force && existing);
     const values = {
       postId: planned.postId,
       scheduledAt: isPublishedReset && planned.scheduledAt.getTime() < Date.now() ? new Date() : planned.scheduledAt,
       caption: planned.caption,
       status: (isPublishedReset ? ('ready' as const) : (existing?.status === 'approved' ? ('approved' as const) : ('ready' as const))),
-      media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
+      media: 'videoUrl' in media ? { videoUrl: media.videoUrl, ...(media.durationSeconds !== undefined ? {durationSeconds:media.durationSeconds} : {}), ...(media.partCount !== undefined ? {partCount:media.partCount} : {}), ...(media.isAiGenerated ? { isAiGenerated: true } : {}) } : {},
       error: null,
       igContainerId: null,
       publishAttemptedAt: isPublishedReset ? null : (existing?.publishAttemptedAt ?? null),
@@ -286,4 +286,22 @@ export async function markBufferSubmission(db:Db,id:string,at:Date|null):Promise
 // Instagram carousel parçası gönderilmeden önce container kimliği yazılır; yarıda kalan deneme yeniden paylaşmasın.
 export async function setContainer(db: Db, id: string, igContainerId: string): Promise<void> {
   await db.update(publications).set({ igContainerId, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+// JSON media state is updated atomically so duplicate queue deliveries cannot create duplicate YouTube posts.
+export async function claimYouTubeSubmission(db: Db, id: string, now: Date): Promise<PublicationRow | null> {
+  const [row] = await db.update(publications).set({
+    media: sql`${publications.media} || ${JSON.stringify({ youtubeAttemptedAt: now.toISOString(), youtubeStatus: 'submitting' })}::jsonb`,
+    updatedAt: now,
+  }).where(and(eq(publications.id, id), sql`${publications.media}->>'youtubeAttemptedAt' is null`, sql`${publications.media}->>'youtubeRemoteId' is null`)).returning();
+  return row ?? null;
+}
+
+export async function setYouTubeState(db: Db, id: string, state: { youtubeRemoteId?: string; youtubeStatus?: string; youtubeError?: string; youtubeAttemptedAt?: string | null }): Promise<void> {
+  await db.update(publications).set({ media: sql`${publications.media} || ${JSON.stringify(state)}::jsonb`, updatedAt: new Date() }).where(eq(publications.id, id));
+}
+
+export async function stampImmediateApproval(db: Db, ids: string[], date: DateKey): Promise<void> {
+  if (!ids.length) return;
+  await db.update(publications).set({ media: sql`${publications.media} || ${JSON.stringify({ immediateApprovalDate: date })}::jsonb` }).where(inArray(publications.id, ids));
 }

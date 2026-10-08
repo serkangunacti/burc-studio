@@ -4,7 +4,7 @@ import { closeDb, getDb } from '../src/db/client';
 import { missingPosts, renderDay } from '../src/lib/automation/render-job';
 import { hasPlanMessage } from '../src/lib/automation/repository';
 import { isDateKey, istanbulDateKey } from '../src/lib/date/istanbul';
-import { getSettings, saveSettings } from '../src/lib/settings/repository';
+import { getSettings } from '../src/lib/settings/repository';
 import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
@@ -12,7 +12,7 @@ import { decodeVoiceAsset } from './automation/voice';
 import { createGoogleNarrator, introNarrationText, narrationText, outroNarrationText } from './automation/google-tts';
 import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
 
-// GitHub Actions'ta her sabah çalışır: günün gönderilerini carousel parçaları ve Reels olarak çizer, onaya hazırlar.
+// GitHub Actions'ta 04:00 TSİ başlar: yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
 const { values } = parseArgs({
   options: {
     date: { type: 'string' },
@@ -61,13 +61,6 @@ async function main() {
   } catch (cleanError) {
     log(`Vercel Blob temizliği atlandı: ${cleanError instanceof Error ? cleanError.message : String(cleanError)}`);
   }
-  // Kullanıcı tercihi: Paylaşımlar sabah 08:30 ve sonrasına peş peşe planlanır (eski 19:00 akşam saatleri sabah saatine çekilir).
-  const morningSchedule = {
-    horoscope: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
-    tarot: { kadin: { carousel: '09:00', reels: '09:00' }, erkek: { carousel: '09:15', reels: '09:15' } },
-    weekly: { kadin: { carousel: '07:30', reels: '07:30' }, erkek: { carousel: '08:00', reels: '08:00' } },
-  };
-  await saveSettings(db, { automation: { schedule: morningSchedule } });
   const { automation } = await getSettings(db);
   const paused = automationStartReason(automation.startDate, date);
   if (!automation.enabled || paused) {
@@ -76,7 +69,7 @@ async function main() {
     return;
   }
 
-  // Günlük üretim cron'u ±1 saat oynayabilir; gönderiler tamamlanana kadar beklenir.
+  // Üretim ve render 04:00 TSİ tetiklenir; üretim tamamlanana kadar beklenir.
   const deadline = Date.now() + Number(values['wait-minutes']) * 60_000;
   let missing = await missingPosts(db, date);
   while (missing.length > 0 && Date.now() < deadline) {

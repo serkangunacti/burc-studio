@@ -56,9 +56,9 @@ describe('ayar birleştirme', () => {
         startDate: null,
         telegramChatId: null,
         schedule: {
-          horoscope: { kadin: { carousel: '08:30', reels: '19:00' }, erkek: { carousel: '09:30', reels: '20:00' } },
-          tarot: { kadin: { carousel: '12:30', reels: '21:00' }, erkek: { carousel: '13:30', reels: '22:00' } },
-          weekly: { kadin: { carousel: '10:30', reels: '17:00' }, erkek: { carousel: '11:30', reels: '18:00' } },
+          horoscope: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
+          tarot: { kadin: { carousel: '09:00', reels: '09:00' }, erkek: { carousel: '09:15', reels: '09:15' } },
+          weekly: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
         },
         partGapMinutes: 3,
         cutoffTime: '22:15',
