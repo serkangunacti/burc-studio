@@ -154,7 +154,18 @@ export const PUBLICATION_FORMATS = ['carousel', 'reels', 'tiktok'] as const;
 export type PublicationFormat = (typeof PUBLICATION_FORMATS)[number];
 export const PUBLICATION_STATUSES = ['ready', 'approved', 'publishing', 'published', 'skipped', 'expired', 'failed'] as const;
 export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
-export type PublicationMedia = { imageIds?: string[]; videoUrl?: string; isAiGenerated?: boolean };
+export type PublicationMedia = {
+  imageIds?: string[];
+  videoUrl?: string;
+  isAiGenerated?: boolean;
+  durationSeconds?: number;
+  partCount?: number;
+  youtubeRemoteId?: string;
+  youtubeAttemptedAt?: string | null;
+  youtubeStatus?: string;
+  youtubeError?: string;
+  immediateApprovalDate?: string;
+};
 
 export const publicationFormatEnum = pgEnum('publication_format', PUBLICATION_FORMATS);
 export const publicationStatusEnum = pgEnum('publication_status', PUBLICATION_STATUSES);
