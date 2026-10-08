@@ -10,6 +10,7 @@ import { createTelegramClient, escapeHtml, TelegramError, type TelegramClient } 
 import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
 import { dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
 import {
+  approveAndScheduleNow,
   approveDay,
   claimForPublishing,
   deleteMediaBefore,
@@ -243,6 +244,26 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       } catch (error) {
         await client.sendMessage(from, `❌ YouTube Shorts işlemi başarısız:\n<i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
       }
+      return;
+    }
+    if (command === '/hemen' || command === '/simdi' || command === '/paylas') {
+      try {
+        const today = istanbulDateKey(deps.now());
+        const result = await publishDayNow(deps, today);
+        if (result.published === 0) {
+          await client.sendMessage(from, 'Paylaşılacak hazır veya onaylı gönderi bulunamadı.');
+        } else {
+          const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
+          await client.sendMessage(
+            from,
+            `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
+          );
+        }
+      } catch (error) {
+        await client.sendMessage(from, `❌ Hemen paylaşım başlatılamadı: <i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
+      }
+      return;
+    }
     if (command === '/ciz' || command === '/yenile') {
       try {
         const today = istanbulDateKey(deps.now());
@@ -272,12 +293,25 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     return;
   }
   const now = deps.now();
-  const targetDate = action.action === 'approve' ? action.date : telegram.automation.startDate
+  const targetDate = action.action === 'approve' || action.action === 'publish_now' ? action.date : telegram.automation.startDate
     ? (await getPostDetail(deps.db, action.postId))?.post.date ?? istanbulDateKey(now)
     : istanbulDateKey(now);
   const paused = automationStartReason(telegram.automation.startDate, targetDate, now);
   if (!telegram.automation.enabled || paused) {
     await client.answerCallback(query.id, paused ?? 'Otomatik paylaşım kapalı.');
+    return;
+  }
+  if (action.action === 'publish_now') {
+    const result = await publishDayNow(deps, action.date);
+    await client.answerCallback(query.id, result.published > 0 ? `🚀 ${result.published} paylaşım başlatıldı` : 'Paylaşılacak gönderi yok.');
+    await refreshDayMessage(deps, action.date, query.message.message_id);
+    if (result.published > 0) {
+      const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
+      await client.sendMessage(
+        chatId,
+        `🚀 <b>${result.published} paylaşım için anında paylaşım başlatıldı!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
+      );
+    }
     return;
   }
   if (action.action === 'approve') {
@@ -815,6 +849,28 @@ export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Pr
 }
 
 export type PublishNowResult = { id: string; label: string; outcome: PublishOutcome | 'retry'; message?: string };
+
+// Günün hazır ya da onaylanmış paylaşımlarını beklemeden hemen şimdi yayınlar.
+export async function publishDayNow(deps: AutomationDeps, date: DateKey): Promise<{ published: number; triggered: number; errors: string[] }> {
+  const now = deps.now();
+  const rows = await approveAndScheduleNow(deps.db, date, now);
+  if (rows.length === 0) return { published: 0, triggered: 0, errors: [] };
+  await enqueueRows(deps, rows);
+
+  let triggered = 0;
+  const errors: string[] = [];
+  for (const row of rows) {
+    try {
+      await publishPublication(deps, row.id);
+      triggered++;
+    } catch (error) {
+      if (!(error instanceof RetryLater)) {
+        errors.push(`${publicationLabel(row)}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  return { published: rows.length, triggered, errors };
+}
 
 // Kuyruğun yeniden teslimini beklemeden, saati gelmiş onaylı paylaşımları bu istekte gönderir (Instagram işlemesi dahil).
 export async function publishDueNow(deps: AutomationDeps, date: DateKey, limit: number): Promise<PublishNowResult[]> {

@@ -79,17 +79,27 @@ export function buildDayMessage(
     ].join('\n');
   });
   const pending = groups.some((group) => group.status === 'ready');
+  const hasApproved = groups.some((group) => group.status === 'approved');
   const footer = pending
-    ? "Onaylarsan her paylaşım saatinde Instagram'a gider. İstemediğini 🚫 ile çıkarabilirsin."
-    : groups.some((group) => group.status === 'approved')
-      ? '✅ Onaylandı; paylaşımlar saatinde gidecek.'
+    ? "Onaylarsan paylaşımlar planlanan saatte gider. Beklemeden göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilirsin."
+    : hasApproved
+      ? "✅ Onaylandı; paylaşımlar saatinde gidecektir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilir veya /hemen yazabilirsin."
       : '';
   const failures = options.failures?.length ? [`⚠️ Hazırlanamadı:\n${options.failures.map((failure) => `• ${escapeHtml(failure)}`).join('\n')}`] : [];
   const html = [`<b>🔮 ${formatDateLongTr(date)} · paylaşım planı</b>`, lines.join('\n') || 'Bugün için hazır paylaşım yok.', ...failures, footer]
     .filter(Boolean)
     .join('\n\n');
 
-  const keyboard: InlineKeyboard = pending ? [[{ text: '✅ Hepsini onayla', callback_data: `a:${date}` }]] : [];
+  const keyboard: InlineKeyboard = [];
+  if (pending) {
+    keyboard.push([
+      { text: '✅ Hepsini onayla', callback_data: `a:${date}` },
+      { text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` },
+    ]);
+  } else if (hasApproved) {
+    keyboard.push([{ text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` }]);
+  }
+
   for (const group of groups) {
     const time = clock(group.rows[0].scheduledAt);
     const code = FORMAT_CODES[group.format];
@@ -104,12 +114,15 @@ export function buildDayMessage(
   return { html, keyboard };
 }
 
-export type DayAction = { action: 'approve'; date: DateKey } | { action: 'skip' | 'undo' | 'retry'; postId: string; format: PublicationFormat };
+export type DayAction =
+  | { action: 'approve' | 'publish_now'; date: DateKey }
+  | { action: 'skip' | 'undo' | 'retry'; postId: string; format: PublicationFormat };
 const GROUP_ACTIONS = { s: 'skip', u: 'undo', y: 'retry' } as const;
 
 export function parseDayAction(data: string | undefined): DayAction | null {
   const [action, target, code] = (data ?? '').split(':');
   if (action === 'a' && isDateKey(target)) return { action: 'approve', date: target };
+  if (action === 'now' && isDateKey(target)) return { action: 'publish_now', date: target };
   const format = (Object.keys(FORMAT_CODES) as PublicationFormat[]).find((candidate) => FORMAT_CODES[candidate] === code) ?? null;
   const groupAction = GROUP_ACTIONS[action as keyof typeof GROUP_ACTIONS];
   if (groupAction && format && /^[0-9a-f-]{36}$/.test(target ?? '')) return { action: groupAction, postId: target, format };

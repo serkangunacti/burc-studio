@@ -59,7 +59,10 @@ describe('günlük onay mesajı', () => {
     expect(html).toContain('22:00 🕒 Erkek tarot · Reels & Shorts · <a href="https://blob/v.mp4">izle</a>');
     expect(html).toContain('• tarot-kadin: &lt;zaman aşımı&gt;');
     expect(keyboard).toEqual([
-      [{ text: '✅ Hepsini onayla', callback_data: 'a:2026-09-29' }],
+      [
+        { text: '✅ Hepsini onayla', callback_data: 'a:2026-09-29' },
+        { text: '⚡ Şimdi Paylaş', callback_data: 'now:2026-09-29' },
+      ],
       [{ text: '🚫 08:30 Kadın burç carousel', callback_data: `s:${POST}:c` }],
       [{ text: '🚫 22:00 Erkek tarot Reels & Shorts', callback_data: `s:${OTHER}:r` }],
     ]);
@@ -78,6 +81,7 @@ describe('günlük onay mesajı', () => {
 
   it('düğme verisini çözer, bozuk veriyi reddeder', () => {
     expect(parseDayAction('a:2026-09-29')).toEqual({ action: 'approve', date: '2026-09-29' });
+    expect(parseDayAction('now:2026-09-29')).toEqual({ action: 'publish_now', date: '2026-09-29' });
     expect(parseDayAction(`s:${POST}:r`)).toEqual({ action: 'skip', postId: POST, format: 'reels' });
     expect(parseDayAction(`u:${POST}:c`)).toEqual({ action: 'undo', postId: POST, format: 'carousel' });
     expect(parseDayAction(`s:${POST}:t`)).toEqual({ action: 'skip', postId: POST, format: 'tiktok' });

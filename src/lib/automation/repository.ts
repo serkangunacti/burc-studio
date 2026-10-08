@@ -105,6 +105,14 @@ export async function approveDay(db: Db, date: DateKey, now = new Date()): Promi
     .returning();
 }
 
+export async function approveAndScheduleNow(db: Db, date: DateKey, now = new Date()): Promise<PublicationRow[]> {
+  return db
+    .update(publications)
+    .set({ status: 'approved', scheduledAt: now, approvedAt: now, updatedAt: now })
+    .where(and(eq(publications.date, date), inArray(publications.status, ['ready', 'approved'])))
+    .returning();
+}
+
 // Atlanan grup geri alınırsa gün onaylanmışsa yeniden onaya, değilse hazıra döner; onaya dönenler kuyruğa yeniden girer.
 export async function setGroupSkipped(
   db: Db,
