@@ -67,7 +67,7 @@ function groupLinks(group: PublicationGroup, mediaUrl: (id: string) => string): 
 export function buildDayMessage(
   date: DateKey,
   rows: readonly PublicationRow[],
-  options: { mediaUrl: (id: string) => string; failures?: readonly string[] },
+  options: { mediaUrl: (id: string) => string; failures?: readonly string[]; testOnly?: boolean },
 ): { html: string; keyboard: InlineKeyboard } {
   const groups = groupPublications(rows.filter(row=>row.status!=='expired' && row.format!=='carousel' || date<'2026-10-08'));
   const lines = groups.map((group) => {
@@ -81,7 +81,7 @@ export function buildDayMessage(
   const pending = groups.some((group) => group.status === 'ready');
   const hasApproved = groups.some((group) => group.status === 'approved');
   const automatic = date > '2026-10-08';
-  const footer = date === '2026-10-08' && (pending || hasApproved) ? 'Videolar hazır olduğunda bugüne özel /hemen komutuyla paylaşımı onaylayabilirsin.' : automatic && (pending || hasApproved) ? 'Videolar hazır; paylaşımlar sabah planlanan saatlerde otomatik gönderilecek.' : pending
+  const footer = options.testOnly ? 'Bu 8 Ekim paketi test amaçlı hazırlandı; hiçbir paylaşım yapılmayacak.' : date === '2026-10-08' && (pending || hasApproved) ? 'Videolar hazır olduğunda bugüne özel /hemen komutuyla paylaşımı onaylayabilirsin.' : automatic && (pending || hasApproved) ? 'Videolar hazır; paylaşımlar sabah planlanan saatlerde otomatik gönderilecek.' : pending
     ? "Onaylarsan paylaşımlar planlanan saatte gider. Beklemeden göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilirsin."
     : hasApproved
       ? "✅ Onaylandı; paylaşımlar saatinde gidecektir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilir veya /hemen yazabilirsin."
@@ -92,24 +92,26 @@ export function buildDayMessage(
     .join('\n\n');
 
   const keyboard: InlineKeyboard = [];
-  if (pending && !automatic && date !== '2026-10-08') {
-    keyboard.push([
-      { text: '✅ Hepsini onayla', callback_data: `a:${date}` },
-      { text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` },
-    ]);
-  } else if (hasApproved && !automatic && date !== '2026-10-08') {
-    keyboard.push([{ text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` }]);
-  }
+  if (!options.testOnly) {
+    if (pending && !automatic && date !== '2026-10-08') {
+      keyboard.push([
+        { text: '✅ Hepsini onayla', callback_data: `a:${date}` },
+        { text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` },
+      ]);
+    } else if (hasApproved && !automatic && date !== '2026-10-08') {
+      keyboard.push([{ text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` }]);
+    }
 
-  for (const group of groups) {
-    const time = clock(group.rows[0].scheduledAt);
-    const code = FORMAT_CODES[group.format];
-    if (group.status === 'ready' || group.status === 'approved') {
-      keyboard.push([{ text: `🚫 ${time} ${groupLabel(group)}`, callback_data: `s:${group.postId}:${code}` }]);
-    } else if (group.status === 'failed') {
-      keyboard.push([{ text: `🔁 ${time} ${groupLabel(group)} yeniden dene`, callback_data: `y:${group.postId}:${code}` }]);
-    } else if (group.status === 'skipped') {
-      keyboard.push([{ text: `↩️ ${time} ${groupLabel(group)} geri al`, callback_data: `u:${group.postId}:${code}` }]);
+    for (const group of groups) {
+      const time = clock(group.rows[0].scheduledAt);
+      const code = FORMAT_CODES[group.format];
+      if (group.status === 'ready' || group.status === 'approved') {
+        keyboard.push([{ text: `🚫 ${time} ${groupLabel(group)}`, callback_data: `s:${group.postId}:${code}` }]);
+      } else if (group.status === 'failed') {
+        keyboard.push([{ text: `🔁 ${time} ${groupLabel(group)} yeniden dene`, callback_data: `y:${group.postId}:${code}` }]);
+      } else if (group.status === 'skipped') {
+        keyboard.push([{ text: `↩️ ${time} ${groupLabel(group)} geri al`, callback_data: `u:${group.postId}:${code}` }]);
+      }
     }
   }
   return { html, keyboard };

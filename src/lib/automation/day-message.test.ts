@@ -101,6 +101,13 @@ describe('günlük onay mesajı', () => {
     const { keyboard } = buildDayMessage('2026-09-29', rows, { mediaUrl });
     expect(keyboard).toEqual([[{ text: '🔁 08:30 Kadın burç carousel yeniden dene', callback_data: `y:${POST}:c` }]]);
   });
+
+  it('gecikmiş 8 Ekim test paketi yalnız izleme bağlantıları sunar', () => {
+    const { html, keyboard } = buildDayMessage('2026-10-08', ROWS, { mediaUrl, testOnly: true });
+    expect(html).toContain('test amaçlı hazırlandı; hiçbir paylaşım yapılmayacak');
+    expect(html).not.toContain('/hemen');
+    expect(keyboard).toEqual([]);
+  });
 });
 
 

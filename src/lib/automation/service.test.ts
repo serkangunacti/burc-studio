@@ -285,6 +285,16 @@ describe('günlük onay', () => {
     expect((await listPublications(db, DATE))[0].telegramMessageId).toBe(77);
   });
 
+  it('8 Ekim test paketi gece yarısından sonra paylaşım çağrısı göstermeden hazır bildirimi yollar', async () => {
+    await connectAll(db);
+    await seedDay(db, '2026-10-08');
+    const { deps, telegramCalls } = harness(db, new Date('2026-10-08T21:01:00Z'));
+    expect(await sendDayPlan(deps, '2026-10-08')).toEqual({ sent: true });
+    const message = telegramCalls().find((call) => call.path === 'sendMessage');
+    expect(message?.params.text).toContain('test amaçlı hazırlandı; hiçbir paylaşım yapılmayacak');
+    expect(message?.params.text).not.toContain('/hemen');
+  });
+
   it('chat kaydı yoksa mesaj göndermez ve nedenini söyler', async () => {
     await saveIntegration(db, { id: 'telegram', secretEncrypted: encryptSecret('BOT', KEY), account: { id: '42', username: 'b' }, expiresAt: null });
     const { deps } = harness(db, new Date());
@@ -933,4 +943,3 @@ describe('YouTube Shorts paylaşımı', () => {
     expect(telegramCalls().some((call) => String(call.params.text).includes("YouTube'a (video) gönderildi"))).toBe(true);
   });
 });
-

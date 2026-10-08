@@ -227,8 +227,9 @@ export async function sendDayPlan(deps: AutomationDeps, date: DateKey, failures:
   if (covers.length >= 2) {
     await telegram.client.sendPhotos(telegram.chatId, covers).catch((error: unknown) => console.error('Önizleme albümü gönderilemedi', error));
   }
-  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl, failures });
-  const message = await telegram.client.sendMessage(telegram.chatId, date === IMMEDIATE_APPROVAL_DATE ? `${html}\n\nBugüne özel: tüm videolar hazır olduğunda /hemen komutuyla paylaşımı başlatabilirsin.` : html, date === IMMEDIATE_APPROVAL_DATE ? {} : { keyboard });
+  const testOnly = date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(deps.now()) > date;
+  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl, failures, testOnly });
+  const message = await telegram.client.sendMessage(telegram.chatId, testOnly ? html : date === IMMEDIATE_APPROVAL_DATE ? `${html}\n\nBugüne özel: tüm videolar hazır olduğunda /hemen komutuyla paylaşımı başlatabilirsin.` : html, testOnly || date === IMMEDIATE_APPROVAL_DATE ? {} : { keyboard });
   if (rows.length > 0) await setTelegramMessageId(deps.db, date, message.message_id);
   return { sent: true };
 }
@@ -238,7 +239,8 @@ async function refreshDayMessage(deps: AutomationDeps, date: DateKey, messageId?
   const rows = await listPublications(deps.db, date);
   const target = messageId ?? rows.find((row) => row.telegramMessageId)?.telegramMessageId;
   if (!telegram?.chatId || !target) return;
-  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl: mediaUrlFor(deps.appUrl) });
+  const testOnly = date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(deps.now()) > date;
+  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl: mediaUrlFor(deps.appUrl), testOnly });
   await telegram.client.editMessage(telegram.chatId, target, html, keyboard).catch((error: unknown) => {
     // Aynı içerikle düzenleme Telegram'da hata sayılır; yok sayılır.
     if (!(error instanceof TelegramError && error.message.includes('not modified'))) console.error('Plan mesajı güncellenemedi', error);
