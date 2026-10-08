@@ -293,7 +293,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     return;
   }
   const now = deps.now();
-  const targetDate = action.action === 'approve' || action.action === 'publish_now' ? action.date : telegram.automation.startDate
+  const targetDate = 'date' in action ? action.date : telegram.automation.startDate
     ? (await getPostDetail(deps.db, action.postId))?.post.date ?? istanbulDateKey(now)
     : istanbulDateKey(now);
   const paused = automationStartReason(telegram.automation.startDate, targetDate, now);
@@ -329,10 +329,12 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     if (retried[0]) await refreshDayMessage(deps, retried[0].date, query.message.message_id);
     return;
   }
-  const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip' }, now);
-  if (action.action === 'undo') await enqueueRows(deps, changed.filter((row) => row.status === 'approved'));
-  await client.answerCallback(query.id, changed.length === 0 ? 'Değişiklik yok.' : action.action === 'skip' ? 'Paylaşılmayacak.' : 'Geri alındı.');
-  if (changed[0]) await refreshDayMessage(deps, changed[0].date, query.message.message_id);
+  if ('postId' in action) {
+    const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip' }, now);
+    if (action.action === 'undo') await enqueueRows(deps, changed.filter((row) => row.status === 'approved'));
+    await client.answerCallback(query.id, changed.length === 0 ? 'Değişiklik yok.' : action.action === 'skip' ? 'Paylaşılmayacak.' : 'Geri alındı.');
+    if (changed[0]) await refreshDayMessage(deps, changed[0].date, query.message.message_id);
+  }
 }
 
 const clock = (date: Date) => date.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });

@@ -74,7 +74,7 @@ export function outroNarrationText(): string {
   return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın! Takip etmeyi unutmayın!';
 }
 
-export function createWavFromPcm(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer {
+export function createWavFromPcm(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer<any> {
   const header = Buffer.alloc(44);
   header.write('RIFF', 0);
   header.writeUInt32LE(36 + pcm.length, 4);
@@ -263,7 +263,7 @@ export function createGoogleNarrator(options: {
         throw new Error('Google Gemini TTS geçerli ses verisi döndürmedi');
       }
 
-      let data = Buffer.from(base64Data, 'base64');
+      let data: Buffer<any> = Buffer.from(base64Data, 'base64');
       // Eğer model RIFF WAVE başlığı olmadan ham PCM (L16) döndürdüyse standart WAV başlığı ekle
       if (data.length >= 4 && data.toString('ascii', 0, 4) !== 'RIFF') {
         const mime = json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType ?? '';

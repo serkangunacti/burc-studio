@@ -65,7 +65,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
 
   for (const post of posts) {
     if (options.only && !`${post.kind}-${post.audience}`.includes(options.only)) continue;
-    const targetTemplateVersion = specFor(post.kind)?.templateVersion ?? post.templateVersion;
+    const targetTemplateVersion = (post.kind !== 'special' ? specFor(post.kind)?.templateVersion : undefined) ?? post.templateVersion;
     const templateOutdated = post.templateVersion !== targetTemplateVersion;
     const items = plan.filter((item) => item.postId === post.id);
     if (items.length === 0) continue;

@@ -27,6 +27,7 @@ import {
   runMaintenance,
   sendDayPlan,
   startRender,
+  syncYouTubeShorts,
   type AutomationDeps,
 } from './service';
 
