@@ -15,10 +15,25 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[1], "words": [{"start": 5.0, "end": 6.0}]},
             {"text": scenes[2], "words": [{"start": 14.0, "end": 14.0}]},
         ]
-        starts = module.scene_starts(segments, scenes, 14.0)
+        starts = module.scene_starts(segments, scenes, 14.0, 1.0)
         self.assertEqual(starts[:2], [0.0, 5.0])
         self.assertAlmostEqual(starts[2], 8.0)
         self.assertLess(starts[2], 14.0)
+
+    def test_rejects_a_late_anchor_that_leaves_too_little_time_for_the_trailing_scenes(self):
+        scenes = ["Giriş", "Koç.", "Kapanış."]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 1.0}]},
+            {"text": scenes[1], "words": [{"start": 13.0, "end": 13.2}]},
+            {"text": scenes[2], "words": [{"start": 14.0, "end": 14.0}]},
+        ]
+        starts = module.scene_starts(segments, scenes, 14.0, 1.0)
+        self.assertEqual(starts[0], 0.0)
+        self.assertAlmostEqual(starts[1], 70 / 17)
+        self.assertAlmostEqual(starts[2], 126 / 17)
+        self.assertGreaterEqual(starts[1], 1.0)
+        self.assertGreaterEqual(starts[2] - starts[1], 1.0)
+        self.assertGreaterEqual(14.0 - starts[2], 1.0)
 
     def test_does_not_hide_an_unaligned_scene_before_a_later_valid_anchor(self):
         scenes = ["Giriş", "İlk yorum", "İkinci yorum", "Kapanış"]
@@ -29,18 +44,18 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[3], "words": [{"start": 12.0, "end": 13.0}]},
         ]
         with self.assertRaisesRegex(ValueError, "iç sahne zamanlaması"):
-            module.scene_starts(segments, scenes, 14.0)
+            module.scene_starts(segments, scenes, 14.0, 1.0)
 
     def test_retains_scene_order_without_loading_a_model(self):
         scenes = ["Giriş.", "Koç.", "Kapanış."]
         segments = [{"text": text, "words": [{"start": i * 5 + .2, "end": i * 5 + 4}]} for i, text in enumerate(scenes)]
-        self.assertEqual(module.scene_starts(segments, scenes, 20.0), [0, 5.2, 10.2])
+        self.assertEqual(module.scene_starts(segments, scenes, 20.0, 1.0), [0, 5.2, 10.2])
 
     def test_rejects_missing_words_changed_text_and_invalid_scene_starts(self):
         with self.assertRaises(ValueError):
-            module.scene_starts([{"text": "Metin.", "words": []}], ["Metin."], 20.0)
+            module.scene_starts([{"text": "Metin.", "words": []}], ["Metin."], 20.0, 1.0)
         with self.assertRaises(ValueError):
-            module.scene_starts([{"text": "Başka.", "words": [{"start": 0, "end": 1}]}], ["Metin."], 20.0)
+            module.scene_starts([{"text": "Başka.", "words": [{"start": 0, "end": 1}]}], ["Metin."], 20.0, 1.0)
         for word in [
             {"start": float("nan"), "end": 1},
             {"start": None, "end": 1},
@@ -55,6 +70,7 @@ class AlignmentTests(unittest.TestCase):
                     ],
                     ["Giriş", "Metin."],
                     20.0,
+                    1.0,
                 )
                 self.assertEqual(starts[0], 0.0)
                 self.assertGreater(starts[1], 0.0)
@@ -66,7 +82,7 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[0], "words": [{"start": 0.1, "end": 5.2}, {"start": 4.9, "end": 5.5}, {"start": None, "end": None}]},
             {"text": scenes[1], "words": [{"start": 5.1, "end": 7.0}]},
         ]
-        self.assertEqual(module.scene_starts(segments, scenes, 10.0), [0.0, 5.1])
+        self.assertEqual(module.scene_starts(segments, scenes, 10.0, 1.0), [0.0, 5.1])
 
     def test_rejects_unordered_scene_boundaries(self):
         scenes = ["İlk sahne.", "İkinci sahne."]
@@ -75,7 +91,7 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[1], "words": [{"start": 0.0, "end": 7.0}]},
         ]
         with self.assertRaises(ValueError):
-            module.scene_starts(segments, scenes, 10.0)
+            module.scene_starts(segments, scenes, 10.0, 1.0)
 
 
 if __name__ == "__main__":

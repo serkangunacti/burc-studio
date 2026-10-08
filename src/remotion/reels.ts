@@ -6,6 +6,8 @@ export const INTRO_FRAMES = 75;
 export const SIGN_FRAMES = 150;
 export const OUTRO_FRAMES = 90;
 export const TRANSITION_FRAMES = 15;
+// Used only when forced alignment cannot locate trailing scene boundaries.
+export const MIN_REELS_SCENE_AUDIO_GAP_SECONDS = 1;
 export const MAX_REELS_SECONDS = 179; // Tek MP4, YouTube Shorts sınırının altında.
 export const MAX_REELS_FRAMES = Math.floor(178.9 * REELS_FPS);
 

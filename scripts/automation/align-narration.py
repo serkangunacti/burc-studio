@@ -10,10 +10,16 @@ import sys
 from pathlib import Path
 
 
-def scene_starts(segments, scenes, duration_seconds):
+def scene_starts(segments, scenes, duration_seconds, minimum_scene_gap_seconds):
     if not isinstance(duration_seconds, (int, float)) or not math.isfinite(duration_seconds) or duration_seconds <= 0:
         raise ValueError("Konuşma zamanlaması: ses süresi geçersiz")
-    if len(segments) != len(scenes):
+    if (
+        not isinstance(minimum_scene_gap_seconds, (int, float))
+        or not math.isfinite(minimum_scene_gap_seconds)
+        or minimum_scene_gap_seconds <= 0
+    ):
+        raise ValueError("Konuşma zamanlaması: en kısa sahne aralığı geçersiz")
+    if not scenes or len(segments) != len(scenes):
         raise ValueError("Konuşma zamanlaması: bütün sahneler eşleşmedi")
     candidates = []
     for index, (segment, text) in enumerate(zip(segments, scenes)):
@@ -40,13 +46,19 @@ def scene_starts(segments, scenes, duration_seconds):
         if candidate is not None:
             if candidate <= last_anchor_time:
                 raise ValueError("Konuşma zamanlaması: sahne başlangıçları sıralı değil")
-            starts[index] = candidate
-            last_anchor_index = index
-            last_anchor_time = candidate
-            continue
+            remaining_scene_count = len(scenes) - index
+            has_room_before = candidate - last_anchor_time >= minimum_scene_gap_seconds
+            has_room_after = duration_seconds - candidate >= remaining_scene_count * minimum_scene_gap_seconds
+            if has_room_before and has_room_after:
+                starts[index] = candidate
+                last_anchor_index = index
+                last_anchor_time = candidate
+                continue
         if any(
-            later is not None and later > last_anchor_time
-            for later in candidates[index + 1:]
+            later is not None
+            and later - last_anchor_time >= (later_index - last_anchor_index) * minimum_scene_gap_seconds
+            and duration_seconds - later >= (len(scenes) - later_index) * minimum_scene_gap_seconds
+            for later_index, later in enumerate(candidates[index + 1:], start=index + 1)
         ):
             raise ValueError("Konuşma zamanlaması: iç sahne zamanlaması eksik veya sırasız")
 
@@ -56,12 +68,19 @@ def scene_starts(segments, scenes, duration_seconds):
         weights = [max(1, len("".join(scene.split()))) for scene in scenes]
         total_weight = sum(weights[last_anchor_index:])
         remaining_seconds = duration_seconds - last_anchor_time
-        if total_weight <= 0 or remaining_seconds <= 0:
+        remaining_scene_count = len(scenes) - last_anchor_index
+        if total_weight <= 0 or remaining_seconds < remaining_scene_count * minimum_scene_gap_seconds:
             raise ValueError("Konuşma zamanlaması: son sahneler için ses aralığı kalmadı")
         elapsed_weight = 0
+        previous_start = last_anchor_time
         for boundary in range(last_anchor_index + 1, len(scenes)):
             elapsed_weight += weights[boundary - 1]
             starts[boundary] = last_anchor_time + remaining_seconds * elapsed_weight / total_weight
+            if starts[boundary] - previous_start < minimum_scene_gap_seconds:
+                raise ValueError("Konuşma zamanlaması: son sahneler için ses aralığı kalmadı")
+            previous_start = starts[boundary]
+        if duration_seconds - previous_start < minimum_scene_gap_seconds:
+            raise ValueError("Konuşma zamanlaması: son sahneler için ses aralığı kalmadı")
         break
 
     return starts
@@ -78,11 +97,12 @@ def main():
     request = json.loads(Path(manifest).read_text())
     scenes = request["scenes"]
     duration_seconds = request["durationSeconds"]
+    minimum_scene_gap_seconds = request["minimumSceneGapSeconds"]
     model = stable_whisper.load_model("small", device="cpu")
     result = model.align(audio, "\n".join(scenes), language="tr", original_split=True, verbose=None, remove_instant_words=False)
     if result is None:
         raise ValueError("Konuşma zamanlaması çıkarılamadı")
-    starts = scene_starts(result.to_dict()["segments"], scenes, duration_seconds)
+    starts = scene_starts(result.to_dict()["segments"], scenes, duration_seconds, minimum_scene_gap_seconds)
     Path(output).write_text(json.dumps({"sceneStarts": starts}))
 
 

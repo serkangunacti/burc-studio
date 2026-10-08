@@ -5,7 +5,7 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 import type {ReelsProps} from '../../src/remotion/slide-types';
 import {fullNarrationTiming} from '../../src/remotion/voice';
-import {REELS_FPS} from '../../src/remotion/reels';
+import {MIN_REELS_SCENE_AUDIO_GAP_SECONDS,REELS_FPS} from '../../src/remotion/reels';
 import {introNarrationText, narrationText, outroNarrationText, wavDuration, type NarrationClip} from './google-tts';
 
 const execFileAsync=promisify(execFile);
@@ -43,7 +43,7 @@ export async function fitNarrationToBudget(rawPath:string,cacheDir:string):Promi
 
 async function alignOnActions(audio:string,scenes:string[],manifest:string,durationSeconds:number):Promise<number[]>{
   if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Konuşma analizi yalnız GitHub Actions üzerinde çalışır');
-  await writeFile(manifest,JSON.stringify({scenes,durationSeconds}),{mode:0o600});
+  await writeFile(manifest,JSON.stringify({scenes,durationSeconds,minimumSceneGapSeconds:MIN_REELS_SCENE_AUDIO_GAP_SECONDS}),{mode:0o600});
   const output=`${manifest}.aligned.json`;
   await execFileAsync('python3',['scripts/automation/align-narration.py',audio,manifest,output],{timeout:15*60_000,maxBuffer:4*1024*1024});
   return (JSON.parse(await readFile(output,'utf8')) as {sceneStarts:number[]}).sceneStarts;
