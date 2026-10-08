@@ -17,12 +17,13 @@ export function PostSlide({ templateVersion, props }: PostSlideProps) {
 export function PostReels({ templateVersion, reels, musicFile, voice }: PostReelsProps) {
   const { Reels } = getTemplate(templateVersion);
   const frames = reelsDurationInFrames(reels.signs.length,reels.sceneTiming);
-  const timeline = voice ? voiceTimeline(voice, frames, REELS_FPS,reels.sceneTiming) : null;
+  const timeline = voice && !('full' in voice) ? voiceTimeline(voice, frames, REELS_FPS,reels.sceneTiming) : null;
   return (
     <>
       <Reels {...reels} />
       {musicFile && <Audio src={staticFile(musicFile)} volume={frame => musicVolume(frame, voice, frames, REELS_FPS,reels.sceneTiming)} />}
-      {voice && timeline && <>
+      {voice && 'full' in voice && <Audio src={staticFile(voice.full.file)} />}
+      {voice && !('full' in voice) && timeline && <>
         <Sequence from={0} durationInFrames={timeline.introFrames}><Audio src={staticFile(voice.intro.file)} /></Sequence>
         {timeline.signTracks?.map(track=><Sequence key={track.file} from={track.from} durationInFrames={track.durationInFrames}><Audio src={staticFile(track.file)} /></Sequence>)}
         <Sequence from={timeline.outroStart} durationInFrames={timeline.outroFrames}><Audio src={staticFile(voice.outro.file)} /></Sequence>

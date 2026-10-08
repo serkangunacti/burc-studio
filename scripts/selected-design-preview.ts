@@ -1,16 +1,20 @@
-import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {LONGEST_WEEKLY_BODY,SAMPLE_COVER,sampleProps,sampleReels,sampleSign} from '../src/remotion/fixtures';
 import {openMusicRenderer} from './automation/music';
 import {openRemotionRenderers} from './automation/remotion';
-import {decodeVoiceAsset} from './automation/voice';
+import {createGoogleNarrator} from './automation/google-tts';
+import {createFullNarration} from './automation/full-narration';
 
 async function main() {
-  const output=process.argv[2],assetFile=process.argv[3];
-  if(!output || !assetFile) throw new Error('Çıktı klasörü ve özel ses varlığı dosyası gerekli');
+  if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Video önizlemesi yalnız GitHub Actions üzerinde hazırlanır');
+  const output=process.argv[2];
+  if(!output) throw new Error('Çıktı klasörü gerekli');
   await mkdir(output,{recursive:true});
   const music=await openMusicRenderer();
-  const renderer=await openRemotionRenderers({music,voice:decodeVoiceAsset(await readFile(assetFile,'utf8')),log:console.log,upload:async(name,file)=>{const dest=path.join(output,name);await writeFile(dest,file);return dest;}});
+  const cacheDir=process.env.VOICE_CACHE_DIR||'.cache/voice';
+  const narrator=createGoogleNarrator({cacheDir,log:console.log});
+  const renderer=await openRemotionRenderers({music,narrateFull:reels=>createFullNarration(reels,{narrator,cacheDir}),log:console.log,upload:async(name,file)=>{const dest=path.join(output,name);await writeFile(dest,file);return dest;}});
   const brand={handle:'kozmikarkan',enabled:true,position:'bottom-center' as const,opacity:.55};
   try {
     const samples=[

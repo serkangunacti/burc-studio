@@ -1,6 +1,20 @@
 import {describe,expect,it} from 'vitest';
-import {musicVolume,voiceTimeline,narrationTiming,reelsFrameRanges} from './voice';
+import {musicVolume,voiceTimeline,narrationTiming,reelsFrameRanges,fullNarrationTiming} from './voice';
 const voice = {intro:{file:'intro.mp3',durationSeconds:3.72},outro:{file:'outro.mp3',durationSeconds:3.12}};
+describe('tam sesin sahne zamanlaması',()=>{
+  it('178,5 saniyelik tam sesi 14 sahnede eksiksiz tek videoya yerleştirir',()=>{
+    const timing=fullNarrationTiming(178.5,Array.from({length:14},(_,i)=>i*12.5),12,30);
+    const full={full:{file:'full.wav',durationSeconds:178.5}};
+    expect(reelsFrameRanges(12,timing,30,full)).toEqual([[0,5360]]);
+    expect(musicVolume(2500,full,5361,30,timing)).toBe(.2);
+  });
+  it.each([179,Infinity,NaN,0])('geçersiz veya bütçeyi aşan tam sesi reddeder: %s',duration=>{
+    expect(()=>fullNarrationTiming(duration,Array.from({length:14},(_,i)=>i*12),12,30)).toThrow();
+  });
+  it('eksik, ters ve tek karelik sahne sınırlarını reddeder',()=>{
+    for(const starts of [[0,5],[0,10,9,15],[0,.01,10,15]])expect(()=>fullNarrationTiming(20,starts,2,30)).toThrow();
+  });
+});
 describe('önbellekteki ses yerleşimi',()=>{
   it('burç konuşmaları bitmeden sonraki sahnenin geçişini başlatmaz',()=>{
     const narrated={...voice,signs:[{file:'koc.wav',durationSeconds:6.2},{file:'boga.wav',durationSeconds:7.64}]};

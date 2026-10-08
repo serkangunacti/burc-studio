@@ -72,8 +72,8 @@ describe('paylaşım planı', () => {
     expect(tiktok.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt }))).toEqual(
       reels.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt })),
     );
-    expect(tiktok[0].caption).toContain('Sana uyan yorum hangisi?');
-    expect(reels[0].caption).toContain('Günün notunu sonra okumak için kaydet.');
+    expect(tiktok[0].caption).toContain('Günün yorumları burada ✨');
+    expect(reels[0].caption).toContain('Günün yorumları burada ✨');
     expect(tiktok[0].caption).not.toBe(reels[0].caption);
   });
 

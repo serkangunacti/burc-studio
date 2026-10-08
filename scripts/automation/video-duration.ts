@@ -6,7 +6,7 @@ const execFileAsync=promisify(execFile);
 
 export function parseVideoDuration(output:string):number {
   const duration=Number(output.trim());
-  if(!Number.isFinite(duration)||duration<=0||duration>MAX_REELS_SECONDS) {
+  if(!Number.isFinite(duration)||duration<=0||duration>=MAX_REELS_SECONDS) {
     throw new Error(`MP4 süresi geçersiz veya Shorts güvenli tavanını aşıyor: ${output.trim()} sn`);
   }
   return duration;

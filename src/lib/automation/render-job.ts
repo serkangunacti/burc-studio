@@ -14,6 +14,7 @@ import type { ReelsProps, SlideProps } from '@/remotion/slide-types';
 import { planPublications } from './plan';
 import { listPublications, savePublication } from './repository';
 import { automationStartReason } from './start';
+import {MAX_REELS_SECONDS} from '@/remotion/reels';
 
 export type Renderers = {
   renderStills: (templateVersion: string, slides: SlideProps[]) => Promise<Uint8Array[]>;
@@ -44,6 +45,12 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   await db.delete(publicationsTable).where(and(eq(publicationsTable.date, date), eq(publicationsTable.format, 'carousel')));
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
+  // Invalidate the entire rebuild before its first render: no mix of old and new approvals.
+  if(options.force && !options.only){
+    if([...existing.values()].some(row=>row.status==='publishing'))return {...result,failures:['Paylaşım sürüyor; paketin yeniden hazırlanması bekletildi']};
+    await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video paketi yeniden render ediliyor'}).where(eq(publicationsTable.date,date));
+  }
+
   for (const post of posts) {
     if (options.only && `${post.kind}-${post.audience}` !== options.only) continue;
     const items = plan.filter(item => item.postId === post.id);
@@ -51,7 +58,8 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
     const targetTemplateVersion = (post.kind !== 'special' ? specFor(post.kind)?.templateVersion : undefined) ?? post.templateVersion;
     const templateOutdated = post.templateVersion !== targetTemplateVersion;
     const oldVideos = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels').sort((a,b) => a.part-b.part);
-    const replace = options.force === true || !!options.only || templateOutdated;
+    const unsafe=oldVideos.some(row=>row.part!==0||row.media.partCount!==1||typeof row.media.durationSeconds!=='number'||!Number.isFinite(row.media.durationSeconds)||row.media.durationSeconds<=0||row.media.durationSeconds>=MAX_REELS_SECONDS);
+    const replace = options.force === true || !!options.only || templateOutdated || unsafe;
     const partCount = oldVideos[0]?.media.partCount ?? 1;
     const pending = items.filter(item => replace || Array.from({length:partCount},(_,part)=>existing.get(slotKey({...item,part}))).some(row=>!row));
     if (!pending.length) {
@@ -79,7 +87,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         const video = typeof rendered==='string'?{videoUrl:rendered}:rendered;
         videos = 'parts' in video && video.parts?.length ? video.parts.map(part=>({...part,...(video.isAiGenerated?{isAiGenerated:true}:{})})) : [video];
       }
-      if (videos.some(video=>video.durationSeconds!==undefined && (!Number.isFinite(video.durationSeconds)||video.durationSeconds<=0||video.durationSeconds>179))) throw new Error('Video 179 saniyelik süre kontrolünü geçemedi');
+      if (videos.length!==1 || videos.some(video=>typeof video.durationSeconds!=='number'||!Number.isFinite(video.durationSeconds)||video.durationSeconds<=0||video.durationSeconds>=MAX_REELS_SECONDS)) throw new Error('Tek MP4 video 179 saniyelik süre kontrolünü geçemedi');
       for (const item of pending) {
         for (const [part,video] of videos.entries()) {
           const planned = {...item,part,scheduledAt:new Date(item.scheduledAt.getTime()+part*settings.automation.partGapMinutes*60_000)};

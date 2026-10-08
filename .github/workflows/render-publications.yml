@@ -48,12 +48,31 @@ jobs:
         if: steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v2-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            voice-v2-${{ steps.start-window.outputs.date }}-
+            voice-v3-${{ steps.start-window.outputs.date }}-
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji ffmpeg && ffprobe -version
         if: steps.start-window.outputs.allowed == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.start-window.outputs.allowed == 'true'
+        with:
+          python-version: '3.11'
+      - name: Konuşma zamanlaması araçlarını yalnız Actions üzerine kur
+        if: steps.start-window.outputs.allowed == 'true'
+        run: |
+          python3 -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install stable-ts==2.19.1
+      - uses: actions/cache@v4
+        if: steps.start-window.outputs.allowed == 'true'
+        with:
+          path: ~/.cache/whisper
+          key: whisper-small-tr-v1
+      - name: Ses ve süre kontrollerini doğrula
+        if: steps.start-window.outputs.allowed == 'true'
+        run: |
+          npx vitest run scripts/automation/google-tts.test.ts scripts/automation/full-narration.test.ts scripts/automation/remotion.test.ts scripts/automation/video-duration.test.ts src/remotion/voice.test.ts src/lib/automation/render-job.test.ts src/lib/automation/publishing-policy.test.ts src/lib/content/daily-package.test.ts src/lib/automation/plan.test.ts --maxWorkers=2
+          python3 scripts/automation/align-narration.test.py
       - uses: actions/cache@v4
         if: steps.start-window.outputs.allowed == 'true'
         with:
@@ -75,6 +94,7 @@ jobs:
           SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}
           GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GOOGLE_TTS_API_KEY_3: ${{ secrets.GOOGLE_TTS_API_KEY_3 }}
           VOICE_CACHE_DIR: .cache/voice
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
           APP_URL: https://burc-studio.vercel.app
@@ -83,4 +103,4 @@ jobs:
         if: always() && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v2-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}

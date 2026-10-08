@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGoogleNarrator, createWavFromPcm, narrationText } from './google-tts';
 
 const dirs: string[] = [];
@@ -11,7 +11,55 @@ async function cache() {
   return dir;
 }
 afterEach(async () => {
+  vi.unstubAllEnvs();
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
+});
+
+describe('tek istek ve üç anahtar', () => {
+  it('tam video metnini aynı ayarlarla 1 → 2 → 3 geçirir ve önbelleğe alır', async () => {
+    const calls: {key: string; url: string; payload: unknown}[] = [];
+    const text = Array.from({length:14}, (_,i) => `Sahne ${i}. ${'Mevcut Türkçe yorum. '.repeat(12)}`).join('\n\n').trim();
+    const narrator = createGoogleNarrator({apiKeys:['bir','iki','üç'], cacheDir:await cache(), fetchImpl:async (url, options) => {
+      const key = new Headers(options?.headers).get('x-goog-api-key')!;
+      calls.push({key,url:String(url),payload:JSON.parse(String(options?.body))});
+      if(key==='bir') return new Response('quota PerDay',{status:429});
+      if(key==='iki') return new Response('API key invalid',{status:403});
+      return Response.json({candidates:[{content:{parts:[{inlineData:{mimeType:'audio/wav',data:mockWav().toString('base64')}}]}}]});
+    }});
+    expect((await narrator.speak(text)).durationSeconds).toBe(1);
+    expect(calls.map(c=>c.key)).toEqual(['bir','iki','üç']);
+    expect(new Set(calls.map(c=>c.url)).size).toBe(1);
+    expect(calls.every(c=>!c.url.includes('key='))).toBe(true);
+    expect(calls[0].payload).toEqual(calls[2].payload);
+    expect(calls[2].payload).toMatchObject({contents:[{parts:[{text}]}]});
+    expect((await narrator.speak(text)).cached).toBe(true);
+    expect(calls).toHaveLength(3);
+  });
+  it('günlük kotası dolan anahtarı atlar ve Pasifik gece yarısında yeniden dener', async () => {
+    let now = new Date('2026-10-08T12:00:00Z');
+    const keys: string[]=[];
+    let exhausted=true;
+    const narrator=createGoogleNarrator({apiKeys:['bir','iki','üç'],now:()=>now,cacheDir:await cache(),fetchImpl:async(_url,options)=>{
+      const key=new Headers(options?.headers).get('x-goog-api-key')!; keys.push(key);
+      if(key==='bir'&&exhausted)return new Response('quota PerDay',{status:429});
+      return Response.json({candidates:[{content:{parts:[{inlineData:{mimeType:'audio/wav',data:mockWav().toString('base64')}}]}}]});
+    }});
+    await narrator.speak('İlk tam video.'); await narrator.speak('İkinci tam video.');
+    expect(keys).toEqual(['bir','iki','iki']);
+    now=new Date('2026-10-09T07:00:00Z'); exhausted=false;
+    await narrator.speak('Yeni günlük video.'); expect(keys.at(-1)).toBe('bir');
+  });
+  it('ortam anahtarlarını 1 → 2 → 3 sırasıyla kullanır', async () => {
+    vi.stubEnv('GOOGLE_TTS_API_KEY','bir'); vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY','iki'); vi.stubEnv('GOOGLE_TTS_API_KEY_3','üç');
+    const keys:string[]=[];
+    const narrator=createGoogleNarrator({cacheDir:await cache(),fetchImpl:async(_url,options)=>{
+      const key=new Headers(options?.headers).get('x-goog-api-key')!; keys.push(key);
+      if(key!=='üç')return new Response('quota',{status:429});
+      return Response.json({candidates:[{content:{parts:[{inlineData:{mimeType:'audio/wav',data:mockWav().toString('base64')}}]}}]});
+    }});
+    expect((await narrator.speak('Tam metin.')).durationSeconds).toBe(1);
+    expect(keys).toEqual(['bir','iki','üç']);
+  });
 });
 
 function mockWav() {

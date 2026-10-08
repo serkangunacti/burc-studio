@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { videoSafetyError, immediatePublishAllowed } from './service';
 import type { PublicationRow } from './repository';
 
-const row = (media: PublicationRow['media'], format: PublicationRow['format'] = 'reels') => ({ media, format } as PublicationRow);
+const row = (media: PublicationRow['media'], format: PublicationRow['format'] = 'reels') => ({ media, format, part:0 } as PublicationRow);
 
 describe('Shorts publishing policy', () => {
-  it('requires verified positive duration with a five second safety margin', () => {
-    for (const durationSeconds of [undefined, NaN, Infinity, 0, -1, 175.1, 180]) {
+  it('requires verified positive duration strictly below 179 seconds', () => {
+    for (const durationSeconds of [undefined, NaN, Infinity, 0, -1, 179, 179.1, 180]) {
       expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds }))).toBeTruthy();
     }
-    expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 175 }))).toBeNull();
+    expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 178.999 }))).toBeNull();
+    expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 100, partCount:2 }))).toBeTruthy();
     expect(videoSafetyError(row({ durationSeconds: 10 }))).toBeTruthy();
     expect(videoSafetyError(row({ imageIds: ['a'] }, 'carousel'))).toBeTruthy();
   });

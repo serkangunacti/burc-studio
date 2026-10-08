@@ -6,10 +6,10 @@ import { openBrowser, renderMedia, renderStill, selectComposition } from '@remot
 import type { Renderers } from '@/lib/automation/render-job';
 import { REELS_FPS, reelsDurationInFrames } from '@/remotion/reels';
 import type { MusicRenderer } from './music';
-import type { decodeVoiceAsset } from './voice';
-import type { ReelsSign, ReelsProps } from '@/remotion/slide-types';
-import {narrationTiming,reelsFrameRanges,type ReelsVoice} from '@/remotion/voice';
-import type {NarrationClip} from './google-tts';
+import type { ReelsProps } from '@/remotion/slide-types';
+import {fullNarrationTiming,reelsFrameRanges,type ReelsVoice} from '@/remotion/voice';
+import type {FullNarration} from './full-narration';
+import {MAX_REELS_SECONDS} from '@/remotion/reels';
 import {probeVideoDuration} from './video-duration';
 
 export type RemotionRenderers = Renderers & { close: () => Promise<void> };
@@ -18,10 +18,7 @@ export async function openRemotionRenderers(input: {
   music: MusicRenderer;
   upload: (name: string, file: Buffer) => Promise<string>;
   log: (message: string) => void;
-  voice?: ReturnType<typeof decodeVoiceAsset>;
-  narrate?: (sign: ReelsSign) => Promise<NarrationClip>;
-  narrateIntro?: (reels: ReelsProps) => Promise<NarrationClip>;
-  narrateOutro?: () => Promise<NarrationClip>;
+  narrateFull: (reels: ReelsProps) => Promise<FullNarration>;
 }): Promise<RemotionRenderers> {
   const serveUrl = await bundle({
     entryPoint: path.resolve('src/remotion/index.ts'),
@@ -32,14 +29,6 @@ export async function openRemotionRenderers(input: {
   });
   const browser = await openBrowser('chrome');
   const work = await mkdtemp(path.join(os.tmpdir(), 'kozmik-'));
-  const voice:ReelsVoice|undefined = input.voice ? {
-    intro: {file:'serkanses-intro.mp3',durationSeconds:input.voice.intro.durationSeconds},
-    outro: {file:'serkanses-outro.mp3',durationSeconds:input.voice.outro.durationSeconds},
-  } : undefined;
-  if (input.voice) {
-    await writeFile(path.join(serveUrl,'public','serkanses-intro.mp3'),input.voice.intro.data);
-    await writeFile(path.join(serveUrl,'public','serkanses-outro.mp3'),input.voice.outro.data);
-  }
 
   return {
     async renderStills(templateVersion, slides) {
@@ -62,48 +51,15 @@ export async function openRemotionRenderers(input: {
       return images;
     },
     async renderReels({ templateVersion, reels, musicSeed, name }) {
-      let videoVoice: typeof voice = undefined;
-      if (input.narrate) {
-        if (!['pastel@2', 'pastel-tarot@2', 'pastel-weekly@2'].includes(templateVersion)) {
-          throw new Error('Bu eski şablon burç konuşma zamanlamasını desteklemiyor; video üretilmedi');
-        }
-
-        let introVoice: { file: string; durationSeconds: number } | undefined;
-        let outroVoice: { file: string; durationSeconds: number } | undefined;
-
-        if (input.narrateIntro) {
-          input.log(`${name}: sıcak giriş Google TTS ile seslendiriliyor`);
-          const introClip = await input.narrateIntro(reels);
-          const file = `voice-${name}-intro.wav`;
-          await writeFile(path.join(serveUrl, 'public', file), introClip.data);
-          introVoice = { file, durationSeconds: introClip.durationSeconds };
-        }
-
-        if (input.narrateOutro) {
-          input.log(`${name}: samimi kapanış Google TTS ile seslendiriliyor`);
-          const outroClip = await input.narrateOutro();
-          const file = `voice-${name}-outro.wav`;
-          await writeFile(path.join(serveUrl, 'public', file), outroClip.data);
-          outroVoice = { file, durationSeconds: outroClip.durationSeconds };
-        }
-
-        if (!introVoice || !outroVoice) {
-          throw new Error('Google TTS giriş ve kapanış sesleri üretilemedi; video eksik konuşmayla üretilmeyecek');
-        }
-
-        const signs = [];
-        // Tüm burç yorumları Google TTS ile seslendirilmelidir
-        for (const [index, sign] of reels.signs.entries()) {
-          input.log(`${name}: ${index + 1}/${reels.signs.length} ${sign.signName} Google TTS ile seslendiriliyor`);
-          const clip = await input.narrate(sign);
-          const file = `voice-${name}-${sign.sign}.wav`;
-          await writeFile(path.join(serveUrl, 'public', file), clip.data);
-          signs.push({ file, durationSeconds: clip.durationSeconds });
-        }
-
-        videoVoice = { intro: introVoice, outro: outroVoice, signs };
-        reels = { ...reels, sceneTiming: narrationTiming(videoVoice, reels.signs.length, REELS_FPS) };
+      if (!['pastel@2', 'pastel-tarot@2', 'pastel-weekly@2'].includes(templateVersion)) {
+        throw new Error('Bu eski şablon tam konuşma zamanlamasını desteklemiyor');
       }
+      input.log(`${name}: giriş, 12 yorum ve kapanış tek TTS isteğiyle seslendiriliyor`);
+      const narration = await input.narrateFull(reels);
+      const voiceFile = `voice-${name}-full.wav`;
+      await writeFile(path.join(serveUrl, 'public', voiceFile), narration.data);
+      const videoVoice: ReelsVoice = {full:{file:voiceFile,durationSeconds:narration.durationSeconds}};
+      reels = {...reels,sceneTiming:fullNarrationTiming(narration.durationSeconds,narration.sceneStarts,reels.signs.length,REELS_FPS)};
       const seconds = reelsDurationInFrames(reels.signs.length, reels.sceneTiming) / REELS_FPS;
       const musicFile = `music-${name}.wav`;
       // Paket klasörü sunucuda statik olarak sunulur; müzik staticFile() ile buradan okunur.
@@ -114,9 +70,10 @@ export async function openRemotionRenderers(input: {
       if (composition.durationInFrames !== reelsDurationInFrames(reels.signs.length, reels.sceneTiming)) {
         throw new Error('Video kompozisyon süresi konuşma zamanlamasıyla uyuşmuyor');
       }
+      if (ranges.length!==1) throw new Error('Render tek MP4 olmak zorunda');
       const outputs: {fileName: string; output: string; durationSeconds: number}[] = [];
-      for (const [index, frameRange] of ranges.entries()) {
-        const fileName = ranges.length === 1 ? `${name}.mp4` : `${name}-part-${index + 1}.mp4`;
+      for (const frameRange of ranges) {
+        const fileName = `${name}.mp4`;
         const output = path.join(work, fileName);
         const started = Date.now();
         await renderMedia({
@@ -136,16 +93,17 @@ export async function openRemotionRenderers(input: {
         });
         // Measure the encoded file, rather than assuming its requested frame count is its duration.
         const durationSeconds = await probeVideoDuration(output);
+        if (!Number.isFinite(durationSeconds) || durationSeconds<=0 || durationSeconds>=MAX_REELS_SECONDS) throw new Error('MP4 179 saniyelik kesin süre sınırını geçemedi');
         input.log(`${fileName}: ${durationSeconds.toFixed(2)} sn video, ${Math.round((Date.now() - started) / 1000)} sn render`);
         outputs.push({fileName, output, durationSeconds});
       }
-      // No part is exposed for publishing until all parts have passed the duration gate.
+      // Upload only after ffprobe has verified the single encoded MP4.
       const parts: {videoUrl: string; durationSeconds: number}[] = [];
       for (const output of outputs) {
         const file = await readFile(output.output);
         parts.push({videoUrl: await input.upload(output.fileName, file), durationSeconds: output.durationSeconds});
       }
-      return { ...parts[0], ...(videoVoice ? {isAiGenerated:true} : {}), ...(parts.length > 1 ? {parts} : {}) };
+      return {...parts[0],isAiGenerated:true};
     },
     async close() {
       await browser.close({ silent: true });

@@ -7,7 +7,7 @@ export const SIGN_FRAMES = 150;
 export const OUTRO_FRAMES = 90;
 export const TRANSITION_FRAMES = 15;
 export const MAX_REELS_SECONDS = 179; // Tek MP4, YouTube Shorts sınırının altında.
-export const MAX_REELS_FRAMES = MAX_REELS_SECONDS * REELS_FPS;
+export const MAX_REELS_FRAMES = Math.floor(178.9 * REELS_FPS);
 
 // Geçişler iki sahneyi üst üste bindirir; her geçiş toplam süreyi kısaltır.
 export function reelsDurationInFrames(signCount: number, timing?:ReelsSceneTiming): number {

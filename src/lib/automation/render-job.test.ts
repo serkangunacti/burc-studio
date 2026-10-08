@@ -14,7 +14,7 @@ let db: Db;
 
 function fakeRenderers(): Renderers & { stills: ReturnType<typeof vi.fn>; videos: ReturnType<typeof vi.fn> } {
   const stills = vi.fn(async (_version: string, slides: unknown[]) => slides.map((_, index) => new Uint8Array([index])));
-  const videos = vi.fn(async ({ name }: { name: string }) => `https://blob.example/${name}.mp4`);
+  const videos = vi.fn(async ({ name }: { name: string }) => ({videoUrl:`https://blob.example/${name}.mp4`,durationSeconds:100}));
   return { renderStills: stills, renderReels: videos, stills, videos };
 }
 
@@ -23,7 +23,7 @@ beforeEach(async () => {
 });
 
 describe('günün render işi', () => {
-  it('uzun içeriğin bütün video parçalarını aynı sırayla iki platforma kaydeder ve yeniden çizmez', async () => {
+  it('birden çok parça döndüren render sonucunu hiçbir platforma kaydetmez', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await saveSettings(db, { automation: { tiktok: { enabled: true } } });
     const renderers = fakeRenderers();
@@ -31,16 +31,40 @@ describe('günün render işi', () => {
       {videoUrl: 'https://blob.example/1.mp4', durationSeconds: 160},
       {videoUrl: 'https://blob.example/2.mp4', durationSeconds: 45},
     ] }));
-    expect((await renderDay(db, DATE, renderers)).failures).toEqual([]);
+    expect((await renderDay(db, DATE, renderers)).failures).toHaveLength(1);
     const rows = await listPublications(db, DATE);
-    expect(rows.map(r => [r.format,r.part,r.media.videoUrl,r.media.durationSeconds,r.media.partCount])).toEqual([
-      ['reels',0,'https://blob.example/1.mp4',160,2], ['tiktok',0,'https://blob.example/1.mp4',160,2],
-      ['reels',1,'https://blob.example/2.mp4',45,2], ['tiktok',1,'https://blob.example/2.mp4',45,2],
-    ]);
-    const again = fakeRenderers();
-    await renderDay(db, DATE, again);
-    expect(again.videos).not.toHaveBeenCalled();
-    expect(await listPublications(db, DATE)).toHaveLength(4);
+    expect(rows).toEqual([]);
+  });
+  it.each([179,179.1,undefined,NaN,Infinity,0])('süresi doğrulanmamış veya 179 sınırındaki sonucu kaydetmez: %s',async durationSeconds=>{
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});
+    const renderers=fakeRenderers();
+    renderers.renderReels=async()=>({videoUrl:'https://blob.test/long.mp4',durationSeconds});
+    expect((await renderDay(db,DATE,renderers)).failures).toHaveLength(1);
+    expect(await listPublications(db,DATE)).toEqual([]);
+  });
+  it('tam 178,9 saniyelik tek MP4 aynı ölçümle iki platforma kaydedilir',async()=>{
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});await saveSettings(db,{automation:{tiktok:{enabled:true}}});
+    const renderers=fakeRenderers();renderers.renderReels=async()=>({videoUrl:'https://blob.test/safe.mp4',durationSeconds:178.9});
+    expect((await renderDay(db,DATE,renderers)).failures).toEqual([]);
+    expect((await listPublications(db,DATE)).map(r=>r.media)).toEqual(Array.from({length:2},()=>({videoUrl:'https://blob.test/safe.mp4',durationSeconds:178.9,partCount:1})));
+  });
+  it('paket yeniden hazırlanırken tüm eski videoları ilk renderdan önce onaydan çıkarır',async()=>{
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'erkek'});
+    await renderDay(db,DATE,fakeRenderers());await approveDay(db,DATE);
+    const renderers=fakeRenderers();let calls=0;
+    renderers.renderReels=async()=>{
+      if(calls++===0)expect((await listPublications(db,DATE)).every(row=>!row.media.videoUrl&&row.approvedAt===null)).toBe(true);
+      return {videoUrl:'https://blob.test/new.mp4',durationSeconds:178};
+    };
+    expect((await renderDay(db,DATE,renderers,{force:true})).failures).toEqual([]);
+  });
+  it('önceden kaydedilen geçersiz MP4 satırını yeniden hazırlar',async()=>{
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});await renderDay(db,DATE,fakeRenderers());
+    const [row]=await listPublications(db,DATE);await db.update(publications).set({media:{videoUrl:'https://blob.test/old.mp4',durationSeconds:179,partCount:1}}).where(eq(publications.id,row.id));
+    const next=fakeRenderers();expect((await renderDay(db,DATE,next)).rendered).toHaveLength(1);
+    expect(next.videos).toHaveBeenCalledTimes(1);
+    expect((await listPublications(db,DATE))[0].media.durationSeconds).toBe(100);
   });
   it('zorla yeniden render onaylı eski videoyu yayın kuyruğundan çıkarır ve dış kimliklerini sıfırlar', async () => {
     await seedPost(db, {date: DATE,kind:'horoscope',audience:'kadin'});
@@ -55,14 +79,14 @@ describe('günün render işi', () => {
   it('sesli render sonucunun AI bilgisini aynı MP4 ile iki platforma ve sonradan açılan TikTok satırına taşır', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     const renderers = fakeRenderers();
-    renderers.renderReels = vi.fn(async () => ({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true }));
+    renderers.renderReels = vi.fn(async () => ({ videoUrl: 'https://blob.example/voice.mp4',durationSeconds:100, isAiGenerated: true }));
     await renderDay(db, DATE, renderers);
-    expect((await listPublications(db, DATE)).find(row => row.format === 'reels')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true });
+    expect((await listPublications(db, DATE)).find(row => row.format === 'reels')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4',durationSeconds:100,partCount:1, isAiGenerated: true });
     await saveSettings(db, { automation: { tiktok: { enabled: true } } });
     const later = fakeRenderers();
     await renderDay(db, DATE, later);
     expect(later.videos).not.toHaveBeenCalled();
-    expect((await listPublications(db, DATE)).find(row => row.format === 'tiktok')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4', isAiGenerated: true });
+    expect((await listPublications(db, DATE)).find(row => row.format === 'tiktok')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4',durationSeconds:100,partCount:1, isAiGenerated: true });
   });
   it('başlangıçtan önce eski planı zorla tetikleme dahil çizmez', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });

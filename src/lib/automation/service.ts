@@ -1,4 +1,5 @@
 import type { Db } from '@/db/types';
+import {MAX_REELS_SECONDS} from '@/remotion/reels';
 import { BufferError, createBufferClient, type BufferClient, type BufferRateLimit } from '@/lib/buffer/client';
 import { istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
 import { istanbulInstant, planPublications } from './plan';
@@ -105,8 +106,9 @@ export function immediatePublishAllowed(date: DateKey, now: Date): boolean {
 export function videoSafetyError(row: PublicationRow): string | null {
   if (row.format === 'carousel') return 'Kart/carousel paylaşımı kapalı.';
   if (!row.media.videoUrl) return 'Video dosyası eksik.';
-  if (row.part !== 0 || (row.media.partCount !== undefined && row.media.partCount !== 1)) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.'; const duration = row.media.durationSeconds;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > 179) {
+  if (row.part !== 0 || (row.media.partCount !== undefined && row.media.partCount !== 1)) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.';
+  const duration = row.media.durationSeconds;
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration >= MAX_REELS_SECONDS) {
     return 'Video süresi doğrulanmadı veya 179 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
   }
   return null;

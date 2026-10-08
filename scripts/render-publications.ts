@@ -8,9 +8,8 @@ import { getSettings } from '../src/lib/settings/repository';
 import { automationStartReason } from '../src/lib/automation/start';
 import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
-import { decodeVoiceAsset } from './automation/voice';
-import { createGoogleNarrator, introNarrationText, narrationText, outroNarrationText } from './automation/google-tts';
-import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
+import { createGoogleNarrator } from './automation/google-tts';
+import { createFullNarration } from './automation/full-narration';
 
 // GitHub Actions'ta 04:00 TSİ başlar: yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
 const { values } = parseArgs({
@@ -79,52 +78,11 @@ async function main() {
   }
 
   const music = await openMusicRenderer();
-  const googleApiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  let narrator: ReturnType<typeof createGoogleNarrator> | undefined;
-
-  const narrate = googleApiKey
-    ? async (sign: ReelsSign) => {
-        narrator ??= createGoogleNarrator({
-          apiKey: googleApiKey,
-          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
-          log,
-        });
-        return await narrator.speak(narrationText(sign));
-      }
-    : undefined;
-
-  const narrateIntro = googleApiKey
-    ? async (reels: ReelsProps) => {
-        narrator ??= createGoogleNarrator({
-          apiKey: googleApiKey,
-          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
-          log,
-        });
-        return await narrator.speak(introNarrationText(reels));
-      }
-    : undefined;
-
-  const narrateOutro = googleApiKey
-    ? async () => {
-        narrator ??= createGoogleNarrator({
-          apiKey: googleApiKey,
-          cacheDir: process.env.VOICE_CACHE_DIR || '.cache/voice',
-          log,
-        });
-        return await narrator.speak(outroNarrationText());
-      }
-    : undefined;
-
-  if (!googleApiKey) {
-    log('Google TTS anahtarı tanımlı değil; Reels müzik ve onaylı giriş/kapanış sesiyle hazırlanıyor.');
-  }
-
+  const cacheDir = process.env.VOICE_CACHE_DIR || '.cache/voice';
+  const narrator = createGoogleNarrator({cacheDir, log});
   const renderers = await openRemotionRenderers({
     music,
-    voice: undefined,
-    narrate,
-    narrateIntro,
-    narrateOutro,
+    narrateFull: (reels) => createFullNarration(reels,{narrator,cacheDir}),
     log,
     upload: async (name, file) => {
       const blob = await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true });
