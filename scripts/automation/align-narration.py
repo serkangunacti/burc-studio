@@ -21,12 +21,11 @@ def scene_starts(segments, scenes):
         words = segment.get("words", [])
         if not words:
             raise ValueError("Konuşma zamanlaması: sözcükler eksik")
-        for word in words:
-            start, end = word["start"], word["end"]
-            if not isinstance(start, (int, float)) or not isinstance(end, (int, float)) or not math.isfinite(start) or not math.isfinite(end) or end <= start:
-                raise ValueError("Konuşma zamanlaması: sözcük süresi geçersiz")
-        scene_start = 0.0 if index == 0 else words[0]["start"]
-        if not math.isfinite(scene_start) or scene_start <= previous_scene_start:
+        first_word_start = words[0].get("start")
+        if not isinstance(first_word_start, (int, float)) or not math.isfinite(first_word_start) or first_word_start < 0:
+            raise ValueError("Konuşma zamanlaması: sahnenin ilk kelime başlangıcı geçersiz")
+        scene_start = 0.0 if index == 0 else first_word_start
+        if scene_start <= previous_scene_start:
             raise ValueError("Konuşma zamanlaması: sahne başlangıçları sıralı değil")
         starts.append(scene_start)
         previous_scene_start = scene_start
