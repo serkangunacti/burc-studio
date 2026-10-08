@@ -171,7 +171,7 @@ export function createGoogleNarrator(options: {
 
       for (const model of GEMINI_TTS_MODELS) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const maxRetries = 5;
+        const maxRetries = 8;
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
           try {
@@ -194,8 +194,12 @@ export function createGoogleNarrator(options: {
             });
 
             if (res.status === 429) {
-              const waitMs = (attempt + 1) * 8000;
-              options.log?.(`Google Gemini TTS (${model}) kota sınırına (429) takıldı, ${waitMs / 1000} sn beklenip aynı modelle tekrar denenecek (${attempt + 1}/${maxRetries})...`);
+              const errBody = await res.text().catch(() => '');
+              const retryMatch = errBody.match(/"retryDelay":\s*"(\d+)s"/);
+              const retrySec = retryMatch ? parseInt(retryMatch[1], 10) : 0;
+              const waitMs = Math.max(retrySec * 1000, 45_000 + attempt * 10_000);
+              lastError = new Error(`Google Gemini TTS kota sınırı (429): ${errBody.slice(0, 200)}`);
+              options.log?.(`Google Gemini TTS (${model}) kota sınırına (429) takıldı, kota penceresinin açılması için ${waitMs / 1000} sn bekleniyor (${attempt + 1}/${maxRetries})...`);
               await new Promise((r) => setTimeout(r, waitMs));
               continue;
             }
@@ -259,8 +263,8 @@ export function createGoogleNarrator(options: {
       await rename(`${unifiedAudioPath}.tmp`, unifiedAudioPath);
 
       options.log?.(`Google Gemini TTS ile ses hazırlandı: ${durationSeconds.toFixed(2)} sn`);
-      // Dakika başına istek (RPM) sınırına çarpmamak için çağrılar arası 4 saniye bekle
-      await new Promise((r) => setTimeout(r, 4000));
+      // Dakika başına istek (RPM) sınırına çarpmamak için çağrılar arası 6 saniye bekle
+      await new Promise((r) => setTimeout(r, 6000));
       return { data, durationSeconds, path: unifiedAudioPath, cached: false };
     },
   };
