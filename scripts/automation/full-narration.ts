@@ -41,9 +41,9 @@ export async function fitNarrationToBudget(rawPath:string,cacheDir:string):Promi
   throw new Error('Tam ses 178,5 saniyelik bütçeye uyarlanamadı; konuşma kesilmedi');
 }
 
-async function alignOnActions(audio:string,scenes:string[],manifest:string):Promise<number[]>{
+async function alignOnActions(audio:string,scenes:string[],manifest:string,durationSeconds:number):Promise<number[]>{
   if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Konuşma analizi yalnız GitHub Actions üzerinde çalışır');
-  await writeFile(manifest,JSON.stringify({scenes}),{mode:0o600});
+  await writeFile(manifest,JSON.stringify({scenes,durationSeconds}),{mode:0o600});
   const output=`${manifest}.aligned.json`;
   await execFileAsync('python3',['scripts/automation/align-narration.py',audio,manifest,output],{timeout:15*60_000,maxBuffer:4*1024*1024});
   return (JSON.parse(await readFile(output,'utf8')) as {sceneStarts:number[]}).sceneStarts;
@@ -65,7 +65,10 @@ export async function createFullNarration(reels:ReelsProps,input:{
     fullNarrationTiming(audio.durationSeconds,cached.sceneStarts,12,REELS_FPS);
     return {...audio,sceneStarts:cached.sceneStarts,timingPath};
   }catch{/* Timing cache is validated against this exact waveform and transcript. */}
-  const sceneStarts=await (input.align??alignOnActions)(audio.path,scenes,`${timingPath}.manifest.json`);
+  const manifest=`${timingPath}.manifest.json`;
+  const sceneStarts=input.align
+    ? await input.align(audio.path,scenes,manifest)
+    : await alignOnActions(audio.path,scenes,manifest,audio.durationSeconds);
   fullNarrationTiming(audio.durationSeconds,sceneStarts,12,REELS_FPS);
   await writeFile(`${timingPath}.tmp`,JSON.stringify({sceneStarts}),{mode:0o600});
   await rename(`${timingPath}.tmp`,timingPath);

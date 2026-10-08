@@ -8,20 +8,57 @@ spec.loader.exec_module(module)
 
 
 class AlignmentTests(unittest.TestCase):
+    def test_interpolates_only_the_unaligned_trailing_scene_within_audio(self):
+        scenes = ["Giriş", "Koç.", "Kapanış."]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 1.0}]},
+            {"text": scenes[1], "words": [{"start": 5.0, "end": 6.0}]},
+            {"text": scenes[2], "words": [{"start": 14.0, "end": 14.0}]},
+        ]
+        starts = module.scene_starts(segments, scenes, 14.0)
+        self.assertEqual(starts[:2], [0.0, 5.0])
+        self.assertAlmostEqual(starts[2], 8.0)
+        self.assertLess(starts[2], 14.0)
+
+    def test_does_not_hide_an_unaligned_scene_before_a_later_valid_anchor(self):
+        scenes = ["Giriş", "İlk yorum", "İkinci yorum", "Kapanış"]
+        segments = [
+            {"text": scenes[0], "words": [{"start": 0.1, "end": 1.0}]},
+            {"text": scenes[1], "words": [{"start": 4.0, "end": 5.0}]},
+            {"text": scenes[2], "words": [{"start": 20.0, "end": 20.0}]},
+            {"text": scenes[3], "words": [{"start": 12.0, "end": 13.0}]},
+        ]
+        with self.assertRaisesRegex(ValueError, "iç sahne zamanlaması"):
+            module.scene_starts(segments, scenes, 14.0)
+
     def test_retains_scene_order_without_loading_a_model(self):
         scenes = ["Giriş.", "Koç.", "Kapanış."]
         segments = [{"text": text, "words": [{"start": i * 5 + .2, "end": i * 5 + 4}]} for i, text in enumerate(scenes)]
-        self.assertEqual(module.scene_starts(segments, scenes), [0, 5.2, 10.2])
+        self.assertEqual(module.scene_starts(segments, scenes, 20.0), [0, 5.2, 10.2])
 
     def test_rejects_missing_words_changed_text_and_invalid_scene_starts(self):
-        for segment in [
-            {"text": "Metin.", "words": []},
-            {"text": "Başka.", "words": [{"start": 0, "end": 1}]},
-            {"text": "Metin.", "words": [{"start": float("nan"), "end": 1}]},
-            {"text": "Metin.", "words": [{"start": None, "end": 1}]},
+        with self.assertRaises(ValueError):
+            module.scene_starts([{"text": "Metin.", "words": []}], ["Metin."], 20.0)
+        with self.assertRaises(ValueError):
+            module.scene_starts([{"text": "Başka.", "words": [{"start": 0, "end": 1}]}], ["Metin."], 20.0)
+        for word in [
+            {"start": float("nan"), "end": 1},
+            {"start": None, "end": 1},
+            {"start": -1, "end": 1},
+            {"start": 20, "end": 20},
         ]:
-            with self.assertRaises(ValueError):
-                module.scene_starts([segment], ["Metin."])
+            with self.subTest(word=word):
+                starts = module.scene_starts(
+                    [
+                        {"text": "Giriş", "words": [{"start": 0.1, "end": 1}]},
+                        {"text": "Metin.", "words": [word]},
+                    ],
+                    ["Giriş", "Metin."],
+                    20.0,
+                )
+                self.assertEqual(starts[0], 0.0)
+                self.assertGreater(starts[1], 0.0)
+                self.assertLess(starts[1], 20.0)
 
     def test_accepts_overlapping_word_bounds_when_scene_boundaries_are_ordered(self):
         scenes = ["İlk sahne.", "İkinci sahne."]
@@ -29,7 +66,7 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[0], "words": [{"start": 0.1, "end": 5.2}, {"start": 4.9, "end": 5.5}, {"start": None, "end": None}]},
             {"text": scenes[1], "words": [{"start": 5.1, "end": 7.0}]},
         ]
-        self.assertEqual(module.scene_starts(segments, scenes), [0.0, 5.1])
+        self.assertEqual(module.scene_starts(segments, scenes, 10.0), [0.0, 5.1])
 
     def test_rejects_unordered_scene_boundaries(self):
         scenes = ["İlk sahne.", "İkinci sahne."]
@@ -38,7 +75,7 @@ class AlignmentTests(unittest.TestCase):
             {"text": scenes[1], "words": [{"start": 0.0, "end": 7.0}]},
         ]
         with self.assertRaises(ValueError):
-            module.scene_starts(segments, scenes)
+            module.scene_starts(segments, scenes, 10.0)
 
 
 if __name__ == "__main__":
