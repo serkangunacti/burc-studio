@@ -102,3 +102,16 @@ describe('günlük onay mesajı', () => {
     expect(keyboard).toEqual([[{ text: '🔁 08:30 Kadın burç carousel yeniden dene', callback_data: `y:${POST}:c` }]]);
   });
 });
+
+
+describe('otomatik video günleri',()=>{
+  it('gelecek gün planında manuel hemen/onay düğmesi sunmaz ve bütün parçaları gösterir',()=>{
+    const rows=[row({}),row({})];
+    rows.forEach((r,i)=>{r.format='reels';r.part=i;r.status='approved';r.media={videoUrl:`https://blob/${i}`,durationSeconds:100,partCount:2};});
+    const result=buildDayMessage('2026-10-09',rows,{mediaUrl:id=>id});
+    expect(result.html).toContain('otomatik');
+    expect(result.html).toContain('https://blob/0');
+    expect(result.html).toContain('https://blob/1');
+    expect(result.keyboard.flat().some(b=>'callback_data' in b && (b.callback_data.startsWith('now:')||b.callback_data.startsWith('a:')))).toBe(false);
+  });
+});

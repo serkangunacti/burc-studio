@@ -47,7 +47,7 @@ export function groupPublications(rows: readonly PublicationRow[]): PublicationG
 }
 
 function groupTitle(group: PublicationGroup): string {
-  const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : FORMAT_NAMES[group.format];
+  const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : `${FORMAT_NAMES[group.format]}${group.rows.length > 1 ? ` (${group.rows.length} video)` : ''}`;
   return `${AUDIENCE_LABELS[group.audience]} ${KIND_LABELS[group.kind]} · ${format}`;
 }
 
@@ -59,7 +59,7 @@ function groupLinks(group: PublicationGroup, mediaUrl: (id: string) => string): 
   const published = group.rows.filter((row) => row.permalink);
   if (published.length > 0) return published.map((row, index) => `<a href="${escapeHtml(row.permalink!)}">${published.length > 1 ? index + 1 : 'gönderi'}</a>`).join(' ');
   const first = group.rows.find((row) => row.part <= 1) ?? group.rows[0];
-  if (first.media.videoUrl) return `<a href="${escapeHtml(first.media.videoUrl)}">izle</a>`;
+  if (first.media.videoUrl) return group.rows.filter(row=>row.media.videoUrl).sort((a,b)=>a.part-b.part).map(row=>`<a href="${escapeHtml(row.media.videoUrl!)}">${group.rows.length>1?`video ${row.part+1}`:'izle'}</a>`).join(' ');
   const cover = first.media.imageIds?.[0];
   return cover ? `<a href="${escapeHtml(mediaUrl(cover))}">kapak</a>` : '';
 }
@@ -69,7 +69,7 @@ export function buildDayMessage(
   rows: readonly PublicationRow[],
   options: { mediaUrl: (id: string) => string; failures?: readonly string[] },
 ): { html: string; keyboard: InlineKeyboard } {
-  const groups = groupPublications(rows);
+  const groups = groupPublications(rows.filter(row=>row.status!=='expired' && row.format!=='carousel' || date<'2026-10-08'));
   const lines = groups.map((group) => {
     const links = groupLinks(group, options.mediaUrl);
     const failed = group.rows.find((row) => row.status === 'failed')?.error;
@@ -80,7 +80,8 @@ export function buildDayMessage(
   });
   const pending = groups.some((group) => group.status === 'ready');
   const hasApproved = groups.some((group) => group.status === 'approved');
-  const footer = pending
+  const automatic = date > '2026-10-08';
+  const footer = date === '2026-10-08' && (pending || hasApproved) ? 'Videolar hazır olduğunda bugüne özel /hemen komutuyla paylaşımı onaylayabilirsin.' : automatic && (pending || hasApproved) ? 'Videolar hazır; paylaşımlar sabah planlanan saatlerde otomatik gönderilecek.' : pending
     ? "Onaylarsan paylaşımlar planlanan saatte gider. Beklemeden göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilirsin."
     : hasApproved
       ? "✅ Onaylandı; paylaşımlar saatinde gidecektir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilir veya /hemen yazabilirsin."
@@ -91,12 +92,12 @@ export function buildDayMessage(
     .join('\n\n');
 
   const keyboard: InlineKeyboard = [];
-  if (pending) {
+  if (pending && !automatic && date !== '2026-10-08') {
     keyboard.push([
       { text: '✅ Hepsini onayla', callback_data: `a:${date}` },
       { text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` },
     ]);
-  } else if (hasApproved) {
+  } else if (hasApproved && !automatic && date !== '2026-10-08') {
     keyboard.push([{ text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` }]);
   }
 

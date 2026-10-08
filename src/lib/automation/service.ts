@@ -1,7 +1,9 @@
 import type { Db } from '@/db/types';
 import { BufferError, createBufferClient, type BufferClient, type BufferRateLimit } from '@/lib/buffer/client';
 import { istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
-import { istanbulInstant } from './plan';
+import { istanbulInstant, planPublications } from './plan';
+import { getCurrentPostsForDate } from '@/lib/content/repository';
+import { missingPosts } from './render-job';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
 import { getSettings, saveSettings } from '@/lib/settings/repository';
 import type { AutomationSettings } from '@/lib/settings/schema';
@@ -11,6 +13,9 @@ import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
 import { dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
 import {
   approveAndScheduleNow,
+  claimYouTubeSubmission,
+  setYouTubeState,
+  stampImmediateApproval,
   approveDay,
   claimForPublishing,
   deleteMediaBefore,
@@ -92,6 +97,59 @@ const MEDIA_RETENTION_DAYS = 1;
 const TOKEN_REFRESH_WINDOW_MS = 20 * DAY_MS;
 const INSTAGRAM_TOKEN_LIFETIME_MS = 60 * DAY_MS;
 
+export const IMMEDIATE_APPROVAL_DATE = '2026-10-08';
+export function immediatePublishAllowed(date: DateKey, now: Date): boolean {
+  return date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(now) === IMMEDIATE_APPROVAL_DATE;
+}
+
+export function videoSafetyError(row: PublicationRow): string | null {
+  if (row.format === 'carousel') return 'Kart/carousel paylaşımı kapalı.';
+  if (!row.media.videoUrl) return 'Video dosyası eksik.';
+  const duration = row.media.durationSeconds;
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > 175) {
+    return 'Video süresi doğrulanmadı veya 175 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
+  }
+  return null;
+}
+
+export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Promise<string | null> {
+  const missing = await missingPosts(deps.db, date);
+  if (missing.length) return `Günün içerikleri eksik: ${missing.join(', ')}`;
+  const rows = (await listPublications(deps.db, date)).filter((row) => row.format !== 'carousel' && row.status !== 'expired');
+  const settings = await getSettings(deps.db);
+  const posts = await getCurrentPostsForDate(deps.db, date);
+  const expected = planPublications(date, posts, settings.automation).filter((item) => item.format !== 'carousel');
+  if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format))) return 'Günün beklenen video paylaşımları eksik.';
+  if (!rows.length) return 'Günün videoları henüz hazır değil.';
+  for (const row of rows) {
+    const error = videoSafetyError(row);
+    if (error) return error;
+    if (!['ready', 'approved', 'publishing', 'published'].includes(row.status)) return 'Günün bütün videoları hazır değil.';
+    const count = row.media.partCount;
+    const group = rows.filter((item) => item.postId === row.postId && item.format === row.format);
+    if (!Number.isInteger(count) || !count || group.length !== count || !Array.from({ length: count }, (_, part) => part).every((part) => group.some((item) => item.part === part))) {
+      return 'Video parçaları eksik; günün tamamı hazırlanana kadar paylaşım bekliyor.';
+    }
+  }
+  return null;
+}
+
+// Only complete, duration-verified days are approved automatically after the exceptional manual day.
+export async function completeReadyDay(deps: AutomationDeps, date: DateKey, failures: readonly string[] = []) {
+  const error = failures.length ? failures.join('; ') : await dayReadinessError(deps, date);
+  if (error) {
+    await notify(deps, `⚠️ Videolar henüz paylaşım için hazır değil.\n${escapeHtml(error)}`);
+    return { sent: false, reason: error };
+  }
+  if (date > IMMEDIATE_APPROVAL_DATE) {
+    const { automation } = await getSettings(deps.db);
+    if (!automation.enabled || automationStartReason(automation.startDate, date, deps.now())) return { sent: false, reason: 'Otomatik paylaşım kapalı veya başlangıcı bekleniyor.' };
+    const approved = await approveDay(deps.db, date, deps.now());
+    await enqueueRows(deps, approved);
+  }
+  return sendDayPlan(deps, date, failures);
+}
+
 export const mediaUrlFor = (appUrl: string) => (id: string) => `${appUrl}/api/media/${id}`;
 
 async function loadTelegram(deps: AutomationDeps): Promise<{ client: TelegramClient; chatId: number | null; automation: AutomationSettings } | null> {
@@ -168,7 +226,7 @@ export async function sendDayPlan(deps: AutomationDeps, date: DateKey, failures:
     await telegram.client.sendPhotos(telegram.chatId, covers).catch((error: unknown) => console.error('Önizleme albümü gönderilemedi', error));
   }
   const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl, failures });
-  const message = await telegram.client.sendMessage(telegram.chatId, html, { keyboard });
+  const message = await telegram.client.sendMessage(telegram.chatId, date === IMMEDIATE_APPROVAL_DATE ? `${html}\n\nBugüne özel: tüm videolar hazır olduğunda /hemen komutuyla paylaşımı başlatabilirsin.` : html, date === IMMEDIATE_APPROVAL_DATE ? {} : { keyboard });
   if (rows.length > 0) await setTelegramMessageId(deps.db, date, message.message_id);
   return { sent: true };
 }
@@ -188,6 +246,7 @@ async function refreshDayMessage(deps: AutomationDeps, date: DateKey, messageId?
 async function enqueueRows(deps: AutomationDeps, rows: readonly PublicationRow[]): Promise<void> {
   const now = deps.now().getTime();
   for (const row of rows) {
+    if (videoSafetyError(row)) continue;
     const delaySeconds = Math.min(MAX_QUEUE_SECONDS, Math.max(0, Math.ceil((row.scheduledAt.getTime() - now) / 1000)));
     await deps.enqueue(row.id, { delaySeconds, retentionSeconds: Math.min(MAX_QUEUE_SECONDS, delaySeconds + 86_400) });
   }
@@ -246,9 +305,13 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       }
       return;
     }
-    if (command === '/hemen' || command === '/simdi' || command === '/paylas') {
+    if (command === '/hemen') {
       try {
         const today = istanbulDateKey(deps.now());
+        if (!immediatePublishAllowed(today, deps.now())) {
+          await client.sendMessage(from, '/hemen yalnız 8 Ekim 2026 için geçerliydi. Videolar her gün 04:00’te hazırlanır, 08:30 ve sonrasındaki planlanan saatlerde otomatik paylaşılır.');
+          return;
+        }
         const result = await publishDayNow(deps, today);
         if (result.published === 0) {
           await client.sendMessage(from, 'Paylaşılacak hazır veya onaylı gönderi bulunamadı.');
@@ -269,7 +332,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
         const today = istanbulDateKey(deps.now());
         const result = await startRender(deps, today, { force: true });
         if (result.dispatched) {
-          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Yeni modern Kozmik Arkan şablonu (pastel@2)\n• Yeni Google TTS seslendirmesi\n• YouTube Shorts 175 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
+          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Mevcut şablon, içerik ve seslendirme korunuyor\n• YouTube Shorts 175 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
         } else {
           await client.sendMessage(from, `❌ Çizim başlatılamadı: ${result.reason ?? 'Bilinmeyen hata'}`);
         }
@@ -301,25 +364,8 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     await client.answerCallback(query.id, paused ?? 'Otomatik paylaşım kapalı.');
     return;
   }
-  if (action.action === 'publish_now') {
-    const result = await publishDayNow(deps, action.date);
-    await client.answerCallback(query.id, result.published > 0 ? `🚀 ${result.published} paylaşım başlatıldı` : 'Paylaşılacak gönderi yok.');
-    await refreshDayMessage(deps, action.date, query.message.message_id);
-    if (result.published > 0) {
-      const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
-      await client.sendMessage(
-        chatId,
-        `🚀 <b>${result.published} paylaşım için anında paylaşım başlatıldı!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
-      );
-    }
-    return;
-  }
-  if (action.action === 'approve') {
-    const approved = await approveDay(deps.db, action.date, now);
-    await enqueueRows(deps, approved);
-    await client.answerCallback(query.id, approved.length > 0 ? `✓ ${approved.length} paylaşım planlandı` : 'Onaylanacak paylaşım kalmadı.');
-    await refreshDayMessage(deps, action.date, query.message.message_id);
-    if (approved.length > 0) await client.sendMessage(chatId, approvalSummary(approved, now));
+  if (action.action === 'publish_now' || action.action === 'approve') {
+    await client.answerCallback(query.id, 'Bugün /hemen komutunu kullan. Sonraki günler planlanan saatlerde otomatik paylaşılır.');
     return;
   }
   if (action.action === 'retry') {
@@ -499,8 +545,20 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   const now = deps.now();
   const current = await getPublication(deps.db, id);
   if (!current) return 'ignored';
+  const safetyError = videoSafetyError(current);
+  if (safetyError) { await markFailed(deps.db, id, safetyError); return 'failed'; }
+  if (current.date === IMMEDIATE_APPROVAL_DATE && current.media.immediateApprovalDate !== IMMEDIATE_APPROVAL_DATE) return 'ignored';
+  if (current.date > IMMEDIATE_APPROVAL_DATE && now < istanbulInstant(current.date, '08:30')) {
+    throw new RetryLater(Math.ceil((istanbulInstant(current.date, '08:30').getTime() - now.getTime()) / 1000), '08:30 paylaşım başlangıcı bekleniyor');
+  }
   const { automation } = await getSettings(deps.db);
   if (!automation.enabled || (automation.startDate && current.date < automation.startDate)) return 'ignored';
+  if (current.status === 'published' && current.format === 'reels' && current.media.youtubeStatus !== 'sent') {
+    await syncYouTubeShorts(deps, current.date);
+    const latest = await getPublication(deps.db, id);
+    if (latest?.media.youtubeRemoteId && !['sent', 'error', 'unknown'].includes(latest.media.youtubeStatus ?? '')) throw new RetryLater(BUFFER_POLL_SECONDS, 'YouTube Shorts paylaşımı sürüyor');
+    return 'ignored';
+  }
   if (automation.startDate && istanbulDateKey(now) < automation.startDate) {
     throw new RetryLater(Math.max(1, Math.ceil((istanbulDayStart(automation.startDate).getTime() - now.getTime()) / 1000)), 'Otomasyon başlangıcı bekleniyor');
   }
@@ -534,42 +592,11 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
           ? await publishViaBuffer(deps, row, 'instagram')
           : await publishToInstagram(deps, row);
     await markPublished(deps.db, id, result, deps.now());
-    if (row.format === 'reels' && row.media.videoUrl) {
-      try {
-        const ytBuffer = await loadBuffer(deps, 'youtube');
-        if (ytBuffer) {
-          const ytTitle = `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts`;
-          try {
-            await ytBuffer.client.shareVideoNow({
-              channelId: ytBuffer.channelId,
-              text: row.caption,
-              videoUrl: row.media.videoUrl,
-              youtube: { title: ytTitle },
-              isAiGenerated: true,
-            });
-            if (!silent) await notify(deps, `▶️ YouTube Shorts'a da gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
-          } catch (shortErr) {
-            const shortMsg = shortErr instanceof Error ? shortErr.message : String(shortErr);
-            if (shortMsg.toLowerCase().includes('3 minutes') || shortMsg.toLowerCase().includes('youtube shorts')) {
-              const cleanTitle = row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 95);
-              const cleanCaption = row.caption.replace(/#shorts?\b/gi, '').trim();
-              await ytBuffer.client.shareVideoNow({
-                channelId: ytBuffer.channelId,
-                text: cleanCaption,
-                videoUrl: row.media.videoUrl,
-                youtube: { title: cleanTitle },
-                isAiGenerated: true,
-              });
-              if (!silent) await notify(deps, `▶️ YouTube'a (video) gönderildi · ${escapeHtml(publicationLabel(row))}\n<i>Süre 3 dakikayı aştığı için normal video olarak paylaşıldı.</i>`, true);
-            } else {
-              throw shortErr;
-            }
-          }
-        }
-      } catch (ytError) {
-        console.error('YouTube Shorts paylaşımı atlandı/başarısız', ytError);
-        const ytMsg = ytError instanceof Error ? ytError.message : String(ytError);
-        await notify(deps, `⚠️ YouTube Shorts paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(ytMsg)}</i>`, true);
+    if (row.format === 'reels') {
+      await syncYouTubeShorts(deps, row.date);
+      const youtube = (await getPublication(deps.db, id))?.media;
+      if (youtube?.youtubeRemoteId && !['sent', 'error', 'unknown'].includes(youtube.youtubeStatus ?? '')) {
+        await deps.enqueue(id, { delaySeconds: BUFFER_POLL_SECONDS, retentionSeconds: 86_400 });
       }
     }
     if (!silent) {
@@ -803,48 +830,43 @@ export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{
   return { requeued: approved.length, retried: retried.length };
 }
 
-// Günün hazır ya da yayınlanmış Reels videolarını YouTube Shorts olarak Buffer kuyruğuna gönderir.
+// YouTube is only submitted from already published Instagram rows, with persisted attempt/remote IDs.
 export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Promise<{ sent: number; errors: string[] }> {
-  const rows = (await listPublications(deps.db, date)).filter((row) => row.format === 'reels' && row.media.videoUrl);
-  if (rows.length === 0) return { sent: 0, errors: ['Günün hazır veya yayınlanmış Reels videosu bulunamadı.'] };
-  const ytBuffer = await loadBuffer(deps, 'youtube');
+  const rows = (await listPublications(deps.db, date)).filter((row) => row.format === 'reels' && row.status === 'published');
   let sent = 0;
   const errors: string[] = [];
   for (const row of rows) {
+    if (row.media.youtubeStatus === 'sent') continue;
     try {
-      const ytTitle = `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts`;
-      try {
-        await ytBuffer.client.shareVideoNow({
-          channelId: ytBuffer.channelId,
-          text: row.caption,
-          videoUrl: row.media.videoUrl!,
-          youtube: { title: ytTitle },
-          ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
-        });
-        sent++;
-        await notify(deps, `▶️ YouTube Shorts'a gönderildi · ${escapeHtml(publicationLabel(row))}`, true);
-      } catch (shortErr) {
-        const shortMsg = shortErr instanceof Error ? shortErr.message : String(shortErr);
-        if (shortMsg.toLowerCase().includes('3 minutes') || shortMsg.toLowerCase().includes('youtube shorts')) {
-          const cleanTitle = row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 95);
-          const cleanCaption = row.caption.replace(/#shorts?\b/gi, '').trim();
-          await ytBuffer.client.shareVideoNow({
-            channelId: ytBuffer.channelId,
-            text: cleanCaption,
-            videoUrl: row.media.videoUrl!,
-            youtube: { title: cleanTitle },
-            ...(row.media.isAiGenerated ? { isAiGenerated: true } : {}),
-          });
+      const safetyError = videoSafetyError(row);
+      if (safetyError) throw new Error(safetyError);
+      if (date === IMMEDIATE_APPROVAL_DATE && row.media.immediateApprovalDate !== date) throw new Error('Telegram /hemen onayı bekleniyor.');
+      const buffer = await loadBuffer(deps, 'youtube');
+      let remoteId = row.media.youtubeRemoteId;
+      if (!remoteId) {
+        const claimed = await claimYouTubeSubmission(deps.db, row.id, deps.now());
+        if (!claimed) continue; // Previous/ambiguous submission must never be repeated.
+        try {
+          remoteId = await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl!, youtube: { title: `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts` }, isAiGenerated: true });
+          await setYouTubeState(deps.db, row.id, { youtubeRemoteId: remoteId, youtubeStatus: 'pending' });
           sent++;
-          await notify(deps, `▶️ YouTube'a (video) gönderildi · ${escapeHtml(publicationLabel(row))}\n<i>Süre 3 dakikayı aştığı için normal video olarak paylaşıldı.</i>`, true);
-        } else {
-          throw shortErr;
+        } catch (error) {
+          if (error instanceof BufferError && !error.outcomeUnknown && (error.rateLimited || !error.retryable)) {
+            await setYouTubeState(deps.db, row.id, { youtubeAttemptedAt: null, youtubeStatus: 'error', youtubeError: error.message });
+          } else {
+            await setYouTubeState(deps.db, row.id, { youtubeStatus: 'unknown', youtubeError: 'Buffer isteğinin sonucu belirsiz; kopya oluşturmayı önlemek için tekrar gönderilmedi.' });
+          }
+          throw error;
         }
       }
+      const post = await buffer.client.post(remoteId);
+      await setYouTubeState(deps.db, row.id, { youtubeStatus: post.status, ...(post.error ? { youtubeError: post.error } : {}) });
+      if (post.status === 'sent') await notify(deps, `▶️ YouTube Shorts paylaşıldı · ${escapeHtml(publicationLabel(row))}`, true);
+      if (post.status === 'error') throw new Error(post.error ?? 'YouTube Shorts paylaşımı başarısız.');
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      errors.push(`${publicationLabel(row)}: ${msg}`);
-      await notify(deps, `⚠️ YouTube Shorts gönderilemedi · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(msg)}</i>`, true);
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${publicationLabel(row)}: ${message}`);
+      await notify(deps, `⚠️ YouTube Shorts paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(message)}</i>`, true);
     }
   }
   return { sent, errors };
@@ -855,7 +877,13 @@ export type PublishNowResult = { id: string; label: string; outcome: PublishOutc
 // Günün hazır ya da onaylanmış paylaşımlarını beklemeden hemen şimdi yayınlar.
 export async function publishDayNow(deps: AutomationDeps, date: DateKey): Promise<{ published: number; triggered: number; errors: string[] }> {
   const now = deps.now();
+  if (!immediatePublishAllowed(date, now)) throw new Error('/hemen yalnız 8 Ekim 2026 için kullanılabilir.');
+  const readinessError = await dayReadinessError(deps, date);
+  if (readinessError) throw new Error(readinessError);
+  const { automation } = await getSettings(deps.db);
+  if (!automation.enabled || automationStartReason(automation.startDate, date, now)) throw new Error('Otomatik paylaşım kapalı veya başlangıcı bekleniyor.');
   const rows = await approveAndScheduleNow(deps.db, date, now);
+  await stampImmediateApproval(deps.db, rows.map((row) => row.id), date);
   if (rows.length === 0) return { published: 0, triggered: 0, errors: [] };
   await enqueueRows(deps, rows);
 
@@ -930,6 +958,7 @@ export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceR
   const { automation } = await getSettings(deps.db);
   const paused = automationStartReason(automation.startDate, istanbulDateKey(now), now);
   if (paused) return { expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false, skipped: paused };
+  if (automation.enabled) await syncYouTubeShorts(deps, istanbulDateKey(now));
   const expired = await expireUnapproved(deps.db, istanbulDateKey(now));
   if (automation.enabled) await enqueueRows(deps, await listPendingBufferVerifications(deps.db));
   const cutoff = new Date(now.getTime() - MEDIA_RETENTION_DAYS * DAY_MS);
