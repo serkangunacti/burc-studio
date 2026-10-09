@@ -5,11 +5,11 @@ import type { PublicationRow } from './repository';
 const row = (media: PublicationRow['media'], format: PublicationRow['format'] = 'reels') => ({ media, format, part:0 } as PublicationRow);
 
 describe('Shorts publishing policy', () => {
-  it('requires verified positive duration strictly below 179 seconds', () => {
-    for (const durationSeconds of [undefined, NaN, Infinity, 0, -1, 179, 179.1, 180]) {
+  it('requires verified positive duration at or below 178.9 seconds', () => {
+    for (const durationSeconds of [undefined, NaN, Infinity, 0, -1, 178.901, 179, 179.1, 180]) {
       expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds }))).toBeTruthy();
     }
-    expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 178.999 }))).toBeNull();
+    expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 178.9 }))).toBeNull();
     expect(videoSafetyError(row({ videoUrl: 'https://video.test/a.mp4', durationSeconds: 100, partCount:2 }))).toBeTruthy();
     expect(videoSafetyError(row({ durationSeconds: 10 }))).toBeTruthy();
     expect(videoSafetyError(row({ imageIds: ['a'] }, 'carousel'))).toBeTruthy();
@@ -106,6 +106,11 @@ it('blocks partial days and automatically enqueues the complete next day', async
   await completeReadyDay(deps, date);
   const rows = await listPublications(db, date);
   expect(rows.every((row) => ['approved', 'published'].includes(row.status))).toBe(true);
+  const newlyApproved = rows.filter((row) => row.status === 'approved');
+  expect(new Date(Math.min(...newlyApproved.map((row) => row.scheduledAt.getTime()))).toISOString()).toBe('2026-10-09T06:01:00.000Z');
+  expect([...new Set(newlyApproved.map((row) => row.scheduledAt.getTime()))].sort((a,b)=>a-b).map(time=>new Date(time).toISOString())).toEqual([
+    '2026-10-09T06:01:00.000Z','2026-10-09T06:16:00.000Z','2026-10-09T06:31:00.000Z','2026-10-09T06:46:00.000Z',
+  ]);
   expect(enqueue).toHaveBeenCalledTimes(rows.filter((row) => row.status === 'approved').length);
 });
 

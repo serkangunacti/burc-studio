@@ -12,6 +12,19 @@ async function work(){const dir=await mkdtemp(path.join(os.tmpdir(),'full-narrat
 afterEach(async()=>{vi.unstubAllEnvs(); for(const dir of dirs.splice(0)) await rm(dir,{recursive:true,force:true});});
 
 describe('tek video, tam ses ve önbellekte zamanlama',()=>{
+  it('12 uzun yorumun tamamını giriş ve kapanışla tek TTS isteğine verir',async()=>{
+    const reels=sampleReels('kadin');
+    const bodies=Array.from({length:12},(_,i)=>`Yorum ${i+1}: ${'Bu cümle tam okunacak ve hiçbir bölümü atlanmayacak. '.repeat(4)}Son cümle ${i+1}.`);
+    reels.signs=reels.signs.map((sign,i)=>({...sign,body:bodies[i]}));
+    const dir=await work();const audio=createWavFromPcm(Buffer.alloc(20*48000));const raw=path.join(dir,'raw.wav');await writeFile(raw,audio);
+    const speak=vi.fn(async()=>({data:audio,path:raw,durationSeconds:20,cached:false}));
+    await createFullNarration(reels,{narrator:{speak},cacheDir:dir,align:async()=>Array.from({length:14},(_,i)=>i*1.4)});
+    expect(speak).toHaveBeenCalledTimes(1);
+    for(const body of bodies)expect(speak.mock.calls[0][0]).toContain(body);
+    expect(speak.mock.calls[0][0]).toContain(introNarrationText(reels));
+    expect(speak.mock.calls[0][0]).toContain(outroNarrationText());
+  });
+
   it.each(['horoscope','tarot','weekly'])('%s kadın ve erkek için giriş, 12 yorum ve kapanışı tek istekte korur', async kind=>{
     for(const audience of ['kadin','erkek'] as const){
       const reels=sampleReels(audience);

@@ -1,8 +1,10 @@
+import {and,eq} from 'drizzle-orm';
+import {publications as publicationsTable} from '@/db/schema';
 import type { Db } from '@/db/types';
-import {MAX_REELS_SECONDS} from '@/remotion/reels';
+import {MAX_REELS_MP4_SECONDS} from '@/remotion/reels';
 import { BufferError, createBufferClient, type BufferClient, type BufferRateLimit } from '@/lib/buffer/client';
 import { istanbulDateKey, istanbulDayStart, type DateKey } from '@/lib/date/istanbul';
-import { istanbulInstant, planPublications } from './plan';
+import { istanbulInstant, planPublications, reanchorOverdueSlots } from './plan';
 import { getCurrentPostsForDate } from '@/lib/content/repository';
 import { missingPosts } from './render-job';
 import { createInstagramClient, fetchInstagramAccount, InstagramError, refreshInstagramToken, type InstagramClient } from '@/lib/instagram/client';
@@ -108,8 +110,8 @@ export function videoSafetyError(row: PublicationRow): string | null {
   if (!row.media.videoUrl) return 'Video dosyası eksik.';
   if (row.part !== 0 || (row.media.partCount !== undefined && row.media.partCount !== 1)) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.';
   const duration = row.media.durationSeconds;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration >= MAX_REELS_SECONDS) {
-    return 'Video süresi doğrulanmadı veya 179 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > MAX_REELS_MP4_SECONDS) {
+    return 'Video süresi doğrulanmadı veya 178,9 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
   }
   return null;
 }
@@ -146,6 +148,11 @@ export async function completeReadyDay(deps: AutomationDeps, date: DateKey, fail
   if (date > IMMEDIATE_APPROVAL_DATE) {
     const { automation } = await getSettings(deps.db);
     if (!automation.enabled || automationStartReason(automation.startDate, date, deps.now())) return { sent: false, reason: 'Otomatik paylaşım kapalı veya başlangıcı bekleniyor.' };
+    const readyRows = (await listPublications(deps.db, date)).filter((row) => row.status === 'ready');
+    for (const [index,row] of reanchorOverdueSlots(readyRows, deps.now()).entries()) {
+      if (row.scheduledAt.getTime() === readyRows[index].scheduledAt.getTime()) continue;
+      await deps.db.update(publicationsTable).set({scheduledAt: row.scheduledAt, updatedAt: deps.now()}).where(and(eq(publicationsTable.id, row.id), eq(publicationsTable.status, 'ready')));
+    }
     const approved = await approveDay(deps.db, date, deps.now());
     await enqueueRows(deps, approved);
   }
@@ -313,7 +320,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       try {
         const today = istanbulDateKey(deps.now());
         if (!immediatePublishAllowed(today, deps.now())) {
-          await client.sendMessage(from, '/hemen yalnız 8 Ekim 2026 için geçerliydi. Videolar her gün 04:00’te hazırlanır, 08:30 ve sonrasındaki planlanan saatlerde otomatik paylaşılır.');
+          await client.sendMessage(from, '/hemen yalnız 8 Ekim 2026 için geçerliydi. İçerik 10:00’da hazırlanır; videolar 10:01’den sonra çizilir ve günün tamamı hazır olunca mevcut yayın sırasıyla paylaşılır.');
           return;
         }
         const result = await publishDayNow(deps, today);

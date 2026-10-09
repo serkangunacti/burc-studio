@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import {nextGoogleDailyQuotaReset} from './quota-reset.mjs';
 
 const GEMINI_TTS_MODEL = 'gemini-3.8-flash-lite-tts';
 
@@ -32,28 +33,11 @@ export function narrationText(sign: {
     if (sign.headline) {
       parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
     }
-    const maxBodyChars = 110;
-    let bodyText = cleanBody;
-    if ([...bodyText].length > maxBodyChars) {
-      const sentences = cleanBody.split(/(?<=[.!?])\s+/);
-      let accumulated = '';
-      for (const s of sentences) {
-        if ([...(accumulated ? `${accumulated} ${s}` : s)].length <= maxBodyChars) {
-          accumulated = accumulated ? `${accumulated} ${s}` : s;
-        } else {
-          break;
-        }
-      }
-      bodyText = accumulated || [...cleanBody].slice(0, 105).join('') + '...';
-    }
-    parts.push(bodyText);
+    parts.push(cleanBody);
     if (sign.luckyNumber && sign.luckyColor) {
       parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
     }
     const text = parts.join(' ').normalize('NFC');
-    if ([...text].length > 185) {
-      return [...text].slice(0, 180).join('') + '...';
-    }
     return text;
   }
 
@@ -110,16 +94,6 @@ export function wavDuration(bytes: Buffer): number {
   return duration;
 }
 
-// Gemini's daily quota resets at midnight in America/Los_Angeles, including DST.
-function nextDailyReset(now: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {timeZone:'America/Los_Angeles',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(now);
-  const part = (type: string) => Number(parts.find(p => p.type === type)!.value);
-  const nextDate = Date.UTC(part('year'), part('month') - 1, part('day') + 1);
-  const offset = new Intl.DateTimeFormat('en-US', {timeZone:'America/Los_Angeles',timeZoneName:'longOffset'}).formatToParts(new Date(nextDate + 12*3600_000)).find(p=>p.type==='timeZoneName')!.value;
-  const hours = Number(offset.match(/GMT-(\d+)/)![1]);
-  return nextDate + hours * 3600_000;
-}
-
 export function createGoogleNarrator(options: {
   apiKey?: string;
   apiKeys?: string[];
@@ -173,7 +147,7 @@ export function createGoogleNarrator(options: {
           const keyError = response.status===401 || response.status===403 || (response.status===400 && /API.?key|API_KEY_INVALID/i.test(body));
           if (response.status===429 || keyError) {
             const retrySeconds = Number(body.match(/"retryDelay"\s*:\s*"([\d.]+)s"/)?.[1] ?? 60);
-            blockedUntil.set(apiKey, keyError || /PerDay|per_day|daily|günlük/i.test(body) ? nextDailyReset(now()) : now().getTime()+Math.max(1,retrySeconds)*1000);
+            blockedUntil.set(apiKey, keyError || /PerDay|per_day|daily|günlük/i.test(body) ? nextGoogleDailyQuotaReset(now()).getTime() : now().getTime()+Math.max(1,retrySeconds)*1000);
             options.log?.(`TTS anahtar ${index+1}: HTTP ${response.status}; sıradaki anahtara geçiliyor`);
             continue keyLoop;
           }

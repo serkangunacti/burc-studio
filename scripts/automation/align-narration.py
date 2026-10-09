@@ -7,7 +7,46 @@ import json
 import math
 import os
 import sys
+import unicodedata
 from pathlib import Path
+
+
+def rebuild_scene_segments(segments, scenes):
+    """Use original transcript boundaries instead of tokenizer segment splits.
+
+    Every non-whitespace character must survive. Only grouping and Unicode
+    normalization change; omitted or substituted transcript words are rejected.
+    """
+    def compact(text):
+        return "".join(unicodedata.normalize("NFC", text).split())
+
+    words = [word for segment in segments for word in segment.get("words", [])]
+    if not words or any(not isinstance(word.get("word"), str) for word in words):
+        raise ValueError("Konuşma zamanlaması: tam metin sözcükleri eksik")
+    expected = "".join(compact(scene) for scene in scenes)
+    if "".join(compact(word["word"]) for word in words) != expected:
+        raise ValueError("Konuşma zamanlaması: tam metin eşleşmedi; sözcük kesilmedi")
+    rebuilt = [{"text": scene, "words": []} for scene in scenes]
+    boundaries = [0]
+    for scene in scenes:
+        boundaries.append(boundaries[-1] + len(compact(scene)))
+    position = 0
+    for word in words:
+        length = len(compact(word["word"]))
+        if not length:
+            continue
+        for index in range(len(scenes)):
+            left = max(position, boundaries[index])
+            right = min(position + length, boundaries[index + 1])
+            if left >= right:
+                continue
+            start, end = word.get("start"), word.get("end")
+            if all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in (start, end)) and end >= start:
+                span = end - start
+                start, end = start + span * (left - position) / length, start + span * (right - position) / length
+            rebuilt[index]["words"].append({**word, "start": start, "end": end})
+        position += length
+    return rebuilt
 
 
 def scene_starts(segments, scenes, duration_seconds, minimum_scene_gap_seconds):
@@ -105,11 +144,20 @@ def main():
     duration_seconds = request["durationSeconds"]
     minimum_scene_gap_seconds = request["minimumSceneGapSeconds"]
     model = stable_whisper.load_model("small", device="cpu")
-    result = model.align(audio, "\n".join(scenes), language="tr", original_split=True, verbose=None, remove_instant_words=False)
-    if result is None:
-        raise ValueError("Konuşma zamanlaması çıkarılamadı")
-    starts = scene_starts(result.to_dict()["segments"], scenes, duration_seconds, minimum_scene_gap_seconds)
-    Path(output).write_text(json.dumps({"sceneStarts": starts}))
+    failure = None
+    for attempt, options in enumerate([{"token_step": 100}, {"token_step": 400, "nonspeech_skip": None}], start=1):
+        result = model.align(audio, "\n".join(scenes), language="tr", original_split=True, verbose=None, remove_instant_words=False, **options)
+        try:
+            if result is None:
+                raise ValueError("Konuşma zamanlaması çıkarılamadı")
+            segments = rebuild_scene_segments(result.to_dict()["segments"], scenes)
+            starts = scene_starts(segments, scenes, duration_seconds, minimum_scene_gap_seconds)
+            Path(output).write_text(json.dumps({"sceneStarts": starts, "alignmentAttempt": attempt}))
+            return
+        except ValueError as error:
+            failure = error
+            print(f"Eşleştirme {attempt}: {error}; aynı tam ses korunuyor", file=sys.stderr)
+    raise ValueError(f"Konuşma zamanlaması iki analizde doğrulanamadı: {failure}")
 
 
 if __name__ == "__main__":

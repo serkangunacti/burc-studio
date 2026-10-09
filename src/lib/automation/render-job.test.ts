@@ -35,7 +35,7 @@ describe('günün render işi', () => {
     const rows = await listPublications(db, DATE);
     expect(rows).toEqual([]);
   });
-  it.each([179,179.1,undefined,NaN,Infinity,0])('süresi doğrulanmamış veya 179 sınırındaki sonucu kaydetmez: %s',async durationSeconds=>{
+  it.each([178.901,179,179.1,undefined,NaN,Infinity,0])('süresi doğrulanmamış veya 178,9 sınırındaki sonucu kaydetmez: %s',async durationSeconds=>{
     await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});
     const renderers=fakeRenderers();
     renderers.renderReels=async()=>({videoUrl:'https://blob.test/long.mp4',durationSeconds});
@@ -65,6 +65,21 @@ describe('günün render işi', () => {
     const next=fakeRenderers();expect((await renderDay(db,DATE,next)).rendered).toHaveLength(1);
     expect(next.videos).toHaveBeenCalledTimes(1);
     expect((await listPublications(db,DATE))[0].media.durationSeconds).toBe(100);
+  });
+  it('Blob listesinden silinen videoyu yeniden çizer ve onaylı günün tamamını render bitene dek onaydan çıkarır',async()=>{
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});
+    await seedPost(db,{date:DATE,kind:'horoscope',audience:'erkek'});
+    await renderDay(db,DATE,fakeRenderers());await approveDay(db,DATE);
+    const renderers=fakeRenderers() as Renderers & {hasVideo:(url:string)=>Promise<boolean>};
+    renderers.hasVideo=async url=>!url.includes('horoscope-kadin');
+    renderers.renderReels=vi.fn(async()=>{
+      expect((await listPublications(db,DATE)).every(row=>row.status==='ready')).toBe(true);
+      return {videoUrl:'https://blob.test/rebuilt.mp4',durationSeconds:100};
+    });
+    expect((await renderDay(db,DATE,renderers)).failures).toEqual([]);
+    expect(renderers.renderReels).toHaveBeenCalledTimes(1);
+    expect((await listPublications(db,DATE)).find(row=>row.audience==='kadin')?.media.videoUrl).toBe('https://blob.test/rebuilt.mp4');
+    expect((await listPublications(db,DATE)).find(row=>row.audience==='erkek')?.media.videoUrl).toContain('horoscope-erkek');
   });
   it('zorla yeniden render onaylı eski videoyu yayın kuyruğundan çıkarır ve dış kimliklerini sıfırlar', async () => {
     await seedPost(db, {date: DATE,kind:'horoscope',audience:'kadin'});

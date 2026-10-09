@@ -9,7 +9,7 @@ import type { MusicRenderer } from './music';
 import type { ReelsProps } from '@/remotion/slide-types';
 import {fullNarrationTiming,reelsFrameRanges,type ReelsVoice} from '@/remotion/voice';
 import type {FullNarration} from './full-narration';
-import {MAX_REELS_SECONDS} from '@/remotion/reels';
+import {MAX_REELS_MP4_SECONDS} from '@/remotion/reels';
 import {probeVideoDuration} from './video-duration';
 
 export type RemotionRenderers = Renderers & { close: () => Promise<void> };
@@ -93,7 +93,7 @@ export async function openRemotionRenderers(input: {
         });
         // Measure the encoded file, rather than assuming its requested frame count is its duration.
         const durationSeconds = await probeVideoDuration(output);
-        if (!Number.isFinite(durationSeconds) || durationSeconds<=0 || durationSeconds>=MAX_REELS_SECONDS) throw new Error('MP4 179 saniyelik kesin süre sınırını geçemedi');
+        if (!Number.isFinite(durationSeconds) || durationSeconds<=0 || durationSeconds>MAX_REELS_MP4_SECONDS) throw new Error('MP4 178,9 saniyelik kesin süre sınırını geçemedi');
         input.log(`${fileName}: ${durationSeconds.toFixed(2)} sn video, ${Math.round((Date.now() - started) / 1000)} sn render`);
         outputs.push({fileName, output, durationSeconds});
       }

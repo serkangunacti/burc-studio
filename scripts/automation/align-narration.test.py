@@ -8,6 +8,31 @@ spec.loader.exec_module(module)
 
 
 class AlignmentTests(unittest.TestCase):
+    def test_rebuilds_original_scenes_when_tokenizer_moves_a_word_to_neighbor_segment(self):
+        scenes = ["Giriş.", "Koç yorumu.", "Kapanış."]
+        segments = [
+            {"text": "Giriş. Koç", "words": [{"word": " Giriş.", "start": .1, "end": 2}, {"word": " Koç", "start": 5, "end": 6}]},
+            {"text": " yorumu.", "words": [{"word": " yorumu.", "start": 6, "end": 9}]},
+            {"text": " Kapanış.", "words": [{"word": " Kapanış.", "start": 14, "end": 14}]},
+        ]
+        rebuilt = module.rebuild_scene_segments(segments, scenes)
+        self.assertEqual([s["text"] for s in rebuilt], scenes)
+        self.assertEqual(module.scene_starts(rebuilt, scenes, 14, 1)[:2], [0, 5])
+        self.assertLess(module.scene_starts(rebuilt, scenes, 14, 1)[2], 14)
+
+    def test_rebuilding_never_accepts_missing_or_changed_transcript(self):
+        for text in ["Giriş. Başka.", "Giriş."]:
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, "tam metin"):
+                module.rebuild_scene_segments([{"words": [{"word": text, "start": 0, "end": 10}]}], ["Giriş.", "Kapanış."])
+
+    def test_rebuilding_normalizes_unicode_and_splits_a_token_at_original_scene_boundary(self):
+        scenes = ["Giriş.", "Şans."]
+        rebuilt = module.rebuild_scene_segments([
+            {"words": [{"word": " Giriş.S\u0327ans.", "start": 1, "end": 11}]}
+        ], scenes)
+        self.assertEqual([s["text"] for s in rebuilt], scenes)
+        self.assertAlmostEqual(rebuilt[1]["words"][0]["start"], 1 + 60 / 11)
+
     def test_interpolates_only_the_unaligned_trailing_scene_within_audio(self):
         scenes = ["Giriş", "Koç.", "Kapanış."]
         segments = [

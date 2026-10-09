@@ -10,8 +10,9 @@ import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { createGoogleNarrator } from './automation/google-tts';
 import { createFullNarration } from './automation/full-narration';
+import {isGoogleQuotaResetForIstanbulDay} from './automation/quota-reset.mjs';
 
-// GitHub Actions'ta 04:00 TSİ başlar: yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
+// GitHub Actions'ta kota sıfırlanmasından sonra yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
 const { values } = parseArgs({
   options: {
     date: { type: 'string' },
@@ -41,7 +42,12 @@ async function notifyReady(date: string, failures: string[]) {
 async function main() {
   const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
+  if (process.env.GITHUB_EVENT_NAME === 'schedule' && !isGoogleQuotaResetForIstanbulDay(new Date())) {
+    log('Türkiye gününün Gemini kota yenilenme saati gelmedi; zamanlanmış render bekletildi.');
+    return;
+  }
   const db = getDb();
+  const availableVideoUrls = new Set<string>();
   // Vercel Blob ücretsiz kotasını (1 GB) korumak için 24 saatten eski geçici videoları temizle.
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60_000);
@@ -54,6 +60,7 @@ async function main() {
         await del(old);
         totalDeleted += old.length;
       }
+      for (const blob of page.blobs) if (blob.uploadedAt >= cutoff) availableVideoUrls.add(blob.url);
       cursor = page.hasMore ? page.cursor : undefined;
     } while (cursor);
     if (totalDeleted > 0) log(`Vercel Blob temizliği: ${totalDeleted} eski video silindi.`);
@@ -68,7 +75,7 @@ async function main() {
     return;
   }
 
-  // Üretim ve render 04:00 TSİ tetiklenir; üretim tamamlanana kadar beklenir.
+  // İlk render 10:01 TSİ'de tetiklenir; 10:00 içerik üretimi bitene kadar beklenir.
   const deadline = Date.now() + Number(values['wait-minutes']) * 60_000;
   let missing = await missingPosts(db, date);
   while (missing.length > 0 && Date.now() < deadline) {
@@ -90,6 +97,7 @@ async function main() {
       return blob.url;
     },
   });
+  renderers.hasVideo = async (videoUrl) => availableVideoUrls.has(videoUrl);
   try {
     const result = await renderDay(db, date, renderers, {
       force: values.force || process.env.RENDER_FORCE === 'true',

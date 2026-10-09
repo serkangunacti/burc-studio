@@ -3,9 +3,9 @@ name: Paylaşımları hazırla
 # Her sabah yalnız Reels/video hazırlar; paylaşım onayı ve otomatik plan uygulamada denetlenir.
 on:
   schedule:
-    # 10:10 TSİ başlangıç; yedekler 11:10, 11:40 ve 13:10 TSİ.
+    # 10:01 TSİ başlangıç; yedekler 11:10, 11:40 ve 13:10 TSİ.
     # Preflight, Gemini kota sıfırlanmadan önceki ve aynı gün başarıyla tamamlanmış yedek işleri atlar.
-    - cron: '10 7 * * *'
+    - cron: '1 7 * * *'
     - cron: '10 8 * * *'
     - cron: '40 8 * * *'
     - cron: '10 10 * * *'
@@ -61,9 +61,9 @@ jobs:
         if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v4-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            voice-v3-${{ steps.start-window.outputs.date }}-
+            voice-v4-${{ steps.start-window.outputs.date }}-
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji ffmpeg && ffprobe -version
         if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
@@ -116,4 +116,4 @@ jobs:
         if: always() && (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
-          key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: voice-v4-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}

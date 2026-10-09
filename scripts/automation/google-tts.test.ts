@@ -16,6 +16,13 @@ afterEach(async () => {
 });
 
 describe('tek istek ve üç anahtar', () => {
+  it('yorum gövdesinin tamamını korur; uzun gövdeyi cümle veya karakter ortasında kesmez', () => {
+    const body = `İlk cümle. ${'Uzun Türkçe yorum ve devamı. '.repeat(18)}Son cümle bütünüyle korunuyor.`;
+    const text = narrationText({ signName: 'Koç', short: 'Kısa özet.', body, headline: 'Bugünün yorumu' });
+    expect(text).toContain(body);
+    expect(text.endsWith('Son cümle bütünüyle korunuyor.')).toBe(true);
+  });
+
   it('tam video metnini aynı ayarlarla 1 → 2 → 3 geçirir ve önbelleğe alır', async () => {
     const calls: {key: string; url: string; payload: unknown}[] = [];
     const text = Array.from({length:14}, (_,i) => `Sahne ${i}. ${'Mevcut Türkçe yorum. '.repeat(12)}`).join('\n\n').trim();
@@ -48,6 +55,19 @@ describe('tek istek ve üç anahtar', () => {
     expect(keys).toEqual(['bir','iki','iki']);
     now=new Date('2026-10-09T07:00:00Z'); exhausted=false;
     await narrator.speak('Yeni günlük video.'); expect(keys.at(-1)).toBe('bir');
+  });
+  it('Pasifik yaz saati başladığında kotayı yeni Türkiye günü başlamadan açmaz',async()=>{
+    let now=new Date('2027-03-13T20:00:00Z');const keys:string[]=[];
+    const narrator=createGoogleNarrator({apiKeys:['bir','iki'],now:()=>now,cacheDir:await cache(),fetchImpl:async(_url,options)=>{
+      const key=new Headers(options?.headers).get('x-goog-api-key')!;keys.push(key);
+      if(key==='bir'&&keys.filter(value=>value==='bir').length===1)return new Response('quota PerDay',{status:429});
+      return Response.json({candidates:[{content:{parts:[{inlineData:{mimeType:'audio/wav',data:mockWav().toString('base64')}}]}}]});
+    }});
+    await narrator.speak('Geçiş öncesi');
+    now=new Date('2027-03-14T07:15:00Z');await narrator.speak('Geçiş öncesi tekrar');
+    expect(keys.filter(key=>key==='bir')).toHaveLength(1);
+    now=new Date('2027-03-14T08:00:00Z');await narrator.speak('Geçiş sonrası');
+    expect(keys.at(-1)).toBe('bir');
   });
   it('ortam anahtarlarını 1 → 2 → 3 sırasıyla kullanır', async () => {
     vi.stubEnv('GOOGLE_TTS_API_KEY','bir'); vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY','iki'); vi.stubEnv('GOOGLE_TTS_API_KEY_3','üç');

@@ -1,4 +1,4 @@
-import {INTRO_FRAMES,MAX_REELS_SECONDS,MAX_REELS_FRAMES,REELS_FPS,OUTRO_FRAMES,reelsDurationInFrames,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
+import {INTRO_FRAMES,MAX_REELS_NARRATION_SECONDS,MAX_REELS_FRAMES,REELS_FPS,OUTRO_FRAMES,reelsDurationInFrames,SIGN_FRAMES,TRANSITION_FRAMES} from './reels';
 import type {ReelsSceneTiming} from './slide-types';
 export type VoiceTrack = { file: string; durationSeconds: number };
 export type LegacyReelsVoice = { intro: VoiceTrack; outro: VoiceTrack; signs?:VoiceTrack[] };
@@ -62,14 +62,14 @@ export function reelsFrameRanges(signCount:number,timing:ReelsSceneTiming|undefi
   if(total>limit)throw new Error('Video tek parça halinde 3 dakikanın altında oluşturulamıyor; içerik ve seslendirme kesilmedi');
   if(voice){
     if('full' in voice){
-      if(!Number.isFinite(voice.full.durationSeconds)||voice.full.durationSeconds<=0||voice.full.durationSeconds>=MAX_REELS_SECONDS||Math.ceil(voice.full.durationSeconds*fps)>total)throw new Error('Tam konuşma videoya sığmıyor');
+      if(!Number.isFinite(voice.full.durationSeconds)||voice.full.durationSeconds<=0||voice.full.durationSeconds>MAX_REELS_NARRATION_SECONDS||Math.ceil(voice.full.durationSeconds*fps)>total)throw new Error('Tam konuşma videoya sığmıyor');
     }else voiceTimeline(voice,total,fps,timing);
   }
   return [[0,total-1]];
 }
 
 export function fullNarrationTiming(durationSeconds:number,sceneStarts:number[],signCount:number,fps:number):ReelsSceneTiming{
-  if(!Number.isFinite(durationSeconds)||durationSeconds<=0||durationSeconds>178.5||!Number.isFinite(fps)||fps<=0)throw new Error('Tam konuşma süresi geçersiz veya 178,5 sn bütçesini aşıyor');
+  if(!Number.isFinite(durationSeconds)||durationSeconds<=0||durationSeconds>MAX_REELS_NARRATION_SECONDS||!Number.isFinite(fps)||fps<=0)throw new Error('Tam konuşma süresi geçersiz veya 178,5 sn bütçesini aşıyor');
   if(!Array.isArray(sceneStarts)||sceneStarts.length!==signCount+2||sceneStarts[0]!==0||sceneStarts.some((s,i)=>!Number.isFinite(s)||s<0||s>=durationSeconds||(i>0&&s<=sceneStarts[i-1])))throw new Error('Tam konuşma sahne zamanlaması geçersiz');
   const starts=sceneStarts.map(s=>Math.round(s*fps));
   const total=Math.ceil(durationSeconds*fps)+Math.ceil(.2*fps);

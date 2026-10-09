@@ -41,6 +41,14 @@ export type PlannedPublication = {
   caption: string;
 };
 
+// When a complete package is ready after its first slot, move the remaining day as one block.
+export function reanchorOverdueSlots<T extends {scheduledAt: Date}>(items: readonly T[], readyAt: Date, leadSeconds = 60): T[] {
+  if (!items.length) return [];
+  const firstSlot = Math.min(...items.map((item) => item.scheduledAt.getTime()));
+  const shiftMs = Math.max(0, readyAt.getTime() + leadSeconds * 1000 - firstSlot);
+  return items.map((item) => shiftMs ? {...item, scheduledAt: new Date(item.scheduledAt.getTime() + shiftMs)} : item);
+}
+
 function isAutomated(post: PlannablePost): post is PlannablePost & { kind: AutomationKind; audience: Audience } {
   return (AUTOMATION_KINDS as readonly string[]).includes(post.kind) && post.audience !== 'genel';
 }

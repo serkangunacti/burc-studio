@@ -5,11 +5,11 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 import type {ReelsProps} from '../../src/remotion/slide-types';
 import {fullNarrationTiming} from '../../src/remotion/voice';
-import {MIN_REELS_SCENE_AUDIO_GAP_SECONDS,REELS_FPS} from '../../src/remotion/reels';
+import {MAX_REELS_NARRATION_SECONDS,MIN_REELS_SCENE_AUDIO_GAP_SECONDS,REELS_FPS} from '../../src/remotion/reels';
 import {introNarrationText, narrationText, outroNarrationText, wavDuration, type NarrationClip} from './google-tts';
 
 const execFileAsync=promisify(execFile);
-export const NARRATION_BUDGET_SECONDS=178.5;
+export const NARRATION_BUDGET_SECONDS=MAX_REELS_NARRATION_SECONDS;
 export type FullNarration=NarrationClip & {sceneStarts:number[];timingPath:string};
 
 // Every input sample is processed. atempo changes tempo while retaining pitch;
@@ -58,7 +58,7 @@ export async function createFullNarration(reels:ReelsProps,input:{
   const scenes=[introNarrationText(reels),...reels.signs.map(narrationText),outroNarrationText()].map(text=>text.trim().normalize('NFC'));
   const raw=await input.narrator.speak(scenes.join('\n\n'));
   const audio=await fitNarrationToBudget(raw.path,input.cacheDir);
-  const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v1'})).digest('hex');
+  const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v2-transcript-boundaries'})).digest('hex');
   const timingPath=path.join(input.cacheDir,`${key}-timing.json`);
   try{
     const cached=JSON.parse(await readFile(timingPath,'utf8')) as {sceneStarts:number[]};

@@ -8,8 +8,10 @@ export const OUTRO_FRAMES = 90;
 export const TRANSITION_FRAMES = 15;
 // Used only when forced alignment cannot locate trailing scene boundaries.
 export const MIN_REELS_SCENE_AUDIO_GAP_SECONDS = 1;
-export const MAX_REELS_SECONDS = 179; // Tek MP4, YouTube Shorts sınırının altında.
-export const MAX_REELS_FRAMES = Math.floor(178.9 * REELS_FPS);
+export const MAX_REELS_NARRATION_SECONDS = 178.5;
+export const MAX_REELS_MP4_SECONDS = 178.9;
+export const MAX_REELS_SECONDS = 179; // Platform sınırı; içerik tavanı MAX_REELS_MP4_SECONDS değeridir.
+export const MAX_REELS_FRAMES = Math.floor(MAX_REELS_MP4_SECONDS * REELS_FPS);
 
 // Geçişler iki sahneyi üst üste bindirir; her geçiş toplam süreyi kısaltır.
 export function reelsDurationInFrames(signCount: number, timing?:ReelsSceneTiming): number {

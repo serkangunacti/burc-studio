@@ -8,7 +8,7 @@ describe('tam sesin sahne zamanlaması',()=>{
     expect(reelsFrameRanges(12,timing,30,full)).toEqual([[0,5360]]);
     expect(musicVolume(2500,full,5361,30,timing)).toBe(.2);
   });
-  it.each([179,Infinity,NaN,0])('geçersiz veya bütçeyi aşan tam sesi reddeder: %s',duration=>{
+  it.each([178.501,179,Infinity,NaN,0])('geçersiz veya bütçeyi aşan tam sesi reddeder: %s',duration=>{
     expect(()=>fullNarrationTiming(duration,Array.from({length:14},(_,i)=>i*12),12,30)).toThrow();
   });
   it('eksik, ters ve tek karelik sahne sınırlarını reddeder',()=>{
