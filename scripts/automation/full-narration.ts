@@ -46,9 +46,9 @@ export async function fitNarrationToBudget(rawPath:string,cacheDir:string):Promi
   throw new Error('Tam ses 178,5 saniyelik bütçeye uyarlanamadı; konuşma kesilmedi');
 }
 
-async function alignOnActions(audio:string,scenes:string[],manifest:string,durationSeconds:number):Promise<number[]>{
+async function alignOnActions(audio:string,scenes:string[],manifest:string,durationSeconds:number,minimumSceneGapSeconds=MIN_REELS_SCENE_AUDIO_GAP_SECONDS):Promise<number[]>{
   if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Konuşma analizi yalnız GitHub Actions üzerinde çalışır');
-  await writeFile(manifest,JSON.stringify({scenes,durationSeconds,minimumSceneGapSeconds:MIN_REELS_SCENE_AUDIO_GAP_SECONDS}),{mode:0o600});
+  await writeFile(manifest,JSON.stringify({scenes,durationSeconds,minimumSceneGapSeconds}),{mode:0o600});
   const output=`${manifest}.aligned.json`;
   await execFileAsync('python3',['scripts/automation/align-narration.py',audio,manifest,output],{timeout:15*60_000,maxBuffer:4*1024*1024});
   return (JSON.parse(await readFile(output,'utf8')) as {sceneStarts:number[]}).sceneStarts;
@@ -77,7 +77,7 @@ export async function createFullNarration(reels:ReelsProps,input:{
       force=true;
       continue;
     }
-    const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v2-transcript-boundaries'})).digest('hex');
+    const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v3-raw-alignment'})).digest('hex');
     const timingPath=path.join(input.cacheDir,`${key}-timing.json`);
     try{
       const cached=JSON.parse(await readFile(timingPath,'utf8')) as {sceneStarts:number[]};
@@ -86,9 +86,28 @@ export async function createFullNarration(reels:ReelsProps,input:{
     }catch{/* Timing cache is validated against this exact waveform and transcript. */}
     const manifest=`${timingPath}.manifest.json`;
     try{
-      const sceneStarts=input.align
-        ? await input.align(audio.path,scenes,manifest)
-        : await alignOnActions(audio.path,scenes,manifest,audio.durationSeconds);
+      const scale = audio.durationSeconds / raw.durationSeconds;
+      const rawGap = MIN_REELS_SCENE_AUDIO_GAP_SECONDS / scale;
+
+      let sceneStarts: number[];
+      if (scale < 0.999) {
+        try {
+          const rawStarts = input.align
+            ? await input.align(raw.path, scenes, manifest)
+            : await alignOnActions(raw.path, scenes, manifest, raw.durationSeconds, rawGap);
+          sceneStarts = rawStarts.map((start, idx) => idx === 0 ? 0.0 : Number((start * scale).toFixed(3)));
+        } catch {
+          // Fallback: try aligning on tempo audio directly
+          const tempoStarts = input.align
+            ? await input.align(audio.path, scenes, manifest)
+            : await alignOnActions(audio.path, scenes, manifest, audio.durationSeconds, MIN_REELS_SCENE_AUDIO_GAP_SECONDS);
+          sceneStarts = tempoStarts;
+        }
+      } else {
+        sceneStarts = input.align
+          ? await input.align(audio.path, scenes, manifest)
+          : await alignOnActions(audio.path, scenes, manifest, audio.durationSeconds, MIN_REELS_SCENE_AUDIO_GAP_SECONDS);
+      }
       fullNarrationTiming(audio.durationSeconds,sceneStarts,12,REELS_FPS);
       await writeFile(`${timingPath}.tmp`,JSON.stringify({sceneStarts}),{mode:0o600});
       await rename(`${timingPath}.tmp`,timingPath);

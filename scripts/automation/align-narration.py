@@ -146,7 +146,7 @@ def main():
     model = stable_whisper.load_model("small", device="cpu")
     failure = None
     # The wider token window also passed the real male-tarot regression.
-    for attempt, options in enumerate([{"token_step": 400, "nonspeech_skip": None}, {"token_step": 100}], start=1):
+    for attempt, options in enumerate([{"token_step": 400, "nonspeech_skip": None}, {"token_step": 200, "nonspeech_skip": None}, {"token_step": 100}], start=1):
         result = model.align(audio, "\n".join(scenes), language="tr", original_split=True, verbose=None, remove_instant_words=False, **options)
         try:
             if result is None:
@@ -158,7 +158,7 @@ def main():
         except ValueError as error:
             failure = error
             print(f"Eşleştirme {attempt}: {error}; aynı tam ses korunuyor", file=sys.stderr)
-    raise ValueError(f"Konuşma zamanlaması iki analizde doğrulanamadı: {failure}")
+    raise ValueError(f"Konuşma zamanlaması analizlerde doğrulanamadı: {failure}")
 
 
 if __name__ == "__main__":
