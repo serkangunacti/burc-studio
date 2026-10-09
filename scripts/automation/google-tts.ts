@@ -41,15 +41,7 @@ export function narrationText(sign: {
     return text;
   }
 
-  const parts: string[] = [`Sevgili ${sign.signName} burçları;`];
-  if (sign.headline) {
-    parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
-  }
-  parts.push(short);
-  if (sign.luckyNumber && sign.luckyColor) {
-    parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
-  }
-  return parts.join(' ').normalize('NFC');
+  return `${sign.signName}. ${short}`.normalize('NFC');
 }
 
 export function introNarrationText(reels?: { audience?: string; dateLabel?: string; hook?: string; element?: string }): string {

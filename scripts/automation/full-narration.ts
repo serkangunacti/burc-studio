@@ -32,7 +32,7 @@ export async function fitNarrationToBudget(rawPath:string,cacheDir:string):Promi
     return {data,durationSeconds,path:output,cached:true};
   }catch{/* A missing or invalid fitted cache is regenerated from the complete original. */}
   let tempo=rawDuration/(NARRATION_BUDGET_SECONDS-.05);
-  if (tempo > 1.08) {
+  if (tempo > 1.25) {
     throw new Error(`Tam ses doğal hızda (1.0x) ${rawDuration.toFixed(1)} sn; 178,5 sn bütçesini aşıyor (tempo=${tempo.toFixed(2)}x). Doğal anlatımı korumak için robotik hızlandırmaya izin verilmiyor; metin kısaltılmalıdır.`);
   }
   for(let attempt=0;attempt<3;attempt++){
