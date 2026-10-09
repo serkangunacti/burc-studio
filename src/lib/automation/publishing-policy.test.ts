@@ -109,7 +109,7 @@ it('blocks partial days and automatically enqueues the complete next day', async
   const newlyApproved = rows.filter((row) => row.status === 'approved');
   expect(new Date(Math.min(...newlyApproved.map((row) => row.scheduledAt.getTime()))).toISOString()).toBe('2026-10-09T06:01:00.000Z');
   expect([...new Set(newlyApproved.map((row) => row.scheduledAt.getTime()))].sort((a,b)=>a-b).map(time=>new Date(time).toISOString())).toEqual([
-    '2026-10-09T06:01:00.000Z','2026-10-09T06:16:00.000Z','2026-10-09T06:31:00.000Z','2026-10-09T06:46:00.000Z',
+    '2026-10-09T06:01:00.000Z','2026-10-09T06:26:00.000Z','2026-10-09T06:51:00.000Z','2026-10-09T07:16:00.000Z',
   ]);
   expect(enqueue).toHaveBeenCalledTimes(rows.filter((row) => row.status === 'approved').length);
 });

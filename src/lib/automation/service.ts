@@ -101,8 +101,8 @@ const TOKEN_REFRESH_WINDOW_MS = 20 * DAY_MS;
 const INSTAGRAM_TOKEN_LIFETIME_MS = 60 * DAY_MS;
 
 export const IMMEDIATE_APPROVAL_DATE = '2026-10-08';
-export function immediatePublishAllowed(_date: DateKey, _now: Date): boolean {
-  return true;
+export function immediatePublishAllowed(date: DateKey, now: Date): boolean {
+  return date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(now) === IMMEDIATE_APPROVAL_DATE;
 }
 
 export function videoSafetyError(row: PublicationRow): string | null {
@@ -144,6 +144,17 @@ export async function completeReadyDay(deps: AutomationDeps, date: DateKey, fail
   if (error) {
     await notify(deps, `⚠️ Videolar henüz paylaşım için hazır değil.\n${escapeHtml(error)}`);
     return { sent: false, reason: error };
+  }
+  if (date > IMMEDIATE_APPROVAL_DATE) {
+    const { automation } = await getSettings(deps.db);
+    if (!automation.enabled || automationStartReason(automation.startDate, date, deps.now())) return { sent: false, reason: 'Otomatik paylaşım kapalı veya başlangıcı bekleniyor.' };
+    const readyRows = (await listPublications(deps.db, date)).filter((row) => row.status === 'ready');
+    for (const [index, row] of reanchorOverdueSlots(readyRows, deps.now()).entries()) {
+      if (row.scheduledAt.getTime() === readyRows[index].scheduledAt.getTime()) continue;
+      await deps.db.update(publicationsTable).set({ scheduledAt: row.scheduledAt, updatedAt: deps.now() }).where(and(eq(publicationsTable.id, row.id), eq(publicationsTable.status, 'ready')));
+    }
+    const approved = await approveDay(deps.db, date, deps.now());
+    await enqueueRows(deps, approved);
   }
   return sendDayPlan(deps, date, failures);
 }
@@ -568,7 +579,8 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   if (!current) return 'ignored';
   const safetyError = videoSafetyError(current);
   if (safetyError) { await markFailed(deps.db, id, safetyError); return 'failed'; }
-  if (now < istanbulInstant(current.date, '08:30')) {
+  if (current.date === IMMEDIATE_APPROVAL_DATE && current.media.immediateApprovalDate !== IMMEDIATE_APPROVAL_DATE) return 'ignored';
+  if (current.date > IMMEDIATE_APPROVAL_DATE && now < istanbulInstant(current.date, '08:30')) {
     throw new RetryLater(Math.ceil((istanbulInstant(current.date, '08:30').getTime() - now.getTime()) / 1000), '08:30 paylaşım başlangıcı bekleniyor');
   }
   const { automation } = await getSettings(deps.db);

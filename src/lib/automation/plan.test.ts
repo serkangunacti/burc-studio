@@ -33,10 +33,10 @@ describe('paylaşım planı', () => {
     expect(plan).toHaveLength(4);
     expect(plan.filter((item) => item.format === 'carousel')).toHaveLength(0);
     expect(plan.filter((item) => item.format === 'reels').map((item) => [item.postId, item.scheduledAt.toISOString()])).toEqual([
-      ['hk', '2026-09-29T05:30:00.000Z'],
-      ['he', '2026-09-29T05:45:00.000Z'],
-      ['tk', '2026-09-29T06:00:00.000Z'],
-      ['te', '2026-09-29T06:15:00.000Z'],
+      ['hk', '2026-09-29T06:00:00.000Z'],
+      ['he', '2026-09-29T06:25:00.000Z'],
+      ['tk', '2026-09-29T06:50:00.000Z'],
+      ['te', '2026-09-29T07:15:00.000Z'],
     ]);
   });
 
@@ -54,10 +54,10 @@ describe('paylaşım planı', () => {
       automation,
     );
     expect(plan).toHaveLength(6);
-    expect(plan.every((item) => item.scheduledAt.getTime() >= new Date('2026-09-28T05:30:00Z').getTime())).toBe(true);
+    expect(plan.every((item) => item.scheduledAt.getTime() >= new Date('2026-09-28T06:00:00Z').getTime())).toBe(true);
     expect(plan.some((item) => item.postId === 'sp')).toBe(false);
     const weekly = plan.filter((item) => item.postId === 'we');
-    expect(weekly.find((item) => item.format === 'reels')?.scheduledAt.toISOString()).toBe('2026-09-28T05:45:00.000Z');
+    expect(weekly.find((item) => item.format === 'reels')?.scheduledAt.toISOString()).toBe('2026-09-28T06:35:00.000Z');
   });
 
   it('eksik gönderi için satır üretmez', () => {
