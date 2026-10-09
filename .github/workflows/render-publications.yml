@@ -1,14 +1,14 @@
 name: Paylaşımları hazırla
 
-# Her sabah yalnız Reels/video hazırlar; bugünün özel Telegram onayı ve sonraki günlerin otomatik paylaşım kuralı uygulamada denetlenir.
+# Her sabah yalnız Reels/video hazırlar; paylaşım onayı ve otomatik plan uygulamada denetlenir.
 on:
   schedule:
-    # 04:00 TSİ; günlük üretim de 04:00 TSİ başlar, betik eksik gönderileri bekler.
-    # 05:30 ve 07:00 TSİ yedekleri, 08:30 hazırlık hedefi için kurtarma aralığı bırakır.
-    # GitHub zamanlanmış işleri geciktirebilir ya da atlayabilir; yedek tetiklemeler hazır günü yeniden çizmez ve ikinci mesaj göndermez.
-    - cron: '0 1 * * *'
-    - cron: '30 2 * * *'
-    - cron: '0 4 * * *'
+    # 10:10 TSİ başlangıç; yedekler 11:10, 11:40 ve 13:10 TSİ.
+    # Preflight, Gemini kota sıfırlanmadan önceki ve aynı gün başarıyla tamamlanmış yedek işleri atlar.
+    - cron: '10 7 * * *'
+    - cron: '10 8 * * *'
+    - cron: '40 8 * * *'
+    - cron: '10 10 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -26,26 +26,39 @@ concurrency:
   group: render-publications
   cancel-in-progress: false
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   render:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
+      - name: Kota yenilenmesini ve bugünkü başarılı işi önceden kontrol et
+        id: schedule-check
+        if: github.event_name == 'schedule'
+        run: node scripts/automation/schedule-preflight.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/setup-node@v5
+        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
       - name: Başlangıç tarihini kontrol et
         id: start-window
+        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
         run: node --import tsx scripts/check-automation-start.ts
         env:
           RENDER_DATE: ${{ inputs.date }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Tamamlanmış ve bekleyen konuşmaları geri yükle
         uses: actions/cache/restore@v4
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
           key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -53,37 +66,37 @@ jobs:
             voice-v3-${{ steps.start-window.outputs.date }}-
       # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji ffmpeg && ffprobe -version
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
       - uses: actions/setup-python@v5
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           python-version: '3.11'
       - name: Konuşma zamanlaması araçlarını yalnız Actions üzerine kur
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         run: |
           python3 -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
           python3 -m pip install stable-ts==2.19.1
       - uses: actions/cache@v4
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: ~/.cache/whisper
           key: whisper-small-tr-v1
       - name: Ses ve süre kontrollerini doğrula
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         run: |
-          npx vitest run scripts/automation/google-tts.test.ts scripts/automation/full-narration.test.ts scripts/automation/remotion.test.ts scripts/automation/video-duration.test.ts src/remotion/voice.test.ts src/lib/automation/render-job.test.ts src/lib/automation/publishing-policy.test.ts src/lib/content/daily-package.test.ts src/lib/automation/plan.test.ts --maxWorkers=2
+          npx vitest run scripts/automation/google-tts.test.ts scripts/automation/full-narration.test.ts scripts/automation/remotion.test.ts scripts/automation/video-duration.test.ts scripts/automation/quota-reset.test.ts scripts/automation/schedule-preflight.test.ts src/remotion/voice.test.ts src/lib/automation/render-job.test.ts src/lib/automation/publishing-policy.test.ts src/lib/content/daily-package.test.ts src/lib/automation/plan.test.ts --maxWorkers=2
           python3 scripts/automation/align-narration.test.py
       - uses: actions/cache@v4
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
       - run: npx remotion browser ensure
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
       - name: Videoları hazırla ve Telegram’a bildir
-        if: steps.start-window.outputs.allowed == 'true'
+        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         run: node --import tsx scripts/render-publications.ts
         env:
           RENDER_DATE: ${{ inputs.date }}
@@ -100,7 +113,7 @@ jobs:
           APP_URL: https://burc-studio.vercel.app
       - name: Konuşmaları hata durumunda da sakla
         uses: actions/cache/save@v4
-        if: always() && steps.start-window.outputs.allowed == 'true'
+        if: always() && (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
           path: .cache/voice
           key: voice-v3-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
