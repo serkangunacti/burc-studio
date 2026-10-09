@@ -62,7 +62,7 @@ describe('ayar birleştirme', () => {
         },
         partGapMinutes: 3,
         cutoffTime: '22:15',
-        tiktok: { enabled: true },
+        tiktok: { enabled: false },
       },
     });
   });
