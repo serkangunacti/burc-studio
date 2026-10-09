@@ -2,7 +2,8 @@ import { parseArgs } from 'node:util';
 import { del, list, put } from '@vercel/blob';
 import { closeDb, getDb } from '../src/db/client';
 import { missingPosts, renderDay } from '../src/lib/automation/render-job';
-import { hasPlanMessage } from '../src/lib/automation/repository';
+import { hasPlanMessage, listPublications, savePublication } from '../src/lib/automation/repository';
+import { istanbulInstant } from '../src/lib/automation/plan';
 import { isDateKey, istanbulDateKey } from '../src/lib/date/istanbul';
 import { getSettings } from '../src/lib/settings/repository';
 import { automationStartReason } from '../src/lib/automation/start';
@@ -10,12 +11,13 @@ import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { createGoogleNarrator } from './automation/google-tts';
 import { createFullNarration } from './automation/full-narration';
-import { isGoogleQuotaResetForIstanbulDay } from './automation/quota-reset.mjs';
 import { getCurrentPostsForDate } from '../src/lib/content/repository';
 import { getPostDetail } from '../src/lib/posts/repository';
 import { brandFromSettings } from '../src/lib/posts/slide-props';
 import { buildReelsProps } from '../src/lib/posts/reels-props';
 import { musicSeed } from '../src/lib/music/compose';
+import { MAX_REELS_MP4_SECONDS } from '../src/remotion/reels';
+import type { PublicationFormat } from '../src/db/schema';
 import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
 
 // GitHub Actions'ta kota sıfırlanmasından sonra yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
@@ -48,10 +50,6 @@ async function notifyReady(date: string, failures: string[]) {
 async function main() {
   const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
-  if (process.env.GITHUB_EVENT_NAME === 'schedule' && !isGoogleQuotaResetForIstanbulDay(new Date())) {
-    log('Türkiye gününün Gemini kota yenilenme saati gelmedi; zamanlanmış render bekletildi.');
-    return;
-  }
   const db = getDb();
   const availableVideoUrls = new Set<string>();
   // Vercel Blob ücretsiz kotasını (1 GB) korumak için 24 saatten eski geçici videoları temizle.
@@ -81,12 +79,27 @@ async function main() {
     return;
   }
 
-  // İlk render 10:01 TSİ'de tetiklenir; 10:00 içerik üretimi bitene kadar beklenir.
-  const deadline = Date.now() + Number(values['wait-minutes']) * 60_000;
+  // İçerik üretimi 04:30 TSİ'de biter; 05:00 renderında henüz eksik gönderi varsa otomatik tetikle.
   let missing = await missingPosts(db, date);
+  if (missing.length > 0) {
+    log(`İçerikler bekleniyor (${missing.join(', ')}). /api/cron/daily tetikleniyor...`);
+    try {
+      const appUrl = process.env.APP_URL || 'https://burc-studio.vercel.app';
+      const secret = process.env.CRON_SECRET || process.env.AUTOMATION_SECRET;
+      const res = await fetch(`${appUrl}/api/cron/daily`, {
+        headers: secret ? { authorization: `Bearer ${secret}` } : {},
+      });
+      log(`Otomatik içerik üretim tetikleme yanıtı: HTTP ${res.status}`);
+      await sleep(10_000);
+      missing = await missingPosts(db, date);
+    } catch (err) {
+      log(`Otomatik içerik tetikleme hatası: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  const deadline = Date.now() + Number(values['wait-minutes']) * 60_000;
   while (missing.length > 0 && Date.now() < deadline) {
     log(`Bekleniyor: ${missing.join(', ')}`);
-    await sleep(60_000);
+    await sleep(30_000);
     missing = await missingPosts(db, date);
   }
 
@@ -131,14 +144,35 @@ async function main() {
           const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
 
           const elements = [
-            { key: 'ates', name: 'Ateş Grubu', hook: 'Ateş Grubu Bugün Neler Bekliyor? (Koç, Aslan, Yay) 🔥', signs: ['koc', 'aslan', 'yay'] as const },
-            { key: 'toprak', name: 'Toprak Grubu', hook: 'Toprak Grubu Bugün Neler Bekliyor? (Boğa, Başak, Oğlak) 🌿', signs: ['boga', 'basak', 'oglak'] as const },
-            { key: 'hava', name: 'Hava Grubu', hook: 'Hava Grubu Bugün Neler Bekliyor? (İkizler, Terazi, Kova) 💨', signs: ['ikizler', 'terazi', 'kova'] as const },
-            { key: 'su', name: 'Su Grubu', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
+            { key: 'ates', name: 'Ateş Grubu', part: 1, time: '10:40', hook: 'Ateş Grubu Bugün Neler Bekliyor? (Koç, Aslan, Yay) 🔥', signs: ['koc', 'aslan', 'yay'] as const },
+            { key: 'toprak', name: 'Toprak Grubu', part: 2, time: '11:05', hook: 'Toprak Grubu Bugün Neler Bekliyor? (Boğa, Başak, Oğlak) 🌿', signs: ['boga', 'basak', 'oglak'] as const },
+            { key: 'hava', name: 'Hava Grubu', part: 3, time: '11:30', hook: 'Hava Grubu Bugün Neler Bekliyor? (İkizler, Terazi, Kova) 💨', signs: ['ikizler', 'terazi', 'kova'] as const },
+            { key: 'su', name: 'Su Grubu', part: 4, time: '11:55', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
           ];
+
+          const existingReels = (await listPublications(db, date)).filter((row) => row.postId === horoscopePost.id && row.format === 'reels');
 
           for (const el of elements) {
             if (targetOnly && targetOnly !== `element-${el.key}`) continue;
+
+            const isMonday = new Date(`${date}T12:00:00+03:00`).getDay() === 1;
+            const scheduledTime = isMonday
+              ? (el.part === 1 ? '10:20' : el.part === 2 ? '10:45' : el.part === 3 ? '11:10' : '11:35')
+              : el.time;
+
+            const oldElement = existingReels.find((r) => r.part === el.part);
+            const oldValid = oldElement?.media.videoUrl &&
+              typeof oldElement.media.durationSeconds === 'number' &&
+              oldElement.media.durationSeconds > 0 &&
+              oldElement.media.durationSeconds <= MAX_REELS_MP4_SECONDS &&
+              availableVideoUrls.has(oldElement.media.videoUrl);
+
+            if (oldValid && !values.force && process.env.RENDER_FORCE !== 'true' && !targetOnly) {
+              log(`Element Reels zaten mevcut ve geçerli: ${el.name} (${oldElement.media.videoUrl})`);
+              result.kept.push(`element-${el.key}`);
+              continue;
+            }
+
             const elementSigns = el.signs.map((slug) => {
               const signData = baseReels.signs.find((s) => s.sign === slug);
               const reading = readingBySign.get(slug);
@@ -164,7 +198,33 @@ async function main() {
                 name: `${date}-element-${el.key}`,
               });
               const url = typeof videoUrl === 'string' ? videoUrl : videoUrl.videoUrl;
-              log(`ELEMENT REELS HAZIR [${el.name}]: ${url}`);
+              const durationSeconds = typeof videoUrl === 'object' && videoUrl.durationSeconds ? videoUrl.durationSeconds : undefined;
+              log(`ELEMENT REELS HAZIR [${el.name}]: ${url} (${durationSeconds ? durationSeconds.toFixed(1) + 's' : ''})`);
+
+              const formats: PublicationFormat[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
+              for (const fmt of formats) {
+                await savePublication(
+                  db,
+                  date,
+                  {
+                    postId: horoscopePost.id,
+                    kind: 'horoscope',
+                    audience: 'kadin',
+                    format: fmt,
+                    part: el.part,
+                    scheduledAt: istanbulInstant(date, scheduledTime),
+                    caption: `${el.name} Günlük Burç Yorumları ✨\n\n${el.hook}\n\n#burç #${el.key}grubu #astroloji #burçlar`,
+                  },
+                  {
+                    videoUrl: url,
+                    durationSeconds,
+                    isAiGenerated: true,
+                    partCount: 1,
+                  },
+                  { force: values.force || process.env.RENDER_FORCE === 'true' },
+                );
+              }
+
               result.rendered.push(`element-${el.key}`);
             } catch (err) {
               log(`HATA Element Reels [${el.name}]: ${err instanceof Error ? err.message : String(err)}`);

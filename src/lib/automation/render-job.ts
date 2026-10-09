@@ -111,6 +111,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         if (templateOutdated) await db.update(postsTable).set({templateVersion:targetTemplateVersion}).where(eq(postsTable.id,post.id));
         const reels = buildReelsProps(detail,brand);
         const isElementVideo = reels.signs.length <= 4;
+        const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
         const enrichedReels = {
           ...reels,
           signs: reels.signs.map((sign) => ({

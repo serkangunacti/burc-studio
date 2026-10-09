@@ -3,12 +3,10 @@ name: Paylaşımları hazırla
 # Her sabah yalnız Reels/video hazırlar; paylaşım onayı ve otomatik plan uygulamada denetlenir.
 on:
   schedule:
-    # 10:01 TSİ başlangıç; yedekler 11:10, 11:40 ve 13:10 TSİ.
-    # Preflight, Gemini kota sıfırlanmadan önceki ve aynı gün başarıyla tamamlanmış yedek işleri atlar.
-    - cron: '1 7 * * *'
-    - cron: '10 8 * * *'
-    - cron: '40 8 * * *'
-    - cron: '10 10 * * *'
+    # 05:00 TSİ (02:00 UTC) başlangıç; yedek tetikleyici 06:15 TSİ (03:15 UTC).
+    # Preflight, aynı gün başarıyla tamamlanmış yedek işleri atlar.
+    - cron: '0 2 * * *'
+    - cron: '15 3 * * *'
   workflow_dispatch:
     inputs:
       date:

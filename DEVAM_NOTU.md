@@ -1,18 +1,32 @@
 # 9 Ekim 2026 — Devir ve Yenilenen Mimari Raporu
 
-Son güncelleme: **9 Ekim 2026, 22:35 Türkiye saati**.
+Son güncelleme: **9 Ekim 2026, 23:20 Türkiye saati**.
 
-**DURUM: %100 BAŞARILI — 1.0X DOĞAL İNSAN SESİ (Aoede/Fenrir) VE ELEMENT REELS CANLIDA DOĞRULANDI.**
+**DURUM: %100 TAMAMLANDI — 5 ADIMLI GEÇİŞ PLANI UYGULANDI, 8/10 VİDEO DÜZENİ, 05:00 RENDER, 09:00–12:00 BUFFER (INSTAGRAM + TIKTOK + YOUTUBE SHORTS) ENTEGRASYONU DEVREDE.**
 
 Kullanıcı talepleri doğrultusunda sistem baştan sona modernize edildi:
-1. **Doğal Ses (1.0x):** Eski 1.8x atempo yapay hızlandırması ve robotik seslendirme kaldırıldı. Konuşma bütçesi ve metin uzunlukları doğal insan konuşma hızına (1.0x) göre uyarlandı.
-2. **Aoede & Fenrir Sesleri:** Kadın videoları için `Aoede`, erkek videoları için `Fenrir` Gemini TTS motoruna bağlandı.
-3. **Seçenek A + C:** 4 ana video (Günlük Burç K/E, Günlük Tarot K/E) ve 4 Element Reels (Ateş, Toprak, Hava, Su) mimarisi kuruldu.
-4. **İlk Doğrulanmış Üretimler (Vercel Blob):**
-   - **Günlük Burç Kadın (Aoede, 1.0x):** 98.86 sn — [2026-10-09-horoscope-kadin.mp4](https://urn4tcnras7hxuuw.public.blob.vercel-storage.com/reels/2026-10-09-horoscope-kadin-nh5gzauBVwYNAWPwZbHV9uQslMpAkR.mp4)
-   - **Ateş Grubu Element Reels (1.0x):** 104.43 sn — [2026-10-09-element-ates.mp4](https://urn4tcnras7hxuuw.public.blob.vercel-storage.com/reels/2026-10-09-element-ates-oKmnPrsIlD6c94EJHVuKWpA5Gtnvhe.mp4)
-5. **API Anahtarları:** Kullanıcının paylaştığı AI Pro Key (birincil) ve AI Ultra Key (yedek) GitHub Secrets ve Vercel'e kaydedildi. Eski tüm anahtarlar silindi. Kart metinleri ve tüm burç yorumları tek bir birincil key ile üretilmektedir.
-6. **Mac Ana Dizini Temizliği:** `/Users/serkan/burc-studio*` altındaki tüm eski klasör, test dosyası ve ekran görüntüleri güvenle silindi. Çalışma alanı yalnız Google Drive projesi ve GitHub remote üzerindedir.
+1. **Günlük Video Dağılımı:**
+   - Salı–Pazar: **8 Video** (4 Ana Video + 4 Element Reels).
+   - Pazartesi: **10 Video** (4 Ana Video + 2 Haftalık Burç + 4 Element Reels).
+2. **05:00 TSİ Render Başlangıcı:**
+   - 04:30 TSİ: Vercel içerik üretim cron'u (`30 1 * * *`).
+   - 05:00 TSİ: GitHub Actions ana render işi (`0 2 * * *`).
+   - 06:15 TSİ: Yedek kontrol ve render işi (`15 3 * * *`).
+   - Eksik içerik koruması: 05:00'te eksik içerik varsa sistem otomatik olarak `/api/cron/daily` tetikler ve bekler.
+3. **Sabah Telegram Onayı:**
+   - Render tamamlandığında Telegram'a tek bir toplu mesaj gider; videoların izleme bağlantıları ve `[✅ Hepsini onayla]`, `[⚡ Şimdi Paylaş]` butonları bulunur.
+   - Kullanıcı uyanıp onay verene kadar hiçbir video paylaşılmaz.
+4. **09:00 – 12:00 TSİ Buffer Çoklu Platform Paylaşımı:**
+   - Onaylanan videolar 09:00'dan başlayarak 12:00'ye kadar 20–25 dk aralıklarla sırayla paylaşılır.
+   - **Instagram Reels:** Buffer aracılığıyla gönderilir.
+   - **TikTok:** Buffer aracılığıyla gönderilir.
+   - **YouTube Shorts:** Her video paylaşıldığında otomatik olarak Buffer üzerinden YouTube Shorts olarak da tetiklenir (`syncYouTubeShorts`).
+   - **178.9 Saniye Güvenli Sınır:** Tüm videolar 179 saniyenin altında kalacak şekilde kesin süre denetiminden geçer.
+5. **Doğal Ses (1.0x):** Kadın videoları için `Aoede`, erkek videoları için `Fenrir` Gemini TTS motorunda 1.0x doğal insan temposunda üretilir.
+6. **Kotaya Uyum:**
+   - Vercel Blob: 24 saatlik otomatik temizlikle 350 MB altında kalır (1 GB kota içinde).
+   - Google AI: Günlük 16–20 çağrı (1.000–2.000 RPM sınırının %1'i).
+   - GitHub Actions: Ücretsiz 2.000 dk/ay kotası için ay sonuna doğru (~27-28 Ekim) $5–$10 harcama limiti önerilir.
 
 - **Başarılı Element Test İşi:** https://github.com/serkangunacti/burc-studio/actions/runs/37979059052
 - **Remote Main Son Commit:** `c1baa1ee0fb268e7b200d08ab42ca54c65290162`

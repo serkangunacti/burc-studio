@@ -89,13 +89,13 @@ export const DEFAULT_SETTINGS: Settings = {
     startDate: null,
     telegramChatId: null,
     schedule: {
-      horoscope: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
-      tarot: { kadin: { carousel: '09:00', reels: '09:00' }, erkek: { carousel: '09:15', reels: '09:15' } },
-      weekly: { kadin: { carousel: '08:30', reels: '08:30' }, erkek: { carousel: '08:45', reels: '08:45' } },
+      horoscope: { kadin: { carousel: '09:00', reels: '09:00' }, erkek: { carousel: '09:25', reels: '09:25' } },
+      tarot: { kadin: { carousel: '09:50', reels: '09:50' }, erkek: { carousel: '10:15', reels: '10:15' } },
+      weekly: { kadin: { carousel: '09:12', reels: '09:12' }, erkek: { carousel: '09:35', reels: '09:35' } },
     },
     partGapMinutes: 3,
     cutoffTime: '22:15',
-    tiktok: { enabled: false },
+    tiktok: { enabled: true },
   },
 };
 

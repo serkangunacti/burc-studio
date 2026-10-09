@@ -1,7 +1,5 @@
 import {
   dateKeyInTimezone,
-  googleDailyQuotaResetForIstanbulDate,
-  isGoogleQuotaResetForIstanbulDay,
   istanbulDateKey,
 } from './quota-reset.mjs';
 import {fileURLToPath} from 'node:url';
@@ -9,24 +7,19 @@ import {fileURLToPath} from 'node:url';
 export function shouldRunScheduledRender({eventName, now = new Date(), workflowRuns = []}) {
   if (eventName !== 'schedule') return {shouldRun: true, reason: 'Manuel çalıştırma'};
   const instant = now instanceof Date ? now : new Date(now);
-  if (!isGoogleQuotaResetForIstanbulDay(instant)) {
-    return {shouldRun: false, reason: 'Bu Türkiye gününün Gemini kota yenilenme saati henüz gelmedi'};
-  }
   const today = istanbulDateKey(instant);
-  const quotaReset = googleDailyQuotaResetForIstanbulDate(today);
   const alreadySucceeded = workflowRuns.some((run) =>
     run.event === 'schedule' && run.status === 'completed' && run.conclusion === 'success' &&
-    typeof run.created_at === 'string' && dateKeyInTimezone(run.created_at, 'Europe/Istanbul') === today &&
-    new Date(run.created_at) >= quotaReset
+    typeof run.created_at === 'string' && dateKeyInTimezone(run.created_at, 'Europe/Istanbul') === today
   );
   if (alreadySucceeded) return {shouldRun: false, reason: 'Bugünün zamanlanmış render işi zaten başarıyla tamamlandı'};
-  return {shouldRun: true, reason: 'Kota yenilendi ve bugünün render işi henüz başarıyla tamamlanmadı'};
+  return {shouldRun: true, reason: 'Bugünün render işi henüz başarıyla tamamlanmadı; render başlatılıyor'};
 }
 
 async function main() {
   const eventName = process.env.GITHUB_EVENT_NAME;
   let workflowRuns = [];
-  if (eventName === 'schedule' && isGoogleQuotaResetForIstanbulDay(new Date())) {
+  if (eventName === 'schedule') {
     const repository = process.env.GITHUB_REPOSITORY;
     const token = process.env.GITHUB_TOKEN;
     if (repository && token) {

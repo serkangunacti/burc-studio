@@ -33,7 +33,7 @@ function groupStatus(rows: readonly PublicationRow[]): PublicationStatus {
 export function groupPublications(rows: readonly PublicationRow[]): PublicationGroup[] {
   const groups = new Map<string, PublicationRow[]>();
   for (const row of [...rows].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())) {
-    const key = `${row.postId}:${row.format}`;
+    const key = row.format === 'reels' && row.part > 0 ? `${row.postId}:${row.format}:${row.part}` : `${row.postId}:${row.format}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.values()].map((group) => ({
@@ -46,12 +46,32 @@ export function groupPublications(rows: readonly PublicationRow[]): PublicationG
   }));
 }
 
+const ELEMENT_NAMES: Record<number, string> = {
+  1: 'Ateş Grubu (Koç, Aslan, Yay)',
+  2: 'Toprak Grubu (Boğa, Başak, Oğlak)',
+  3: 'Hava Grubu (İkizler, Terazi, Kova)',
+  4: 'Su Grubu (Yengeç, Akrep, Balık)',
+};
+
+const ELEMENT_SHORT: Record<number, string> = {
+  1: 'Ateş Grubu',
+  2: 'Toprak Grubu',
+  3: 'Hava Grubu',
+  4: 'Su Grubu',
+};
+
 function groupTitle(group: PublicationGroup): string {
+  const part = group.rows[0].part;
+  if (group.format === 'reels' && part > 0 && ELEMENT_NAMES[part]) {
+    return `${ELEMENT_NAMES[part]} · ${FORMAT_NAMES[group.format]}`;
+  }
   const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : `${FORMAT_NAMES[group.format]}${group.rows.length > 1 ? ` (${group.rows.length} video)` : ''}`;
   return `${AUDIENCE_LABELS[group.audience]} ${KIND_LABELS[group.kind]} · ${format}`;
 }
 
-export function groupLabel(group: Pick<PublicationGroup, 'audience' | 'kind' | 'format'>): string {
+export function groupLabel(group: Pick<PublicationGroup, 'audience' | 'kind' | 'format'> & { rows?: PublicationRow[]; part?: number }): string {
+  const part = group.part ?? group.rows?.[0]?.part;
+  if (group.format === 'reels' && part && ELEMENT_SHORT[part]) return `${ELEMENT_SHORT[part]} ${FORMAT_NAMES[group.format]}`;
   return `${AUDIENCE_LABELS[group.audience]} ${KIND_SHORT[group.kind]} ${FORMAT_NAMES[group.format]}`;
 }
 
@@ -69,7 +89,7 @@ export function buildDayMessage(
   rows: readonly PublicationRow[],
   options: { mediaUrl: (id: string) => string; failures?: readonly string[]; testOnly?: boolean },
 ): { html: string; keyboard: InlineKeyboard } {
-  const groups = groupPublications(rows.filter(row=>row.status!=='expired' && row.format!=='carousel' || date<'2026-10-08'));
+  const groups = groupPublications(rows.filter((row) => row.status !== 'expired' && (row.format !== 'carousel' || date < '2026-10-08')));
   const lines = groups.map((group) => {
     const links = groupLinks(group, options.mediaUrl);
     const failed = group.rows.find((row) => row.status === 'failed')?.error;
@@ -80,12 +100,13 @@ export function buildDayMessage(
   });
   const pending = groups.some((group) => group.status === 'ready');
   const hasApproved = groups.some((group) => group.status === 'approved');
-  const automatic = date > '2026-10-08';
-  const footer = options.testOnly ? 'Bu 8 Ekim paketi test amaçlı hazırlandı; hiçbir paylaşım yapılmayacak.' : date === '2026-10-08' && (pending || hasApproved) ? 'Videolar hazır olduğunda bugüne özel /hemen komutuyla paylaşımı onaylayabilirsin.' : automatic && (pending || hasApproved) ? 'Videolar hazır; paylaşımlar sabah planlanan saatlerde otomatik gönderilecek.' : pending
-    ? "Onaylarsan paylaşımlar planlanan saatte gider. Beklemeden göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilirsin."
-    : hasApproved
-      ? "✅ Onaylandı; paylaşımlar saatinde gidecektir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilir veya /hemen yazabilirsin."
-      : '';
+  const footer = options.testOnly
+    ? 'Bu paket test amaçlı hazırlandı; hiçbir paylaşım yapılmayacak.'
+    : pending
+      ? "Onaylarsan paylaşımlar planlanan saatlerde (09:00 - 12:00) otomatik gönderilir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilirsin."
+      : hasApproved
+        ? "✅ Onaylandı; paylaşımlar saatinde gidecektir. Beklemeden anında göndermek için '⚡ Şimdi Paylaş' düğmesine dokunabilir veya /hemen yazabilirsin."
+        : '';
   const failures = options.failures?.length ? [`⚠️ Hazırlanamadı:\n${options.failures.map((failure) => `• ${escapeHtml(failure)}`).join('\n')}`] : [];
   const html = [`<b>🔮 ${formatDateLongTr(date)} · paylaşım planı</b>`, lines.join('\n') || 'Bugün için hazır paylaşım yok.', ...failures, footer]
     .filter(Boolean)
@@ -93,24 +114,25 @@ export function buildDayMessage(
 
   const keyboard: InlineKeyboard = [];
   if (!options.testOnly) {
-    if (pending && !automatic && date !== '2026-10-08') {
+    if (pending) {
       keyboard.push([
         { text: '✅ Hepsini onayla', callback_data: `a:${date}` },
         { text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` },
       ]);
-    } else if (hasApproved && !automatic && date !== '2026-10-08') {
+    } else if (hasApproved) {
       keyboard.push([{ text: '⚡ Şimdi Paylaş', callback_data: `now:${date}` }]);
     }
 
     for (const group of groups) {
       const time = clock(group.rows[0].scheduledAt);
       const code = FORMAT_CODES[group.format];
+      const partSuffix = group.rows[0].part > 0 ? `:${group.rows[0].part}` : '';
       if (group.status === 'ready' || group.status === 'approved') {
-        keyboard.push([{ text: `🚫 ${time} ${groupLabel(group)}`, callback_data: `s:${group.postId}:${code}` }]);
+        keyboard.push([{ text: `🚫 ${time} ${groupLabel(group)}`, callback_data: `s:${group.postId}:${code}${partSuffix}` }]);
       } else if (group.status === 'failed') {
-        keyboard.push([{ text: `🔁 ${time} ${groupLabel(group)} yeniden dene`, callback_data: `y:${group.postId}:${code}` }]);
+        keyboard.push([{ text: `🔁 ${time} ${groupLabel(group)} yeniden dene`, callback_data: `y:${group.postId}:${code}${partSuffix}` }]);
       } else if (group.status === 'skipped') {
-        keyboard.push([{ text: `↩️ ${time} ${groupLabel(group)} geri al`, callback_data: `u:${group.postId}:${code}` }]);
+        keyboard.push([{ text: `↩️ ${time} ${groupLabel(group)} geri al`, callback_data: `u:${group.postId}:${code}${partSuffix}` }]);
       }
     }
   }
@@ -119,15 +141,16 @@ export function buildDayMessage(
 
 export type DayAction =
   | { action: 'approve' | 'publish_now'; date: DateKey }
-  | { action: 'skip' | 'undo' | 'retry'; postId: string; format: PublicationFormat };
+  | { action: 'skip' | 'undo' | 'retry'; postId: string; format: PublicationFormat; part?: number };
 const GROUP_ACTIONS = { s: 'skip', u: 'undo', y: 'retry' } as const;
 
 export function parseDayAction(data: string | undefined): DayAction | null {
-  const [action, target, code] = (data ?? '').split(':');
+  const [action, target, code, partStr] = (data ?? '').split(':');
   if (action === 'a' && isDateKey(target)) return { action: 'approve', date: target };
   if (action === 'now' && isDateKey(target)) return { action: 'publish_now', date: target };
   const format = (Object.keys(FORMAT_CODES) as PublicationFormat[]).find((candidate) => FORMAT_CODES[candidate] === code) ?? null;
   const groupAction = GROUP_ACTIONS[action as keyof typeof GROUP_ACTIONS];
-  if (groupAction && format && /^[0-9a-f-]{36}$/.test(target ?? '')) return { action: groupAction, postId: target, format };
+  const part = partStr !== undefined && !Number.isNaN(Number(partStr)) ? Number(partStr) : undefined;
+  if (groupAction && format && /^[0-9a-f-]{36}$/.test(target ?? '')) return { action: groupAction, postId: target, format, ...(part !== undefined ? { part } : {}) };
   return null;
 }

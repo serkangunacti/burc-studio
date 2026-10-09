@@ -101,14 +101,14 @@ const TOKEN_REFRESH_WINDOW_MS = 20 * DAY_MS;
 const INSTAGRAM_TOKEN_LIFETIME_MS = 60 * DAY_MS;
 
 export const IMMEDIATE_APPROVAL_DATE = '2026-10-08';
-export function immediatePublishAllowed(date: DateKey, now: Date): boolean {
-  return date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(now) === IMMEDIATE_APPROVAL_DATE;
+export function immediatePublishAllowed(_date: DateKey, _now: Date): boolean {
+  return true;
 }
 
 export function videoSafetyError(row: PublicationRow): string | null {
   if (row.format === 'carousel') return 'Kart/carousel paylaşımı kapalı.';
   if (!row.media.videoUrl) return 'Video dosyası eksik.';
-  if (row.part !== 0 || (row.media.partCount !== undefined && row.media.partCount !== 1)) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.';
+  if (row.media.partCount !== undefined && row.media.partCount !== 1) return 'Video tek parça halinde hazırlanmadı; paylaşım engellendi.';
   const duration = row.media.durationSeconds;
   if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > MAX_REELS_MP4_SECONDS) {
     return 'Video süresi doğrulanmadı veya 178,9 saniyelik güvenli Shorts sınırını aşıyor; paylaşım engellendi.';
@@ -129,32 +129,21 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
     const error = videoSafetyError(row);
     if (error) return error;
     if (!['ready', 'approved', 'publishing', 'published'].includes(row.status)) return 'Günün bütün videoları hazır değil.';
-    const count = row.media.partCount;
-    const group = rows.filter((item) => item.postId === row.postId && item.format === row.format);
-    if (!Number.isInteger(count) || !count || group.length !== count || !Array.from({ length: count }, (_, part) => part).every((part) => group.some((item) => item.part === part))) {
+    const count = row.media.partCount ?? 1;
+    const group = rows.filter((item) => item.postId === row.postId && item.format === row.format && (row.part > 0 ? item.part === row.part : item.part === 0));
+    if (!Number.isInteger(count) || !count || group.length !== count || !Array.from({ length: count }, (_, part) => part).every((part) => group.some((item) => item.part === (row.part > 0 ? row.part : part)))) {
       return 'Video parçaları eksik; günün tamamı hazırlanana kadar paylaşım bekliyor.';
     }
   }
   return null;
 }
 
-// Only complete, duration-verified days are approved automatically after the exceptional manual day.
+// Sabah render bittiğinde günün planı Telegram'a onay için gönderilir; kullanıcı onaylamadan paylaşım başlamaz.
 export async function completeReadyDay(deps: AutomationDeps, date: DateKey, failures: readonly string[] = []) {
   const error = failures.length ? failures.join('; ') : await dayReadinessError(deps, date);
   if (error) {
     await notify(deps, `⚠️ Videolar henüz paylaşım için hazır değil.\n${escapeHtml(error)}`);
     return { sent: false, reason: error };
-  }
-  if (date > IMMEDIATE_APPROVAL_DATE) {
-    const { automation } = await getSettings(deps.db);
-    if (!automation.enabled || automationStartReason(automation.startDate, date, deps.now())) return { sent: false, reason: 'Otomatik paylaşım kapalı veya başlangıcı bekleniyor.' };
-    const readyRows = (await listPublications(deps.db, date)).filter((row) => row.status === 'ready');
-    for (const [index,row] of reanchorOverdueSlots(readyRows, deps.now()).entries()) {
-      if (row.scheduledAt.getTime() === readyRows[index].scheduledAt.getTime()) continue;
-      await deps.db.update(publicationsTable).set({scheduledAt: row.scheduledAt, updatedAt: deps.now()}).where(and(eq(publicationsTable.id, row.id), eq(publicationsTable.status, 'ready')));
-    }
-    const approved = await approveDay(deps.db, date, deps.now());
-    await enqueueRows(deps, approved);
   }
   return sendDayPlan(deps, date, failures);
 }
@@ -234,9 +223,8 @@ export async function sendDayPlan(deps: AutomationDeps, date: DateKey, failures:
   if (covers.length >= 2) {
     await telegram.client.sendPhotos(telegram.chatId, covers).catch((error: unknown) => console.error('Önizleme albümü gönderilemedi', error));
   }
-  const testOnly = date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(deps.now()) > date;
-  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl, failures, testOnly });
-  const message = await telegram.client.sendMessage(telegram.chatId, testOnly ? html : date === IMMEDIATE_APPROVAL_DATE ? `${html}\n\nBugüne özel: tüm videolar hazır olduğunda /hemen komutuyla paylaşımı başlatabilirsin.` : html, testOnly || date === IMMEDIATE_APPROVAL_DATE ? {} : { keyboard });
+  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl, failures, testOnly: false });
+  const message = await telegram.client.sendMessage(telegram.chatId, html, { keyboard });
   if (rows.length > 0) await setTelegramMessageId(deps.db, date, message.message_id);
   return { sent: true };
 }
@@ -246,8 +234,7 @@ async function refreshDayMessage(deps: AutomationDeps, date: DateKey, messageId?
   const rows = await listPublications(deps.db, date);
   const target = messageId ?? rows.find((row) => row.telegramMessageId)?.telegramMessageId;
   if (!telegram?.chatId || !target) return;
-  const testOnly = date === IMMEDIATE_APPROVAL_DATE && istanbulDateKey(deps.now()) > date;
-  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl: mediaUrlFor(deps.appUrl), testOnly });
+  const { html, keyboard } = buildDayMessage(date, rows, { mediaUrl: mediaUrlFor(deps.appUrl), testOnly: false });
   await telegram.client.editMessage(telegram.chatId, target, html, keyboard).catch((error: unknown) => {
     // Aynı içerikle düzenleme Telegram'da hata sayılır; yok sayılır.
     if (!(error instanceof TelegramError && error.message.includes('not modified'))) console.error('Plan mesajı güncellenemedi', error);
@@ -319,10 +306,6 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     if (command === '/hemen') {
       try {
         const today = istanbulDateKey(deps.now());
-        if (!immediatePublishAllowed(today, deps.now())) {
-          await client.sendMessage(from, '/hemen yalnız 8 Ekim 2026 için geçerliydi. İçerik 10:00’da hazırlanır; videolar 10:01’den sonra çizilir ve günün tamamı hazır olunca mevcut yayın sırasıyla paylaşılır.');
-          return;
-        }
         const result = await publishDayNow(deps, today);
         if (result.published === 0) {
           await client.sendMessage(from, 'Paylaşılacak hazır veya onaylı gönderi bulunamadı.');
@@ -375,8 +358,35 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     await client.answerCallback(query.id, paused ?? 'Otomatik paylaşım kapalı.');
     return;
   }
-  if (action.action === 'publish_now' || action.action === 'approve') {
-    await client.answerCallback(query.id, 'Bugün /hemen komutunu kullan. Sonraki günler planlanan saatlerde otomatik paylaşılır.');
+  if (action.action === 'approve') {
+    const readyRows = (await listPublications(deps.db, targetDate)).filter((row) => row.status === 'ready');
+    for (const [index, row] of reanchorOverdueSlots(readyRows, now).entries()) {
+      if (row.scheduledAt.getTime() === readyRows[index].scheduledAt.getTime()) continue;
+      await deps.db.update(publicationsTable).set({ scheduledAt: row.scheduledAt, updatedAt: now }).where(and(eq(publicationsTable.id, row.id), eq(publicationsTable.status, 'ready')));
+    }
+    const approved = await approveDay(deps.db, targetDate, now);
+    await enqueueRows(deps, approved);
+    const summary = approvalSummary(approved, now);
+    await client.answerCallback(query.id, `✅ ${approved.length} paylaşım onaylandı.`);
+    await client.sendMessage(chatId, summary);
+    if (query.message?.message_id) await refreshDayMessage(deps, targetDate, query.message.message_id);
+    return;
+  }
+  if (action.action === 'publish_now') {
+    try {
+      const result = await publishDayNow(deps, targetDate);
+      await client.answerCallback(query.id, `🚀 ${result.published} paylaşım tetiklendi.`);
+      const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
+      await client.sendMessage(
+        chatId,
+        `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
+      );
+      if (query.message?.message_id) await refreshDayMessage(deps, targetDate, query.message.message_id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await client.answerCallback(query.id, `Hata: ${msg.slice(0, 100)}`);
+      await client.sendMessage(chatId, `❌ Hemen paylaşım başlatılamadı: <i>${escapeHtml(msg)}</i>`);
+    }
     return;
   }
   if (action.action === 'retry') {
@@ -558,8 +568,7 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   if (!current) return 'ignored';
   const safetyError = videoSafetyError(current);
   if (safetyError) { await markFailed(deps.db, id, safetyError); return 'failed'; }
-  if (current.date === IMMEDIATE_APPROVAL_DATE && current.media.immediateApprovalDate !== IMMEDIATE_APPROVAL_DATE) return 'ignored';
-  if (current.date > IMMEDIATE_APPROVAL_DATE && now < istanbulInstant(current.date, '08:30')) {
+  if (now < istanbulInstant(current.date, '08:30')) {
     throw new RetryLater(Math.ceil((istanbulInstant(current.date, '08:30').getTime() - now.getTime()) / 1000), '08:30 paylaşım başlangıcı bekleniyor');
   }
   const { automation } = await getSettings(deps.db);
@@ -851,7 +860,6 @@ export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Pr
     try {
       const safetyError = videoSafetyError(row);
       if (safetyError) throw new Error(safetyError);
-      if (date === IMMEDIATE_APPROVAL_DATE && row.media.immediateApprovalDate !== date) throw new Error('Telegram /hemen onayı bekleniyor.');
       const buffer = await loadBuffer(deps, 'youtube');
       let remoteId = row.media.youtubeRemoteId;
       if (!remoteId) {
@@ -888,7 +896,6 @@ export type PublishNowResult = { id: string; label: string; outcome: PublishOutc
 // Günün hazır ya da onaylanmış paylaşımlarını beklemeden hemen şimdi yayınlar.
 export async function publishDayNow(deps: AutomationDeps, date: DateKey): Promise<{ published: number; triggered: number; errors: string[] }> {
   const now = deps.now();
-  if (!immediatePublishAllowed(date, now)) throw new Error('/hemen yalnız 8 Ekim 2026 için kullanılabilir.');
   const readinessError = await dayReadinessError(deps, date);
   if (readinessError) throw new Error(readinessError);
   const { automation } = await getSettings(deps.db);
