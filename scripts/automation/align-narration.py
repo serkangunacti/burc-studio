@@ -145,7 +145,8 @@ def main():
     minimum_scene_gap_seconds = request["minimumSceneGapSeconds"]
     model = stable_whisper.load_model("small", device="cpu")
     failure = None
-    for attempt, options in enumerate([{"token_step": 100}, {"token_step": 400, "nonspeech_skip": None}], start=1):
+    # The wider token window also passed the real male-tarot regression.
+    for attempt, options in enumerate([{"token_step": 400, "nonspeech_skip": None}, {"token_step": 100}], start=1):
         result = model.align(audio, "\n".join(scenes), language="tr", original_split=True, verbose=None, remove_instant_words=False, **options)
         try:
             if result is None:
