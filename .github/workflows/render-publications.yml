@@ -38,7 +38,16 @@ jobs:
           test_manifest=pathlib.Path("/tmp/raw-manifest.json")
           test_manifest.write_text(json.dumps(request))
           output=pathlib.Path("/tmp/raw-aligned.json")
-          subprocess.run(["python3","scripts/automation/align-narration.py",str(raw),str(test_manifest),str(output)],check=True)
+          import importlib.util, sys
+          spec=importlib.util.spec_from_file_location("align_diagnostic","scripts/automation/align-narration.py")
+          module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+          original=module.scene_starts
+          def inspect(segments,scenes,duration_seconds,minimum_scene_gap_seconds):
+              print(json.dumps({"duration":duration_seconds,"gap":minimum_scene_gap_seconds,"boundaries":[{"scene":i,"words":len(s["words"]),"first":[{"word":w["word"],"start":w["start"],"end":w["end"]} for w in s["words"][:8]],"last":[{"word":w["word"],"start":w["start"],"end":w["end"]} for w in s["words"][-2:]]} for i,s in enumerate(segments)]},ensure_ascii=False),flush=True)
+              return original(segments,scenes,duration_seconds,minimum_scene_gap_seconds)
+          module.scene_starts=inspect
+          sys.argv=["align-narration.py",str(raw),str(test_manifest),str(output)]
+          module.main()
           starts=json.loads(output.read_text())["sceneStarts"]
           scaled=[x*duration(fitted)/duration(raw) for x in starts]
           assert len(scaled)==14 and scaled[0]==0 and all(b-a>=1 for a,b in zip(scaled,scaled[1:]))
