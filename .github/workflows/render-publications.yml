@@ -43,16 +43,17 @@ jobs:
           spec=importlib.util.spec_from_file_location("alignment","scripts/automation/align-narration.py")
           module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
           model=stable_whisper.load_model("small",device="cpu")
-          for index,(a,b) in enumerate([(140,185),(265,309.2)]):
+          print(json.dumps({"originalLastScenes":request["scenes"][10:]},ensure_ascii=False),flush=True)
+          for index,(a,b) in enumerate([(250,309.2)]):
               fragment=f"/tmp/fragment-{index}.wav"
               subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-ss",str(a),"-to",str(b),"-i",str(raw),fragment],check=True)
               transcript=model.transcribe(fragment,language="tr",verbose=None,word_timestamps=False)
               print(json.dumps({"fragment":index,"start":a,"end":b,"transcription":transcript.text},ensure_ascii=False),flush=True)
           result=model.align(str(raw),"\n".join(request["scenes"]),language="tr",original_split=True,verbose=None,remove_instant_words=False,token_step=400,nonspeech_skip=None,fast_mode=True)
           segments=module.rebuild_scene_segments(result.to_dict()["segments"],request["scenes"])
-          print(json.dumps({"fastModeAnchors":[{"scene":i,"start":s["words"][0]["start"],"end":s["words"][-1]["end"],"positiveWords":sum(w["end"]>w["start"] for w in s["words"]),"words":len(s["words"])} for i,s in enumerate(segments)]}),flush=True)
+          print(json.dumps({"fastModeAnchors":[{"scene":i,"start":float(s["words"][0]["start"]),"end":float(s["words"][-1]["end"]),"positiveWords":int(sum(w["end"]>w["start"] for w in s["words"])),"words":len(s["words"])} for i,s in enumerate(segments)]}),flush=True)
           starts=module.scene_starts(segments,request["scenes"],request["durationSeconds"],request["minimumSceneGapSeconds"])
-          output.write_text(json.dumps({"sceneStarts":starts}))
+          output.write_text(json.dumps({"sceneStarts":[float(x) for x in starts]}))
           starts=json.loads(output.read_text())["sceneStarts"]
           scaled=[x*duration(fitted)/duration(raw) for x in starts]
           assert len(scaled)==14 and scaled[0]==0 and all(b-a>=1 for a,b in zip(scaled,scaled[1:]))
