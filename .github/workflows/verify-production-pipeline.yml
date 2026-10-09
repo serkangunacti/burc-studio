@@ -16,6 +16,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Üretim kurallarını test et
         run: |
           npx vitest run scripts/automation/google-tts.test.ts scripts/automation/full-narration.test.ts scripts/automation/remotion.test.ts scripts/automation/video-duration.test.ts scripts/automation/quota-reset.test.ts scripts/automation/schedule-preflight.test.ts src/remotion/voice.test.ts src/lib/automation/render-job.test.ts src/lib/automation/publishing-policy.test.ts src/lib/content/daily-package.test.ts src/lib/automation/plan.test.ts --maxWorkers=2

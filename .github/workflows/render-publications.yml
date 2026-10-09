@@ -33,7 +33,7 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
       - name: Kota yenilenmesini ve bugünkü başarılı işi önceden kontrol et

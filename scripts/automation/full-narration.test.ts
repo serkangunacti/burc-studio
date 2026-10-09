@@ -17,7 +17,7 @@ describe('tek video, tam ses ve önbellekte zamanlama',()=>{
     const bodies=Array.from({length:12},(_,i)=>`Yorum ${i+1}: ${'Bu cümle tam okunacak ve hiçbir bölümü atlanmayacak. '.repeat(4)}Son cümle ${i+1}.`);
     reels.signs=reels.signs.map((sign,i)=>({...sign,body:bodies[i]}));
     const dir=await work();const audio=createWavFromPcm(Buffer.alloc(20*48000));const raw=path.join(dir,'raw.wav');await writeFile(raw,audio);
-    const speak=vi.fn(async()=>({data:audio,path:raw,durationSeconds:20,cached:false}));
+    const speak=vi.fn(async(_text:string)=>({data:audio,path:raw,durationSeconds:20,cached:false}));
     await createFullNarration(reels,{narrator:{speak},cacheDir:dir,align:async()=>Array.from({length:14},(_,i)=>i*1.4)});
     expect(speak).toHaveBeenCalledTimes(1);
     for(const body of bodies)expect(speak.mock.calls[0][0]).toContain(body);
