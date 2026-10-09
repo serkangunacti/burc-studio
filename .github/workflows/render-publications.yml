@@ -1,120 +1,46 @@
-name: Paylaşımları hazırla
-
-# Her sabah yalnız Reels/video hazırlar; paylaşım onayı ve otomatik plan uygulamada denetlenir.
-on:
-  schedule:
-    # 10:01 TSİ başlangıç; yedekler 11:10, 11:40 ve 13:10 TSİ.
-    # Preflight, Gemini kota sıfırlanmadan önceki ve aynı gün başarıyla tamamlanmış yedek işleri atlar.
-    - cron: '1 7 * * *'
-    - cron: '10 8 * * *'
-    - cron: '40 8 * * *'
-    - cron: '10 10 * * *'
-  workflow_dispatch:
-    inputs:
-      date:
-        description: 'Tarih (YYYY-AA-GG, boşsa bugün)'
-        required: false
-      force:
-        description: 'Onaylanmamış hazır paylaşımları yeniden çiz'
-        type: boolean
-        default: false
-      only:
-        description: 'Yalnız bu gönderiyi çiz (ör: horoscope-kadin, boşsa tümü)'
-        required: false
-
-concurrency:
-  group: render-publications
-  cancel-in-progress: false
-
+name: Ham ses eşleştirmesi doğrulaması
+on: workflow_dispatch
 permissions:
-  actions: read
   contents: read
-
 jobs:
-  render:
+  verify:
     runs-on: ubuntu-24.04
-    # Tam metinli 178,9 saniyelik altı pazartesi videosu için kurulum dahil pay.
-    timeout-minutes: 180
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - name: Kota yenilenmesini ve bugünkü başarılı işi önceden kontrol et
-        id: schedule-check
-        if: github.event_name == 'schedule'
-        run: node scripts/automation/schedule-preflight.mjs
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - uses: actions/setup-node@v5
-        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
-      - name: Başlangıç tarihini kontrol et
-        id: start-window
-        if: github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true'
-        run: node --import tsx scripts/check-automation-start.ts
-        env:
-          RENDER_DATE: ${{ inputs.date }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      - name: Tamamlanmış ve bekleyen konuşmaları geri yükle
-        uses: actions/cache/restore@v4
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
+      - uses: actions/cache/restore@v4
         with:
           path: .cache/voice
-          key: voice-v4-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            voice-v4-${{ steps.start-window.outputs.date }}-
-      # Açıklama ve kancalardaki emojiler için renkli emoji yazı tipi.
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji ffmpeg && ffprobe -version
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
+          key: voice-v4-2026-10-09-37923586596-1
       - uses: actions/setup-python@v5
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
         with:
-          python-version: '3.11'
-      - name: Konuşma zamanlaması araçlarını yalnız Actions üzerine kur
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-        run: |
-          python3 -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-          python3 -m pip install stable-ts==2.19.1
-      - uses: actions/cache@v4
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: python3 -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: python3 -m pip install stable-ts==2.19.1
+      - uses: actions/cache/restore@v4
         with:
           path: ~/.cache/whisper
           key: whisper-small-tr-v1
-      - name: Ses ve süre kontrollerini doğrula
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
+      - name: Aynı tam ham ses üzerinde sahneleri doğrula
         run: |
-          npx vitest run scripts/automation/google-tts.test.ts scripts/automation/full-narration.test.ts scripts/automation/remotion.test.ts scripts/automation/video-duration.test.ts scripts/automation/quota-reset.test.ts scripts/automation/schedule-preflight.test.ts src/remotion/voice.test.ts src/lib/automation/render-job.test.ts src/lib/automation/publishing-policy.test.ts src/lib/content/daily-package.test.ts src/lib/automation/plan.test.ts --maxWorkers=2
-          python3 scripts/automation/align-narration.test.py
-      - uses: actions/cache@v4
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-      - run: npx remotion browser ensure
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-      - name: Videoları hazırla ve Telegram’a bildir
-        if: (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-        run: node --import tsx scripts/render-publications.ts
-        env:
-          RENDER_DATE: ${{ inputs.date }}
-          RENDER_FORCE: ${{ inputs.force }}
-          RENDER_ONLY: ${{ inputs.only }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          SERKANSES_VOICE_ASSET: ${{ secrets.SERKANSES_VOICE_ASSET }}
-          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
-          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
-          GOOGLE_TTS_API_KEY_3: ${{ secrets.GOOGLE_TTS_API_KEY_3 }}
-          VOICE_CACHE_DIR: .cache/voice
-          AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
-          APP_URL: https://burc-studio.vercel.app
-      - name: Konuşmaları hata durumunda da sakla
-        uses: actions/cache/save@v4
-        if: always() && (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'
-        with:
-          path: .cache/voice
-          key: voice-v4-${{ steps.start-window.outputs.date }}-${{ github.run_id }}-${{ github.run_attempt }}
+          python3 - <<'PY'
+          import json, wave, pathlib, subprocess
+          root=pathlib.Path(".cache/voice")
+          def duration(p):
+              with wave.open(str(p)) as w: return w.getnframes()/w.getframerate()
+          raw=next(p for p in root.glob("*.wav") if abs(duration(p)-309.2)<.02)
+          fitted=root/"12085e8642275277a63f0c2aa041d23512958287c78b2491cddd9d5c02cc127b-tempo.wav"
+          manifest=root/"aa107e834eafcb1f347151b7f0f75910329cd02f439b10143e12a2b64697dd3b-timing.json.manifest.json"
+          request=json.loads(manifest.read_text())
+          request["durationSeconds"]=duration(raw)
+          request["minimumSceneGapSeconds"]*=duration(raw)/duration(fitted)
+          test_manifest=pathlib.Path("/tmp/raw-manifest.json")
+          test_manifest.write_text(json.dumps(request))
+          output=pathlib.Path("/tmp/raw-aligned.json")
+          subprocess.run(["python3","scripts/automation/align-narration.py",str(raw),str(test_manifest),str(output)],check=True)
+          starts=json.loads(output.read_text())["sceneStarts"]
+          scaled=[x*duration(fitted)/duration(raw) for x in starts]
+          assert len(scaled)==14 and scaled[0]==0 and all(b-a>=1 for a,b in zip(scaled,scaled[1:]))
+          print(json.dumps({"rawDuration":duration(raw),"finalDuration":duration(fitted),"sceneStarts":scaled,"scenes":14}))
+          PY
