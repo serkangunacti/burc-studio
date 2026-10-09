@@ -41,16 +41,32 @@ export function narrationText(sign: {
     return text;
   }
 
-  const text = `${sign.signName}. ${short}`.normalize('NFC');
-  if ([...text].length > 300) throw new Error(`${sign.signName}: ses metni 300 karakteri aşıyor; metin kesilmedi`);
-  return text;
+  const parts: string[] = [`Sevgili ${sign.signName} burçları;`];
+  if (sign.headline) {
+    parts.push(`${sign.headline.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim()}.`);
+  }
+  parts.push(short);
+  if (sign.luckyNumber && sign.luckyColor) {
+    parts.push(`Şanslı sayınız ${sign.luckyNumber}, uğurlu renginiz ${sign.luckyColor.name}!`);
+  }
+  return parts.join(' ').normalize('NFC');
 }
 
-export function introNarrationText(_reels?: { audience?: string; dateLabel?: string; hook?: string }): string {
+export function introNarrationText(reels?: { audience?: string; dateLabel?: string; hook?: string; element?: string }): string {
+  if (reels?.element) {
+    const el = reels.element.toLowerCase();
+    if (el === 'ates') return 'Ateş grubu burçları; Koç, Aslan ve Yay! Günün enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
+    if (el === 'toprak') return 'Toprak grubu burçları; Boğa, Başak ve Oğlak! Günün kararlı enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
+    if (el === 'hava') return 'Hava grubu burçları; İkizler, Terazi ve Kova! Günün hareketli enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
+    if (el === 'su') return 'Su grubu burçları; Yengeç, Akrep ve Balık! Günün sezgisel enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
+  }
   return 'Canlarım ciğerlerim, günün enerjilerine hazır mısınız? Yıldızlar bakalım bugün bize neler fısıldıyor...';
 }
 
-export function outroNarrationText(): string {
+export function outroNarrationText(reels?: { audience?: string; element?: string }): string {
+  if (reels?.element) {
+    return 'Günün element yorumları böyleydi. Burcunu veya yükselenini dinlemesini istediğin arkadaşınla paylaşmayı ve takip etmeyi unutma!';
+  }
   return 'Yarın yepyeni yorumlarla yine buradayız canlarım, kendinize çok iyi bakın! Takip etmeyi unutmayın!';
 }
 
@@ -99,6 +115,7 @@ export function createGoogleNarrator(options: {
   apiKeys?: string[];
   cacheDir?: string;
   audience?: 'kadin' | 'erkek';
+  voiceName?: string;
   fetchImpl?: typeof fetch;
   now?: () => Date;
   log?: (message: string) => void;
@@ -112,11 +129,13 @@ export function createGoogleNarrator(options: {
   const hash = (value: string) => createHash('sha256').update(value).digest('hex');
   const sanitize = (value: string) => apiKeys.reduce((s,key)=>s.replaceAll(key,'[gizli]'),value);
 
+  const voiceName = options.voiceName ?? (options.audience === 'erkek' ? 'Fenrir' : 'Aoede');
+
   return {
     async speak(rawText: string, opts?: { force?: boolean }): Promise<NarrationClip> {
       const text = rawText.trim().normalize('NFC');
       if (!text || [...text].length > 20_000) throw new Error('Ses metni 1–20000 karakter olmalı; metin kesilmedi');
-      const key = hash(JSON.stringify({text,model:GEMINI_TTS_MODEL,engine:'gemini-full-tts-v3'}));
+      const key = hash(JSON.stringify({text,model:GEMINI_TTS_MODEL,voiceName,engine:'gemini-full-tts-v4-natural'}));
       await mkdir(cacheDir, {recursive:true});
       const audioPath = path.join(cacheDir, `${key}.wav`);
       if (!opts?.force) {
@@ -128,8 +147,19 @@ export function createGoogleNarrator(options: {
         }
       }
       if (!apiKeys.length) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
-      // Identical model and voice configuration on every key; preserve the existing default voice.
-      const payload = {contents:[{role:'user',parts:[{text}]}],generationConfig:{responseModalities:['AUDIO']}};
+      const payload = {
+        contents: [{ role: 'user', parts: [{ text }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName,
+              },
+            },
+          },
+        },
+      };
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent`;
       let response: Response | undefined;
       let lastError = new Error('Google Gemini TTS anahtarlarının kotası henüz açılmadı');

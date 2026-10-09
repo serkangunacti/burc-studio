@@ -10,7 +10,13 @@ import { openMusicRenderer } from './automation/music';
 import { openRemotionRenderers } from './automation/remotion';
 import { createGoogleNarrator } from './automation/google-tts';
 import { createFullNarration } from './automation/full-narration';
-import {isGoogleQuotaResetForIstanbulDay} from './automation/quota-reset.mjs';
+import { isGoogleQuotaResetForIstanbulDay } from './automation/quota-reset.mjs';
+import { getCurrentPostsForDate } from '../src/lib/content/repository';
+import { getPostDetail } from '../src/lib/posts/repository';
+import { brandFromSettings } from '../src/lib/posts/slide-props';
+import { buildReelsProps } from '../src/lib/posts/reels-props';
+import { musicSeed } from '../src/lib/music/compose';
+import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
 
 // GitHub Actions'ta kota sıfırlanmasından sonra yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
 const { values } = parseArgs({
@@ -86,10 +92,16 @@ async function main() {
 
   const music = await openMusicRenderer();
   const cacheDir = process.env.VOICE_CACHE_DIR || '.cache/voice';
-  const narrator = createGoogleNarrator({cacheDir, log});
   const renderers = await openRemotionRenderers({
     music,
-    narrateFull: (reels) => createFullNarration(reels,{narrator,cacheDir}),
+    narrateFull: (reels) => {
+      const narrator = createGoogleNarrator({
+        cacheDir,
+        log,
+        audience: reels.audience as 'kadin' | 'erkek',
+      });
+      return createFullNarration(reels, { narrator, cacheDir });
+    },
     log,
     upload: async (name, file) => {
       const blob = await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true });
@@ -103,6 +115,65 @@ async function main() {
       force: values.force || process.env.RENDER_FORCE === 'true',
       only: values.only || process.env.RENDER_ONLY,
     });
+    // Element Reels (Ateş, Toprak, Hava, Su) Üretimi (Seçenek C)
+    const shouldRenderElements = !values.only || values.only.startsWith('element');
+    if (shouldRenderElements) {
+      log('--- Element Reels (Ateş, Toprak, Hava, Su) Hazırlanıyor ---');
+      const posts = await getCurrentPostsForDate(db, date);
+      const horoscopePost = posts.find((p) => p.kind === 'horoscope');
+      if (horoscopePost) {
+        const detail = await getPostDetail(db, horoscopePost.id);
+        if (detail) {
+          const settings = await getSettings(db);
+          const brand = brandFromSettings(settings);
+          const baseReels = buildReelsProps(detail, brand);
+          const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
+
+          const elements = [
+            { key: 'ates', name: 'Ateş Grubu', hook: 'Ateş Grubu Bugün Neler Bekliyor? (Koç, Aslan, Yay) 🔥', signs: ['koc', 'aslan', 'yay'] as const },
+            { key: 'toprak', name: 'Toprak Grubu', hook: 'Toprak Grubu Bugün Neler Bekliyor? (Boğa, Başak, Oğlak) 🌿', signs: ['boga', 'basak', 'oglak'] as const },
+            { key: 'hava', name: 'Hava Grubu', hook: 'Hava Grubu Bugün Neler Bekliyor? (İkizler, Terazi, Kova) 💨', signs: ['ikizler', 'terazi', 'kova'] as const },
+            { key: 'su', name: 'Su Grubu', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
+          ];
+
+          for (const el of elements) {
+            if (values.only && values.only !== `element-${el.key}`) continue;
+            const elementSigns = el.signs.map((slug) => {
+              const signData = baseReels.signs.find((s) => s.sign === slug);
+              const reading = readingBySign.get(slug);
+              return {
+                ...(signData || {}),
+                body: reading?.body ?? signData?.short,
+              } as ReelsSign;
+            }).filter(Boolean);
+
+            const elementReels: ReelsProps = {
+              ...baseReels,
+              element: el.key,
+              hook: el.hook,
+              signs: elementSigns,
+            };
+
+            try {
+              log(`Element Reels hazırlanıyor: ${el.name} (${date}-element-${el.key})`);
+              const videoUrl = await renderers.renderReels({
+                templateVersion: horoscopePost.templateVersion,
+                reels: elementReels,
+                musicSeed: musicSeed(elementReels),
+                name: `${date}-element-${el.key}`,
+              });
+              const url = typeof videoUrl === 'string' ? videoUrl : videoUrl.videoUrl;
+              log(`ELEMENT REELS HAZIR [${el.name}]: ${url}`);
+              result.rendered.push(`element-${el.key}`);
+            } catch (err) {
+              log(`HATA Element Reels [${el.name}]: ${err instanceof Error ? err.message : String(err)}`);
+              result.failures.push(`element-${el.key}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        }
+      }
+    }
+
     log(`Çizilen: ${result.rendered.length}, korunan: ${result.kept.length}, hata: ${result.failures.length}`);
     for (const failure of result.failures) log(`HATA ${failure}`);
     const failures = [...missing.map((item) => `${item}: gönderi üretilmedi`), ...result.failures];

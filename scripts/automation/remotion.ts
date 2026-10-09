@@ -54,7 +54,7 @@ export async function openRemotionRenderers(input: {
       if (!['pastel@2', 'pastel-tarot@2', 'pastel-weekly@2'].includes(templateVersion)) {
         throw new Error('Bu eski şablon tam konuşma zamanlamasını desteklemiyor');
       }
-      input.log(`${name}: giriş, 12 yorum ve kapanış tek TTS isteğiyle seslendiriliyor`);
+      input.log(`${name}: giriş, ${reels.signs.length} yorum ve kapanış tek TTS isteğiyle seslendiriliyor`);
       const narration = await input.narrateFull(reels);
       const voiceFile = `voice-${name}-full.wav`;
       await writeFile(path.join(serveUrl, 'public', voiceFile), narration.data);

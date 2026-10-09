@@ -29,8 +29,8 @@ export function availableProviders(env: Env): ProviderSpec[] {
   }
   if (env.GOOGLE_GENERATIVE_AI_API_KEY) {
     const google = createGoogle({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY });
-    specs.push({ id: 'gemini', label: 'Gemini API', model: env.GEMINI_MODEL ?? 'gemini-3.5-flash', dailyCap: 18, factory: (id) => google(id) });
-    specs.push({ id: 'gemini-lite', label: 'Gemini API (Lite)', model: env.GEMINI_LITE_MODEL ?? 'gemini-3.5-flash-lite', dailyCap: 450, factory: (id) => google(id) });
+    specs.push({ id: 'gemini', label: 'Gemini API', model: env.GEMINI_MODEL ?? 'gemini-flash-latest', dailyCap: 2000, factory: (id) => google(id) });
+    specs.push({ id: 'gemini-lite', label: 'Gemini API (Lite)', model: env.GEMINI_LITE_MODEL ?? 'gemini-flash-lite-latest', dailyCap: 2000, factory: (id) => google(id) });
   }
   if (env.OLLAMA_API_KEY) {
     specs.push({ id: 'ollama-cloud', label: 'Ollama Cloud', model: env.OLLAMA_CLOUD_MODEL ?? 'gemma4:31b', dailyCap: 100, factory: openAICompatible('ollama-cloud', 'https://ollama.com/v1', env.OLLAMA_API_KEY) });

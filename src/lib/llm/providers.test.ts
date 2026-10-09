@@ -11,8 +11,8 @@ describe('availableProviders', () => {
   it('anahtarı olanları varsayılan sıra, model ve tavanlarla döner', () => {
     expect(availableProviders(ENV).map(({ id, model, dailyCap }) => ({ id, model, dailyCap }))).toEqual([
       { id: 'gateway', model: 'google/gemini-2.5-flash', dailyCap: 300 },
-      { id: 'gemini', model: 'gemini-3.5-flash', dailyCap: 18 },
-      { id: 'gemini-lite', model: 'gemini-3.5-flash-lite', dailyCap: 450 },
+      { id: 'gemini', model: 'gemini-flash-latest', dailyCap: 2000 },
+      { id: 'gemini-lite', model: 'gemini-flash-lite-latest', dailyCap: 2000 },
       { id: 'ollama-cloud', model: 'gemma4:31b', dailyCap: 100 },
     ]);
   });
@@ -26,8 +26,8 @@ describe('availableProviders', () => {
   it("OpenRouter iki ücretsiz modelle, Gemini'nin ardından ve günlük 50 isteklik ortak kotayı bölüşerek eklenir", () => {
     const env = { GOOGLE_GENERATIVE_AI_API_KEY: 'g', OPENROUTER_API_KEY: 'r', OPENROUTER_MODEL: 'a:free', OPENROUTER_MODEL_2: 'b:free' };
     expect(availableProviders(env).map(({ id, model, dailyCap }) => ({ id, model, dailyCap }))).toEqual([
-      { id: 'gemini', model: 'gemini-3.5-flash', dailyCap: 18 },
-      { id: 'gemini-lite', model: 'gemini-3.5-flash-lite', dailyCap: 450 },
+      { id: 'gemini', model: 'gemini-flash-latest', dailyCap: 2000 },
+      { id: 'gemini-lite', model: 'gemini-flash-lite-latest', dailyCap: 2000 },
       { id: 'openrouter', model: 'a:free', dailyCap: 24 },
       { id: 'openrouter-2', model: 'b:free', dailyCap: 24 },
     ]);

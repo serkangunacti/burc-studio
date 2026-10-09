@@ -32,6 +32,9 @@ export async function fitNarrationToBudget(rawPath:string,cacheDir:string):Promi
     return {data,durationSeconds,path:output,cached:true};
   }catch{/* A missing or invalid fitted cache is regenerated from the complete original. */}
   let tempo=rawDuration/(NARRATION_BUDGET_SECONDS-.05);
+  if (tempo > 1.08) {
+    throw new Error(`Tam ses doğal hızda (1.0x) ${rawDuration.toFixed(1)} sn; 178,5 sn bütçesini aşıyor (tempo=${tempo.toFixed(2)}x). Doğal anlatımı korumak için robotik hızlandırmaya izin verilmiyor; metin kısaltılmalıdır.`);
+  }
   for(let attempt=0;attempt<3;attempt++){
     let remaining=tempo;const factors:number[]=[];
     while(remaining>2){factors.push(2);remaining/=2;}factors.push(remaining);
@@ -59,8 +62,14 @@ export async function createFullNarration(reels:ReelsProps,input:{
   cacheDir:string;
   align?:(audio:string,scenes:string[],manifest:string)=>Promise<number[]>;
 }):Promise<FullNarration>{
-  if(reels.signs.length!==12)throw new Error('Tam ses için 12 burç yorumu zorunlu');
-  const scenes=[introNarrationText(reels),...reels.signs.map(narrationText),outroNarrationText()].map(text=>text.trim().normalize('NFC'));
+  const signCount = reels.signs.length;
+  if(signCount===0)throw new Error('Konuşma için en az 1 burç yorumu zorunlu');
+  const isElementVideo = signCount < 12;
+  const scenes=[
+    introNarrationText(reels),
+    ...reels.signs.map(narrationText),
+    outroNarrationText(reels)
+  ].map(text=>text.trim().normalize('NFC'));
   const fullText=scenes.join('\n\n');
 
   let force=false;
@@ -77,11 +86,11 @@ export async function createFullNarration(reels:ReelsProps,input:{
       force=true;
       continue;
     }
-    const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v3-raw-alignment'})).digest('hex');
+    const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v4-natural-alignment'})).digest('hex');
     const timingPath=path.join(input.cacheDir,`${key}-timing.json`);
     try{
       const cached=JSON.parse(await readFile(timingPath,'utf8')) as {sceneStarts:number[]};
-      fullNarrationTiming(audio.durationSeconds,cached.sceneStarts,12,REELS_FPS);
+      fullNarrationTiming(audio.durationSeconds,cached.sceneStarts,signCount,REELS_FPS);
       return {...audio,sceneStarts:cached.sceneStarts,timingPath};
     }catch{/* Timing cache is validated against this exact waveform and transcript. */}
     const manifest=`${timingPath}.manifest.json`;

@@ -110,8 +110,14 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
         if (!detail) throw new Error('Gönderi bulunamadı');
         if (templateOutdated) await db.update(postsTable).set({templateVersion:targetTemplateVersion}).where(eq(postsTable.id,post.id));
         const reels = buildReelsProps(detail,brand);
-        const readingBySign = new Map(detail.slides.flatMap(s=>s.reading?[[s.reading.sign,s.reading] as const]:[]));
-        const enrichedReels = {...reels,signs:reels.signs.map(sign=>({...sign,body:readingBySign.get(sign.sign)?.body??sign.short}))};
+        const isElementVideo = reels.signs.length <= 4;
+        const enrichedReels = {
+          ...reels,
+          signs: reels.signs.map((sign) => ({
+            ...sign,
+            ...(isElementVideo && readingBySign.get(sign.sign)?.body ? { body: readingBySign.get(sign.sign)!.body } : {}),
+          })),
+        };
         const rendered = await renderers.renderReels({templateVersion:targetTemplateVersion,reels:enrichedReels,musicSeed:musicSeed(reels),name:`${date}-${post.kind}-${post.audience}`});
         const video = typeof rendered==='string'?{videoUrl:rendered}:rendered;
         videos = 'parts' in video && video.parts?.length ? video.parts.map(part=>({...part,...(video.isAiGenerated?{isAiGenerated:true}:{})})) : [video];

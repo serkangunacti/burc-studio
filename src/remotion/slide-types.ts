@@ -58,4 +58,4 @@ export type ReelsSign = {
 };
 
 export type ReelsSceneTiming = {introFrames:number;signFrames:number[];outroFrames:number};
-export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number; sceneTiming?:ReelsSceneTiming };
+export type ReelsProps = { audience: Audience; dateLabel: string; hook: string; signs: ReelsSign[]; brand: BrandProps; variant: number; sceneTiming?:ReelsSceneTiming; element?: string };
