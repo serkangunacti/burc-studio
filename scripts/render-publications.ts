@@ -116,7 +116,8 @@ async function main() {
       only: values.only || process.env.RENDER_ONLY,
     });
     // Element Reels (Ateş, Toprak, Hava, Su) Üretimi (Seçenek C)
-    const shouldRenderElements = !values.only || values.only.startsWith('element');
+    const targetOnly = values.only || process.env.RENDER_ONLY;
+    const shouldRenderElements = !targetOnly || targetOnly.startsWith('element');
     if (shouldRenderElements) {
       log('--- Element Reels (Ateş, Toprak, Hava, Su) Hazırlanıyor ---');
       const posts = await getCurrentPostsForDate(db, date);
@@ -137,7 +138,7 @@ async function main() {
           ];
 
           for (const el of elements) {
-            if (values.only && values.only !== `element-${el.key}`) continue;
+            if (targetOnly && targetOnly !== `element-${el.key}`) continue;
             const elementSigns = el.signs.map((slug) => {
               const signData = baseReels.signs.find((s) => s.sign === slug);
               const reading = readingBySign.get(slug);

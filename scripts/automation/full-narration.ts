@@ -117,7 +117,7 @@ export async function createFullNarration(reels:ReelsProps,input:{
           ? await input.align(audio.path, scenes, manifest)
           : await alignOnActions(audio.path, scenes, manifest, audio.durationSeconds, MIN_REELS_SCENE_AUDIO_GAP_SECONDS);
       }
-      fullNarrationTiming(audio.durationSeconds,sceneStarts,12,REELS_FPS);
+      fullNarrationTiming(audio.durationSeconds,sceneStarts,signCount,REELS_FPS);
       await writeFile(`${timingPath}.tmp`,JSON.stringify({sceneStarts}),{mode:0o600});
       await rename(`${timingPath}.tmp`,timingPath);
       return {...audio,sceneStarts,timingPath};
