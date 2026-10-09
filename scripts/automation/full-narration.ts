@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {promisify} from 'node:util';
 import type {ReelsProps} from '../../src/remotion/slide-types';
@@ -11,6 +11,11 @@ import {introNarrationText, narrationText, outroNarrationText, wavDuration, type
 const execFileAsync=promisify(execFile);
 export const NARRATION_BUDGET_SECONDS=MAX_REELS_NARRATION_SECONDS;
 export type FullNarration=NarrationClip & {sceneStarts:number[];timingPath:string};
+
+const BROKEN_AUDIO_KEYS = new Set([
+  '78da634382841e7b8c3797221fcd043af362ecfcca4bc4e6465871b884aab543',
+  '12085e8642275277a63f0c2aa041d23512958287c78b2491cddd9d5c02cc127b',
+]);
 
 // Every input sample is processed. atempo changes tempo while retaining pitch;
 // neither -t nor sample-rate changes are used to shorten speech.
@@ -50,27 +55,55 @@ async function alignOnActions(audio:string,scenes:string[],manifest:string,durat
 }
 
 export async function createFullNarration(reels:ReelsProps,input:{
-  narrator:{speak:(text:string)=>Promise<NarrationClip>};
+  narrator:{speak:(text:string,opts?:{force?:boolean})=>Promise<NarrationClip>};
   cacheDir:string;
   align?:(audio:string,scenes:string[],manifest:string)=>Promise<number[]>;
 }):Promise<FullNarration>{
   if(reels.signs.length!==12)throw new Error('Tam ses için 12 burç yorumu zorunlu');
   const scenes=[introNarrationText(reels),...reels.signs.map(narrationText),outroNarrationText()].map(text=>text.trim().normalize('NFC'));
-  const raw=await input.narrator.speak(scenes.join('\n\n'));
-  const audio=await fitNarrationToBudget(raw.path,input.cacheDir);
-  const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v2-transcript-boundaries'})).digest('hex');
-  const timingPath=path.join(input.cacheDir,`${key}-timing.json`);
-  try{
-    const cached=JSON.parse(await readFile(timingPath,'utf8')) as {sceneStarts:number[]};
-    fullNarrationTiming(audio.durationSeconds,cached.sceneStarts,12,REELS_FPS);
-    return {...audio,sceneStarts:cached.sceneStarts,timingPath};
-  }catch{/* Timing cache is validated against this exact waveform and transcript. */}
-  const manifest=`${timingPath}.manifest.json`;
-  const sceneStarts=input.align
-    ? await input.align(audio.path,scenes,manifest)
-    : await alignOnActions(audio.path,scenes,manifest,audio.durationSeconds);
-  fullNarrationTiming(audio.durationSeconds,sceneStarts,12,REELS_FPS);
-  await writeFile(`${timingPath}.tmp`,JSON.stringify({sceneStarts}),{mode:0o600});
-  await rename(`${timingPath}.tmp`,timingPath);
-  return {...audio,sceneStarts,timingPath};
+  const fullText=scenes.join('\n\n');
+
+  let force=false;
+  let lastError:unknown;
+  for(let attempt=1;attempt<=3;attempt++){
+    const raw=await input.narrator.speak(fullText,{force});
+    if(raw.cached && BROKEN_AUDIO_KEYS.has(path.basename(raw.path,'.wav'))){
+      force=true;
+      continue;
+    }
+    const audio=await fitNarrationToBudget(raw.path,input.cacheDir);
+    const tempoKey=path.basename(audio.path).replace('-tempo.wav','');
+    if(audio.cached && BROKEN_AUDIO_KEYS.has(tempoKey)){
+      force=true;
+      continue;
+    }
+    const key=createHash('sha256').update(audio.data).update(JSON.stringify({scenes,engine:'stable-ts-small-tr-v2-transcript-boundaries'})).digest('hex');
+    const timingPath=path.join(input.cacheDir,`${key}-timing.json`);
+    try{
+      const cached=JSON.parse(await readFile(timingPath,'utf8')) as {sceneStarts:number[]};
+      fullNarrationTiming(audio.durationSeconds,cached.sceneStarts,12,REELS_FPS);
+      return {...audio,sceneStarts:cached.sceneStarts,timingPath};
+    }catch{/* Timing cache is validated against this exact waveform and transcript. */}
+    const manifest=`${timingPath}.manifest.json`;
+    try{
+      const sceneStarts=input.align
+        ? await input.align(audio.path,scenes,manifest)
+        : await alignOnActions(audio.path,scenes,manifest,audio.durationSeconds);
+      fullNarrationTiming(audio.durationSeconds,sceneStarts,12,REELS_FPS);
+      await writeFile(`${timingPath}.tmp`,JSON.stringify({sceneStarts}),{mode:0o600});
+      await rename(`${timingPath}.tmp`,timingPath);
+      return {...audio,sceneStarts,timingPath};
+    }catch(error){
+      lastError=error;
+      if(error instanceof Error && error.message.includes('GitHub Actions')) throw error;
+      force=true;
+      if(audio.path !== raw.path) await rm(audio.path,{force:true}).catch(()=>{});
+      await rm(manifest,{force:true}).catch(()=>{});
+      await rm(`${manifest}.aligned.json`,{force:true}).catch(()=>{});
+      if(attempt<3){
+        console.warn(`[createFullNarration] Konuşma zamanlaması doğrulanamadı (deneme ${attempt}/3). Bozuk ses adayı geçersiz kılındı, yeni TTS isteği yapılıyor: ${error instanceof Error?error.message:String(error)}`);
+      }
+    }
+  }
+  throw lastError;
 }

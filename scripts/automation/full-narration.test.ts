@@ -73,4 +73,32 @@ describe('tek video, tam ses ve önbellekte zamanlama',()=>{
     vi.stubEnv('GITHUB_ACTIONS','false');const dir=await work();const data=createWavFromPcm(Buffer.alloc(20*48000));const raw=path.join(dir,'raw.wav');await writeFile(raw,data);
     await expect(createFullNarration(sampleReels(),{narrator:{speak:async()=>({data,path:raw,durationSeconds:20,cached:false})},cacheDir:dir})).rejects.toThrow(/GitHub Actions/);
   });
+
+  it('konuşma zamanlaması eşleşmediğinde bozuk sesi geçersiz sayıp yeni TTS isteğiyle kurtarır', async () => {
+    const dir = await work();
+    const data1 = createWavFromPcm(Buffer.alloc(20 * 48000));
+    const data2 = createWavFromPcm(Buffer.alloc(22 * 48000));
+    const raw1 = path.join(dir, 'raw1.wav');
+    const raw2 = path.join(dir, 'raw2.wav');
+    await writeFile(raw1, data1);
+    await writeFile(raw2, data2);
+    let calls = 0;
+    const speak = vi.fn(async (_text: string, _opts?: { force?: boolean }) => {
+      calls++;
+      if (calls === 1) return { data: data1, path: raw1, durationSeconds: 20, cached: false };
+      return { data: data2, path: raw2, durationSeconds: 22, cached: false };
+    });
+    let alignCalls = 0;
+    const align = vi.fn(async () => {
+      alignCalls++;
+      if (alignCalls === 1) throw new Error('Konuşma zamanlaması iki analizde doğrulanamadı');
+      return Array.from({ length: 14 }, (_, i) => i * 1.5);
+    });
+    const result = await createFullNarration(sampleReels(), { narrator: { speak }, cacheDir: dir, align });
+    expect(calls).toBe(2);
+    expect(speak.mock.calls[1][1]).toEqual({ force: true });
+    expect(alignCalls).toBe(2);
+    expect(result.durationSeconds).toBe(22);
+    expect(result.sceneStarts).toHaveLength(14);
+  });
 });

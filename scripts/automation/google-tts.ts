@@ -113,17 +113,19 @@ export function createGoogleNarrator(options: {
   const sanitize = (value: string) => apiKeys.reduce((s,key)=>s.replaceAll(key,'[gizli]'),value);
 
   return {
-    async speak(rawText: string): Promise<NarrationClip> {
+    async speak(rawText: string, opts?: { force?: boolean }): Promise<NarrationClip> {
       const text = rawText.trim().normalize('NFC');
       if (!text || [...text].length > 20_000) throw new Error('Ses metni 1–20000 karakter olmalı; metin kesilmedi');
       const key = hash(JSON.stringify({text,model:GEMINI_TTS_MODEL,engine:'gemini-full-tts-v3'}));
       await mkdir(cacheDir, {recursive:true});
       const audioPath = path.join(cacheDir, `${key}.wav`);
-      try {
-        const data = await readFile(audioPath);
-        return {data, durationSeconds:wavDuration(data), path:audioPath, cached:true};
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') options.log?.('Geçersiz tam ses önbelleği yeniden üretilecek');
+      if (!opts?.force) {
+        try {
+          const data = await readFile(audioPath);
+          return {data, durationSeconds:wavDuration(data), path:audioPath, cached:true};
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') options.log?.('Geçersiz tam ses önbelleği yeniden üretilecek');
+        }
       }
       if (!apiKeys.length) throw new Error('Google Gemini TTS API anahtarı tanımlı değil');
       // Identical model and voice configuration on every key; preserve the existing default voice.

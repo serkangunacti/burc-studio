@@ -75,7 +75,13 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   }
 
   for (const post of posts) {
-    if (options.only && `${post.kind}-${post.audience}` !== options.only) continue;
+    if (options.only && `${post.kind}-${post.audience}` !== options.only) {
+      const keptRows = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels');
+      if (keptRows.length && keptRows.every(row => row.media.videoUrl && row.part === 0 && row.media.partCount === 1 && typeof row.media.durationSeconds === 'number' && Number.isFinite(row.media.durationSeconds) && row.media.durationSeconds > 0 && row.media.durationSeconds <= MAX_REELS_MP4_SECONDS)) {
+        result.kept.push(...keptRows.map(slotKey));
+      }
+      continue;
+    }
     const items = plan.filter(item => item.postId === post.id);
     if (!items.length) continue;
     const targetTemplateVersion = (post.kind !== 'special' ? specFor(post.kind)?.templateVersion : undefined) ?? post.templateVersion;
