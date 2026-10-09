@@ -33,7 +33,8 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # Tam metinli 178,9 saniyelik altı pazartesi videosu için kurulum dahil pay.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
       - name: Kota yenilenmesini ve bugünkü başarılı işi önceden kontrol et
