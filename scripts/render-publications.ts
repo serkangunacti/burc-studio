@@ -238,8 +238,9 @@ async function main() {
     log(`Çizilen: ${result.rendered.length}, korunan: ${result.kept.length}, hata: ${result.failures.length}`);
     for (const failure of result.failures) log(`HATA ${failure}`);
     const failures = [...missing.map((item) => `${item}: gönderi üretilmedi`), ...result.failures];
-    // Yedek zamanlamalar aynı günü yeniden çalıştırır; yeni bir şey yoksa ikinci onay mesajı gönderilmez.
-    if (result.rendered.length > 0 || failures.length > 0 || !(await hasPlanMessage(db, date))) await notifyReady(date, failures);
+    // Yedek zamanlamalar aynı günü yeniden çalıştırır; onay bekleyen satır varsa veya yeni çizim varsa bildirim gönderilir.
+    const hasPendingReady = (await listPublications(db, date)).some((row) => row.status === 'ready');
+    if (result.rendered.length > 0 || failures.length > 0 || hasPendingReady || !(await hasPlanMessage(db, date))) await notifyReady(date, failures);
     else log('Onay mesajı zaten gönderilmiş; yeni paylaşım yok.');
     if (failures.length > 0) process.exitCode = 1;
   } finally {
