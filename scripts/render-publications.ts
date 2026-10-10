@@ -134,7 +134,7 @@ async function main() {
     if (shouldRenderElements) {
       log('--- Element Reels (Ateş, Toprak, Hava, Su) Hazırlanıyor ---');
       const posts = await getCurrentPostsForDate(db, date);
-      const horoscopePost = posts.find((p) => p.kind === 'horoscope');
+      const horoscopePost = posts.find((p) => p.kind === 'horoscope' && p.audience === 'kadin') ?? posts.find((p) => p.kind === 'horoscope');
       if (horoscopePost) {
         const detail = await getPostDetail(db, horoscopePost.id);
         if (detail) {
@@ -165,7 +165,7 @@ async function main() {
               typeof oldElement.media.durationSeconds === 'number' &&
               oldElement.media.durationSeconds > 0 &&
               oldElement.media.durationSeconds <= MAX_REELS_MP4_SECONDS &&
-              availableVideoUrls.has(oldElement.media.videoUrl);
+              (availableVideoUrls.size === 0 || availableVideoUrls.has(oldElement.media.videoUrl));
 
             if (oldValid && !values.force && process.env.RENDER_FORCE !== 'true' && !targetOnly) {
               log(`Element Reels zaten mevcut ve geçerli: ${el.name} (${oldElement.media.videoUrl})`);

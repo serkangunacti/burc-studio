@@ -123,7 +123,7 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
   const settings = await getSettings(deps.db);
   const posts = await getCurrentPostsForDate(deps.db, date);
   const expected = planPublications(date, posts, settings.automation).filter((item) => item.format !== 'carousel');
-  if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format))) return 'Günün beklenen video paylaşımları eksik.';
+  if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) return 'Günün beklenen video paylaşımları eksik.';
   if (!rows.length) return 'Günün videoları henüz hazır değil.';
   for (const row of rows) {
     const error = videoSafetyError(row);

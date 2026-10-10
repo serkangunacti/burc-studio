@@ -46,7 +46,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   await db.delete(publicationsTable).where(and(eq(publicationsTable.date, date), eq(publicationsTable.format, 'carousel')));
   const existing = new Map((await listPublications(db, date)).map((row) => [slotKey(row), row]));
   const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
-  const existingVideoRows=[...existing.values()].filter(row=>row.format!=='carousel'&&row.status!=='expired');
+  const existingVideoRows=[...existing.values()].filter(row=>row.format!=='carousel'&&row.status!=='expired'&&row.part===0);
   const missingBlobPosts=new Set<string>();
   const checkedUrls=new Map<string,boolean>();
   if(renderers.hasVideo){
@@ -66,17 +66,17 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
   if((missingBlobPosts.size||invalidVideoPosts.size)&&!options.only&&!options.force){
     if(existingVideoRows.some(row=>row.status==='publishing'))return {...result,failures:['Paylaşım sürüyor; günün video paketi yeniden doğrulanana kadar bekletildi']};
     await db.update(publicationsTable).set({status:'ready',approvedAt:null,error:'Tam günlük video paketi yeniden doğrulanıyor'})
-      .where(and(eq(publicationsTable.date,date),eq(publicationsTable.status,'approved')));
+      .where(and(eq(publicationsTable.date,date),eq(publicationsTable.status,'approved'),eq(publicationsTable.part,0)));
   }
   // Invalidate the entire rebuild before its first render: no mix of old and new approvals.
   if(options.force && !options.only){
     if([...existing.values()].some(row=>row.status==='publishing'))return {...result,failures:['Paylaşım sürüyor; paketin yeniden hazırlanması bekletildi']};
-    await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video paketi yeniden render ediliyor'}).where(eq(publicationsTable.date,date));
+    await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video paketi yeniden render ediliyor'}).where(and(eq(publicationsTable.date,date),eq(publicationsTable.part,0)));
   }
 
   for (const post of posts) {
     if (options.only && `${post.kind}-${post.audience}` !== options.only) {
-      const keptRows = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels');
+      const keptRows = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels' && row.part === 0);
       if (keptRows.length && keptRows.every(row => row.media.videoUrl && row.part === 0 && row.media.partCount === 1 && typeof row.media.durationSeconds === 'number' && Number.isFinite(row.media.durationSeconds) && row.media.durationSeconds > 0 && row.media.durationSeconds <= MAX_REELS_MP4_SECONDS)) {
         result.kept.push(...keptRows.map(slotKey));
       }
@@ -86,20 +86,20 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
     if (!items.length) continue;
     const targetTemplateVersion = (post.kind !== 'special' ? specFor(post.kind)?.templateVersion : undefined) ?? post.templateVersion;
     const templateOutdated = post.templateVersion !== targetTemplateVersion;
-    const oldVideos = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels').sort((a,b) => a.part-b.part);
+    const oldVideos = [...existing.values()].filter(row => row.postId === post.id && row.format === 'reels' && row.part === 0).sort((a,b) => a.part-b.part);
     const unsafe=oldVideos.some(row=>row.part!==0||row.media.partCount!==1||typeof row.media.durationSeconds!=='number'||!Number.isFinite(row.media.durationSeconds)||row.media.durationSeconds<=0||row.media.durationSeconds>MAX_REELS_MP4_SECONDS);
     const replace = options.force === true || !!options.only || templateOutdated || unsafe || missingBlobPosts.has(post.id);
     const partCount = oldVideos[0]?.media.partCount ?? 1;
     const pending = items.filter(item => replace || Array.from({length:partCount},(_,part)=>existing.get(slotKey({...item,part}))).some(row=>!row));
     if (!pending.length) {
-      result.kept.push(...[...existing.values()].filter(row=>row.postId===post.id).map(slotKey));
+      result.kept.push(...[...existing.values()].filter(row=>row.postId===post.id && row.part===0).map(slotKey));
       continue;
     }
     // Eski kuyruk teslimleri render sürerken eski videoyu yayınlamasın.
     if (replace) {
       const active = [...existing.values()].filter(row=>row.postId===post.id && row.status==='publishing');
       if (active.length) { result.failures.push(`${post.kind}-${post.audience}: paylaşım sürüyor; yeniden render bekletildi`); continue; }
-      await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video yeniden render ediliyor'}).where(and(eq(publicationsTable.date,date),eq(publicationsTable.postId,post.id)));
+      await db.update(publicationsTable).set({status:'ready',approvedAt:null,media:{},error:'Video yeniden render ediliyor'}).where(and(eq(publicationsTable.date,date),eq(publicationsTable.postId,post.id),eq(publicationsTable.part,0)));
     }
     try {
       let videos: {videoUrl:string;durationSeconds?:number;isAiGenerated?:boolean}[];
@@ -132,7 +132,7 @@ export async function renderDay(db: Db, date: DateKey, renderers: Renderers, opt
           if (saved) result.rendered.push(slotKey(planned));
         }
         if (replace) {
-          const stale = [...existing.values()].filter(row=>row.postId===post.id && row.format===item.format && row.part>=videos.length);
+          const stale = [...existing.values()].filter(row=>row.postId===post.id && row.format===item.format && row.part===0 && row.part>=videos.length);
           for (const row of stale) await db.update(publicationsTable).set({status:'expired',error:'Yeni render sürümünde bu parça yok'}).where(eq(publicationsTable.id,row.id));
         }
       }

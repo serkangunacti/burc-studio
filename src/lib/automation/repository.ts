@@ -11,7 +11,7 @@ export type IntegrationRow = typeof integrations.$inferSelect;
 export type RenderedMedia = { images: Uint8Array[] } | { videoUrl: string; durationSeconds?: number; partCount?: number; isAiGenerated?: boolean };
 
 // Yalnız onaylanmamış veya zorla yenilenen satır yeniden çizimle ezilir.
-const REPLACEABLE = ['ready', 'approved'] as const;
+const REPLACEABLE = ['ready', 'approved', 'failed', 'expired'] as const;
 // Sonuç yazılmadan düşen bir paylaşım bu süreden sonra yeniden sahiplenilebilir.
 const PUBLISH_LEASE_MS = 10 * 60_000;
 
