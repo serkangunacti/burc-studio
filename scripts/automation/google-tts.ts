@@ -52,7 +52,7 @@ export function introNarrationText(reels?: { audience?: string; dateLabel?: stri
     if (el === 'hava') return 'Hava grubu burçları; İkizler, Terazi ve Kova! Günün hareketli enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
     if (el === 'su') return 'Su grubu burçları; Yengeç, Akrep ve Balık! Günün sezgisel enerjilerine hazır mısınız? Yıldızların mesajlarına hep birlikte bakalım...';
   }
-  return 'Canlarım ciğerlerim, günün enerjilerine hazır mısınız? Yıldızlar bakalım bugün bize neler fısıldıyor...';
+  return 'Kozmik yolcular, günün enerjilerine hazır mısınız? Yıldızlar bakalım bugün bize neler fısıldıyor...';
 }
 
 export function outroNarrationText(reels?: { audience?: string; element?: string }): string {

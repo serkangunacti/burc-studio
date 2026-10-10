@@ -169,7 +169,7 @@ export function CosmicSlide({kind='horoscope',phase=0,reels=false,...props}:Slid
     <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',minHeight:0,padding:'30px 0'}}>
       {slide.type==='cover' && <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:28}}>
         <div style={{display:'inline-flex',alignItems:'center',gap:10,background:'linear-gradient(90deg, #ff0844 0%, #ffb199 100%)',color:'#fff',padding:'12px 28px',borderRadius:30,fontSize:26,fontWeight:800,letterSpacing:3,boxShadow:'0 8px 30px rgba(255, 8, 68, 0.55)',animation:'pulse 2s infinite'}}>
-          ✨ CANLARIM CİĞERLERİM ✨
+          ✨ KOZMİK YOLCULAR ✨
         </div>
         <div style={{fontSize:graphemeLength(slide.hook)>45?72:86,fontWeight:900,lineHeight:1.15,background:'linear-gradient(135deg, #ffffff 30%, #ffd166 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',textShadow:'0 10px 30px rgba(0,0,0,0.5)',maxWidth:940}}>
           {slide.hook}
