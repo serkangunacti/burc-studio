@@ -44,16 +44,16 @@ describe('packageItemsFor', () => {
     { kind: 'horoscope' as const, audience: 'kadin' as const },
     { kind: 'horoscope' as const, audience: 'erkek' as const },
   ];
-  it('pazartesi günlük plana her kitle için haftalık ekler, diğer günler eklemez', () => {
-    expect(packageItemsFor('2026-09-28', plan)).toEqual([...plan, { kind: 'weekly', audience: 'kadin' }, { kind: 'weekly', audience: 'erkek' }]);
+  it('pazartesi günlük plana her kitle için haftalık ekler ve ilk sıraya koyar, diğer günler eklemez', () => {
+    expect(packageItemsFor('2026-09-28', plan)).toEqual([{ kind: 'weekly', audience: 'kadin' }, { kind: 'weekly', audience: 'erkek' }, ...plan]);
     expect(packageItemsFor('2026-09-29', plan)).toEqual(plan);
-    expect(packageItemsFor('2026-09-28', [plan[1]])).toEqual([plan[1], { kind: 'weekly', audience: 'erkek' }]);
+    expect(packageItemsFor('2026-09-28', [plan[1]])).toEqual([{ kind: 'weekly', audience: 'erkek' }, plan[1]]);
   });
 
-  it('tarotlu planda pazartesi 6, diğer günler 4 kalem döner', () => {
+  it('tarotlu planda pazartesi 6, diğer günler 4 kalem döner ve haftalık ilk sıradadır', () => {
     const withTarot = [...plan, { kind: 'tarot' as const, audience: 'kadin' as const }, { kind: 'tarot' as const, audience: 'erkek' as const }];
     expect(packageItemsFor('2026-09-28', withTarot).map((item) => `${item.kind}:${item.audience}`)).toEqual([
-      'horoscope:kadin', 'horoscope:erkek', 'tarot:kadin', 'tarot:erkek', 'weekly:kadin', 'weekly:erkek',
+      'weekly:kadin', 'weekly:erkek', 'horoscope:kadin', 'horoscope:erkek', 'tarot:kadin', 'tarot:erkek',
     ]);
     expect(packageItemsFor('2026-09-29', withTarot)).toHaveLength(4);
   });

@@ -9,12 +9,12 @@ import { AUDIENCES, type Audience, type RunTrigger } from './types';
 export type PackageItem = { kind: GeneratedKind; audience: Audience };
 export type PackageItemResult = { item: PackageItem; result: SetResult } | { item: PackageItem; error: string };
 
-// Pazartesi, plandaki her kitle için haftalık yorumlar da pakete girer.
+// Pazartesi, plandaki her kitle için haftalık yorumlar da pakete ilk sırada girer.
 export function packageItemsFor(date: DateKey, plan: readonly PlanItem[]): PackageItem[] {
   const planned = plan.map((item): PackageItem => ({ kind: item.kind, audience: item.audience }));
   if (!isMonday(date)) return planned;
   const audiences = AUDIENCES.filter((audience) => plan.some((item) => item.audience === audience));
-  return [...planned, ...audiences.map((audience): PackageItem => ({ kind: 'weekly', audience }))];
+  return [...audiences.map((audience): PackageItem => ({ kind: 'weekly', audience })), ...planned];
 }
 
 export function describeGenerationError(error: unknown): string {

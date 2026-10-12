@@ -9,7 +9,7 @@ export const maxDuration = 300;
 
 export async function GET(request: Request) {
   return handleDailyCron(request, {
-    secret: process.env.CRON_SECRET,
+    secret: [process.env.CRON_SECRET, process.env.AUTOMATION_SECRET],
     today: istanbulDateKey(),
     loadDeps: () => loadGenerationDeps(getDb()),
     startRender: (date) => startRender(automationDeps(), date),

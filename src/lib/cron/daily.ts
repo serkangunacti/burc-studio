@@ -8,7 +8,7 @@ import { automationStartReason } from '@/lib/automation/start';
 export async function handleDailyCron(
   request: Request,
   deps: {
-    secret: string | undefined;
+    secret: string | undefined | (string | undefined)[];
     today: DateKey;
     now?: () => Date;
     loadDeps: () => Promise<GenerationDeps & { settings: Settings }>;

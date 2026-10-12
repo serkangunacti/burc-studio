@@ -1,4 +1,5 @@
 import type { PublicationFormat } from '@/db/schema';
+import { isMonday } from '@/lib/astro/week';
 import type { Audience, ReadingAudience, ReadingKind } from '@/lib/content/types';
 import type { DateKey } from '@/lib/date/istanbul';
 import { formatPublicationCaption } from '@/lib/render/caption';
@@ -54,14 +55,26 @@ function isAutomated(post: PlannablePost): post is PlannablePost & { kind: Autom
 }
 
 export function planPublications(date: DateKey, posts: readonly PlannablePost[], automation: AutomationSettings): PlannedPublication[] {
-  return posts.filter(isAutomated).flatMap((post): PlannedPublication[] => {
-    const slot = automation.schedule[post.kind][post.audience];
+  const monday = isMonday(date);
+  const hasWeekly = posts.some((post) => post.kind === 'weekly');
+  const items = posts.filter(isAutomated).flatMap((post): PlannedPublication[] => {
+    let clock = automation.schedule[post.kind][post.audience].reels;
+    if (monday && hasWeekly) {
+      if (post.kind === 'weekly') {
+        clock = post.audience === 'kadin' ? '08:30' : '08:45';
+      } else if (post.kind === 'horoscope') {
+        clock = post.audience === 'kadin' ? '09:00' : '09:15';
+      } else if (post.kind === 'tarot') {
+        clock = post.audience === 'kadin' ? '09:30' : '09:45';
+      }
+    }
     const captionFor = (platform: 'instagram' | 'tiktok') => formatPublicationCaption({ ...post, date, platform });
     const base = { postId: post.id, kind: post.kind, audience: post.audience };
-    const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, slot.reels) };
+    const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, clock) };
     return [
       { ...video, format: 'reels' as const, caption: captionFor('instagram') },
       ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const, caption: captionFor('tiktok') }] : []),
     ];
   });
+  return items.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
 }
