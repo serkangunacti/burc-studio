@@ -128,7 +128,7 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
   for (const row of rows) {
     const error = videoSafetyError(row);
     if (error) return error;
-    if (!['ready', 'approved', 'publishing', 'published'].includes(row.status)) return 'Günün bütün videoları hazır değil.';
+    if (!['ready', 'approved', 'publishing', 'published', 'failed', 'skipped'].includes(row.status)) return 'Günün bütün videoları hazır değil.';
     const count = row.media.partCount ?? 1;
     const group = rows.filter((item) => item.postId === row.postId && item.format === row.format && (row.part > 0 ? item.part === row.part : item.part === 0));
     if (!Number.isInteger(count) || !count || group.length !== count || !Array.from({ length: count }, (_, part) => part).every((part) => group.some((item) => item.part === (row.part > 0 ? row.part : part)))) {
