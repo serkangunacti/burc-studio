@@ -1,5 +1,4 @@
 import { getCurrentPostsForDate } from '@/lib/content/repository';
-import { packageItemsFor } from '@/lib/content/daily-package';
 import { specFor } from '@/lib/content/generation-spec';
 import { posts as postsTable, publications as publicationsTable } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -31,7 +30,7 @@ const slotKey = (item: { kind: string; audience: string; format: string; part: n
 export async function missingPosts(db: Db, date: DateKey): Promise<string[]> {
   const settings = await getSettings(db);
   const posts = await getCurrentPostsForDate(db, date);
-  return packageItemsFor(date, settings.dailyPlan)
+  return settings.dailyPlan
     .filter((item) => !posts.some((post) => post.kind === item.kind && post.audience === item.audience))
     .map((item) => `${item.kind}-${item.audience}`);
 }
