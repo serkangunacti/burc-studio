@@ -1,5 +1,8 @@
 import { parseArgs } from 'node:util';
-import { del, list, put } from '@vercel/blob';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { and, eq, inArray } from 'drizzle-orm';
 import { closeDb, getDb } from '../src/db/client';
 import { publications as publicationsTable, type PublicationFormat } from '../src/db/schema';
@@ -48,30 +51,67 @@ async function notifyReady(date: string, failures: string[]) {
   if (!response.ok && response.status !== 409) throw new Error('Onay mesajı gönderilemedi');
 }
 
+function pushOrphanMediaCommit(mediaWorkdir: string, message: string) {
+  execFileSync('git', ['checkout', '--orphan', 'next-media'], { cwd: mediaWorkdir, stdio: 'pipe' });
+  execFileSync('git', ['add', '-A'], { cwd: mediaWorkdir, stdio: 'pipe' });
+  execFileSync('git', ['commit', '-m', message], { cwd: mediaWorkdir, stdio: 'pipe' });
+  execFileSync('git', ['branch', '-M', 'next-media', 'reels-media'], { cwd: mediaWorkdir, stdio: 'pipe' });
+  execFileSync('git', ['push', '--force', 'origin', 'reels-media'], { cwd: mediaWorkdir, stdio: 'pipe' });
+}
+
 async function main() {
   const date = values.date ?? (process.env.RENDER_DATE || istanbulDateKey());
   if (!isDateKey(date)) throw new Error(`Geçersiz tarih: ${date}`);
   const db = getDb();
   const availableVideoUrls = new Set<string>();
-  // Vercel Blob ücretsiz kotasını (1 GB) korumak için 24 saatten eski geçici videoları temizle.
+
+  const repo = process.env.GITHUB_REPOSITORY || 'serkangunacti/burc-studio';
+  const [repoOwner, repoName] = repo.split('/');
+  const pagesBaseUrl = `https://${repoOwner}.github.io/${repoName}/reels`;
+  const mediaWorkdir = '/tmp/reels-media-worktree';
+  const gitToken = process.env.GITHUB_TOKEN;
+  const remoteUrl = gitToken
+    ? `https://x-access-token:${gitToken}@github.com/${repo}.git`
+    : `https://github.com/${repo}.git`;
+
+  // GitHub Pages (reels-media dalı) hazırlığı ve 48 saatten eski geçici videoların temizliği.
   try {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60_000);
-    let cursor: string | undefined;
+    rmSync(mediaWorkdir, { recursive: true, force: true });
+    try {
+      execFileSync('git', ['clone', '--depth=1', '--branch', 'reels-media', remoteUrl, mediaWorkdir], { stdio: 'pipe' });
+    } catch {
+      mkdirSync(mediaWorkdir, { recursive: true });
+      execFileSync('git', ['init'], { cwd: mediaWorkdir, stdio: 'pipe' });
+      execFileSync('git', ['remote', 'add', 'origin', remoteUrl], { cwd: mediaWorkdir, stdio: 'pipe' });
+    }
+    execFileSync('git', ['config', 'user.name', 'github-actions[bot]'], { cwd: mediaWorkdir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], { cwd: mediaWorkdir, stdio: 'pipe' });
+
+    const reelsDir = path.join(mediaWorkdir, 'reels');
+    mkdirSync(reelsDir, { recursive: true });
+    const nojekyllPath = path.join(mediaWorkdir, '.nojekyll');
+    if (!existsSync(nojekyllPath)) writeFileSync(nojekyllPath, '');
+
+    const cutoffDateKey = new Date(Date.now() - 48 * 60 * 60_000).toISOString().slice(0, 10);
     let totalDeleted = 0;
-    do {
-      const page = await list({ prefix: 'reels/', cursor, limit: 1000 });
-      const old = page.blobs.filter((b) => b.uploadedAt < cutoff).map((b) => b.url);
-      if (old.length > 0) {
-        await del(old);
-        totalDeleted += old.length;
+    for (const entry of readdirSync(reelsDir)) {
+      if (!entry.endsWith('.mp4')) continue;
+      const dateMatch = entry.match(/^(\d{4}-\d{2}-\d{2})-/);
+      if (!dateMatch || dateMatch[1] < cutoffDateKey) {
+        unlinkSync(path.join(reelsDir, entry));
+        totalDeleted++;
+      } else {
+        availableVideoUrls.add(`${pagesBaseUrl}/${entry}`);
       }
-      for (const blob of page.blobs) if (blob.uploadedAt >= cutoff) availableVideoUrls.add(blob.url);
-      cursor = page.hasMore ? page.cursor : undefined;
-    } while (cursor);
-    if (totalDeleted > 0) log(`Vercel Blob temizliği: ${totalDeleted} eski video silindi.`);
+    }
+    if (totalDeleted > 0) {
+      pushOrphanMediaCommit(mediaWorkdir, `chore(media): cleanup ${totalDeleted} expired reels`);
+      log(`GitHub Pages medya temizliği: ${totalDeleted} eski video silindi.`);
+    }
   } catch (cleanError) {
-    log(`Vercel Blob temizliği atlandı: ${cleanError instanceof Error ? cleanError.message : String(cleanError)}`);
+    log(`GitHub Pages medya hazırlığı uyarısı: ${cleanError instanceof Error ? cleanError.message : String(cleanError)}`);
   }
+
   const { automation } = await getSettings(db);
   const paused = automationStartReason(automation.startDate, date);
   if (!automation.enabled || paused) {
@@ -118,9 +158,38 @@ async function main() {
     },
     log,
     upload: async (name, file) => {
-      const blob = await put(`reels/${name}`, file, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true });
-      log(`REELS_VIDEO_URL: ${blob.url}`);
-      return blob.url;
+      const baseName = name.replace(/\.mp4$/i, '');
+      const suffix = createHash('sha1').update(file).digest('hex').slice(0, 10);
+      const fileName = `${baseName}-${suffix}.mp4`;
+      const reelsDir = path.join(mediaWorkdir, 'reels');
+      mkdirSync(reelsDir, { recursive: true });
+      for (const existing of readdirSync(reelsDir)) {
+        if (existing.startsWith(`${baseName}-`) && existing.endsWith('.mp4')) {
+          unlinkSync(path.join(reelsDir, existing));
+          availableVideoUrls.delete(`${pagesBaseUrl}/${existing}`);
+        }
+      }
+      writeFileSync(path.join(reelsDir, fileName), file);
+      pushOrphanMediaCommit(mediaWorkdir, `chore(media): upload ${fileName}`);
+
+      const publicUrl = `${pagesBaseUrl}/${fileName}`;
+      log(`GitHub Pages yayını bekleniyor: ${publicUrl}`);
+      const waitDeadline = Date.now() + 120_000;
+      let live = false;
+      while (Date.now() < waitDeadline) {
+        try {
+          const headRes = await fetch(publicUrl, { method: 'HEAD', cache: 'no-store' });
+          if (headRes.status === 200) {
+            live = true;
+            break;
+          }
+        } catch {}
+        await sleep(3_000);
+      }
+      if (!live) log(`UYARI: GitHub Pages 120s içinde 200 dönmedi, URL yine de kaydediliyor: ${publicUrl}`);
+      availableVideoUrls.add(publicUrl);
+      log(`REELS_VIDEO_URL: ${publicUrl}`);
+      return publicUrl;
     },
   });
   renderers.hasVideo = async (videoUrl) => availableVideoUrls.has(videoUrl);
@@ -186,15 +255,25 @@ async function main() {
             if (targetOnly && targetOnly !== `element-${el.key}`) continue;
 
             const scheduledTime = el.time;
-            const oldElement = existingRows.find((r) => r.format === 'reels' && r.part === el.part);
-            const allFormatsExist = formats.every((fmt) => existingRows.some((r) => r.format === fmt && r.part === el.part));
+            const groupRows = existingRows.filter((r) => r.part === el.part);
+            const isAllPublished = formats.every((fmt) => groupRows.some((r) => r.format === fmt && r.status === 'published'));
+            if (isAllPublished && !forceRender && !targetOnly) {
+              log(`Element Reels zaten paylaşılmış, korunuyor: ${el.name}`);
+              result.kept.push(`element-${el.key}`);
+              continue;
+            }
+
+            const oldElement = groupRows.find((r) => r.format === 'reels');
+            const allFormatsExist = formats.every((fmt) => groupRows.some((r) => r.format === fmt));
+            const hasFailed = groupRows.some((r) => r.status === 'failed');
             const oldValid =
+              !hasFailed &&
               allFormatsExist &&
               oldElement?.media.videoUrl &&
               typeof oldElement.media.durationSeconds === 'number' &&
               oldElement.media.durationSeconds > 0 &&
               oldElement.media.durationSeconds <= MAX_REELS_MP4_SECONDS &&
-              (availableVideoUrls.size === 0 || availableVideoUrls.has(oldElement.media.videoUrl));
+              availableVideoUrls.has(oldElement.media.videoUrl);
 
             if (oldValid && !forceRender && !targetOnly) {
               log(`Element Reels zaten mevcut ve geçerli: ${el.name} (${oldElement.media.videoUrl})`);
@@ -251,7 +330,7 @@ async function main() {
                     isAiGenerated: true,
                     partCount: 1,
                   },
-                  { force: forceRender },
+                  { force: forceRender || hasFailed },
                 );
               }
 

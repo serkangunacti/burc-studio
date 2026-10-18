@@ -12,16 +12,20 @@ export function appUrl(): string {
 }
 
 async function deleteVideosBefore(before: Date): Promise<number> {
-  let deleted = 0;
-  let cursor: string | undefined;
-  do {
-    const page = await list({ prefix: 'reels/', cursor, limit: 1000 });
-    const old = page.blobs.filter((blob) => blob.uploadedAt < before).map((blob) => blob.url);
-    if (old.length > 0) await del(old);
-    deleted += old.length;
-    cursor = page.hasMore ? page.cursor : undefined;
-  } while (cursor);
-  return deleted;
+  try {
+    let deleted = 0;
+    let cursor: string | undefined;
+    do {
+      const page = await list({ prefix: 'reels/', cursor, limit: 1000 });
+      const old = page.blobs.filter((blob) => blob.uploadedAt < before).map((blob) => blob.url);
+      if (old.length > 0) await del(old);
+      deleted += old.length;
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    return deleted;
+  } catch {
+    return 0;
+  }
 }
 
 export function automationDeps(): AutomationDeps {
