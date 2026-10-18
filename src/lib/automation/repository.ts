@@ -116,10 +116,14 @@ export async function approveAndScheduleNow(db: Db, date: DateKey, now = new Dat
 // Atlanan grup geri alınırsa gün onaylanmışsa yeniden onaya, değilse hazıra döner; onaya dönenler kuyruğa yeniden girer.
 export async function setGroupSkipped(
   db: Db,
-  input: { postId: string; format: PublicationFormat; skipped: boolean },
+  input: { postId: string; format: PublicationFormat; skipped: boolean; part?: number },
   now = new Date(),
 ): Promise<PublicationRow[]> {
-  const group = and(eq(publications.postId, input.postId), eq(publications.format, input.format));
+  const group = and(
+    eq(publications.postId, input.postId),
+    eq(publications.format, input.format),
+    input.part !== undefined ? eq(publications.part, input.part) : undefined,
+  );
   if (input.skipped) {
     return db
       .update(publications)
@@ -250,7 +254,7 @@ export async function markForRebuild(db: Db, id: string): Promise<void> {
 }
 
 // Başarısız grup yeniden onaya alınır; sayaçlar ve dış kimlikler sıfırlanır, kuyruğa yeniden girer.
-export async function retryFailedGroup(db: Db, input: { postId: string; format: PublicationFormat }, now = new Date()): Promise<PublicationRow[]> {
+export async function retryFailedGroup(db: Db, input: { postId: string; format: PublicationFormat; part?: number }, now = new Date()): Promise<PublicationRow[]> {
   return db
     .update(publications)
     // Yayın denemesi ve Buffer gönderisi korunur: yeniden deneme önce bunların sonucunu doğrular, kopya paylaşım açmaz.
@@ -264,7 +268,14 @@ export async function retryFailedGroup(db: Db, input: { postId: string; format: 
       approvedAt: now,
       updatedAt: now,
     })
-    .where(and(eq(publications.postId, input.postId), eq(publications.format, input.format), eq(publications.status, 'failed')))
+    .where(
+      and(
+        eq(publications.postId, input.postId),
+        eq(publications.format, input.format),
+        input.part !== undefined ? eq(publications.part, input.part) : undefined,
+        eq(publications.status, 'failed'),
+      ),
+    )
     .returning();
 }
 

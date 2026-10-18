@@ -1,7 +1,9 @@
 import { parseArgs } from 'node:util';
 import { del, list, put } from '@vercel/blob';
+import { and, eq, inArray } from 'drizzle-orm';
 import { closeDb, getDb } from '../src/db/client';
-import { missingPosts, renderDay } from '../src/lib/automation/render-job';
+import { publications as publicationsTable, type PublicationFormat } from '../src/db/schema';
+import { missingPosts, renderDay, type RenderDayResult } from '../src/lib/automation/render-job';
 import { hasPlanMessage, listPublications, savePublication } from '../src/lib/automation/repository';
 import { istanbulInstant } from '../src/lib/automation/plan';
 import { isDateKey, istanbulDateKey } from '../src/lib/date/istanbul';
@@ -17,7 +19,6 @@ import { brandFromSettings } from '../src/lib/posts/slide-props';
 import { buildReelsProps } from '../src/lib/posts/reels-props';
 import { musicSeed } from '../src/lib/music/compose';
 import { MAX_REELS_MP4_SECONDS } from '../src/remotion/reels';
-import type { PublicationFormat } from '../src/db/schema';
 import type { ReelsProps, ReelsSign } from '../src/remotion/slide-types';
 
 // GitHub Actions'ta kota sıfırlanmasından sonra yalnız Reels/video hazırlar, sonucu Telegram'a bildirir.
@@ -124,12 +125,40 @@ async function main() {
   });
   renderers.hasVideo = async (videoUrl) => availableVideoUrls.has(videoUrl);
   try {
-    const result = await renderDay(db, date, renderers, {
-      force: values.force || process.env.RENDER_FORCE === 'true',
-      only: values.only || process.env.RENDER_ONLY,
-    });
-    // Element Reels (Ateş, Toprak, Hava, Su) Üretimi (Seçenek C)
+    const forceRender = values.force || process.env.RENDER_FORCE === 'true';
     const targetOnly = values.only || process.env.RENDER_ONLY;
+    const isMonday = new Date(`${date}T12:00:00+03:00`).getDay() === 1;
+    const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
+
+    // Günlük tam (part 0) horoscope ve tarot videoları artık paylaşılmıyor; yalnızca Pazartesi haftalık (weekly) + her gün 4 Element paylaşılır.
+    await db
+      .delete(publicationsTable)
+      .where(
+        and(
+          eq(publicationsTable.date, date),
+          inArray(publicationsTable.kind, ['horoscope', 'tarot']),
+          eq(publicationsTable.part, 0),
+          inArray(publicationsTable.status, ['ready', 'approved', 'failed', 'expired']),
+        ),
+      );
+
+    // Pazartesi günleri ilk sırada haftalık burç yorumları (08:30 Kadın, 08:45 Erkek) hazırlanır.
+    if (isMonday && (!targetOnly || targetOnly.startsWith('weekly'))) {
+      const weeklyTargets = targetOnly ? [targetOnly] : ['weekly-kadin', 'weekly-erkek'];
+      for (const weeklyOnly of weeklyTargets) {
+        const sub = await renderDay(db, date, renderers, { force: forceRender, only: weeklyOnly });
+        result.rendered.push(...sub.rendered);
+        result.kept.push(...sub.kept);
+        result.failures.push(...sub.failures);
+      }
+    } else if (targetOnly && !targetOnly.startsWith('element') && !targetOnly.startsWith('weekly')) {
+      const sub = await renderDay(db, date, renderers, { force: forceRender, only: targetOnly });
+      result.rendered.push(...sub.rendered);
+      result.kept.push(...sub.kept);
+      result.failures.push(...sub.failures);
+    }
+
+    // Element Reels (Ateş, Toprak, Hava, Su) Üretimi — Her gün sabit saatlerde (10:40, 11:05, 11:30, 11:55)
     const shouldRenderElements = !targetOnly || targetOnly.startsWith('element');
     if (shouldRenderElements) {
       log('--- Element Reels (Ateş, Toprak, Hava, Su) Hazırlanıyor ---');
@@ -150,37 +179,39 @@ async function main() {
             { key: 'su', name: 'Su Grubu', part: 4, time: '11:55', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
           ];
 
-          const existingReels = (await listPublications(db, date)).filter((row) => row.postId === horoscopePost.id && row.format === 'reels');
+          const existingRows = (await listPublications(db, date)).filter((row) => row.postId === horoscopePost.id && row.part > 0);
+          const formats: PublicationFormat[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
 
           for (const el of elements) {
             if (targetOnly && targetOnly !== `element-${el.key}`) continue;
 
-            const isMonday = new Date(`${date}T12:00:00+03:00`).getDay() === 1;
-            const scheduledTime = isMonday
-              ? (el.part === 1 ? '10:20' : el.part === 2 ? '10:45' : el.part === 3 ? '11:10' : '11:35')
-              : el.time;
-
-            const oldElement = existingReels.find((r) => r.part === el.part);
-            const oldValid = oldElement?.media.videoUrl &&
+            const scheduledTime = el.time;
+            const oldElement = existingRows.find((r) => r.format === 'reels' && r.part === el.part);
+            const allFormatsExist = formats.every((fmt) => existingRows.some((r) => r.format === fmt && r.part === el.part));
+            const oldValid =
+              allFormatsExist &&
+              oldElement?.media.videoUrl &&
               typeof oldElement.media.durationSeconds === 'number' &&
               oldElement.media.durationSeconds > 0 &&
               oldElement.media.durationSeconds <= MAX_REELS_MP4_SECONDS &&
               (availableVideoUrls.size === 0 || availableVideoUrls.has(oldElement.media.videoUrl));
 
-            if (oldValid && !values.force && process.env.RENDER_FORCE !== 'true' && !targetOnly) {
+            if (oldValid && !forceRender && !targetOnly) {
               log(`Element Reels zaten mevcut ve geçerli: ${el.name} (${oldElement.media.videoUrl})`);
               result.kept.push(`element-${el.key}`);
               continue;
             }
 
-            const elementSigns = el.signs.map((slug) => {
-              const signData = baseReels.signs.find((s) => s.sign === slug);
-              const reading = readingBySign.get(slug);
-              return {
-                ...(signData || {}),
-                body: reading?.body ?? signData?.short,
-              } as ReelsSign;
-            }).filter(Boolean);
+            const elementSigns = el.signs
+              .map((slug) => {
+                const signData = baseReels.signs.find((s) => s.sign === slug);
+                const reading = readingBySign.get(slug);
+                return {
+                  ...(signData || {}),
+                  body: reading?.body ?? signData?.short,
+                } as ReelsSign;
+              })
+              .filter(Boolean);
 
             const elementReels: ReelsProps = {
               ...baseReels,
@@ -201,7 +232,6 @@ async function main() {
               const durationSeconds = typeof videoUrl === 'object' && videoUrl.durationSeconds ? videoUrl.durationSeconds : undefined;
               log(`ELEMENT REELS HAZIR [${el.name}]: ${url} (${durationSeconds ? durationSeconds.toFixed(1) + 's' : ''})`);
 
-              const formats: PublicationFormat[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
               for (const fmt of formats) {
                 await savePublication(
                   db,
@@ -221,7 +251,7 @@ async function main() {
                     isAiGenerated: true,
                     partCount: 1,
                   },
-                  { force: values.force || process.env.RENDER_FORCE === 'true' },
+                  { force: forceRender },
                 );
               }
 

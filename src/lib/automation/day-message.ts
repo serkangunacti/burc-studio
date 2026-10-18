@@ -33,7 +33,7 @@ function groupStatus(rows: readonly PublicationRow[]): PublicationStatus {
 export function groupPublications(rows: readonly PublicationRow[]): PublicationGroup[] {
   const groups = new Map<string, PublicationRow[]>();
   for (const row of [...rows].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())) {
-    const key = row.format === 'reels' && row.part > 0 ? `${row.postId}:${row.format}:${row.part}` : `${row.postId}:${row.format}`;
+    const key = row.format !== 'carousel' && row.part > 0 ? `${row.postId}:${row.format}:${row.part}` : `${row.postId}:${row.format}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.values()].map((group) => ({
@@ -62,7 +62,7 @@ const ELEMENT_SHORT: Record<number, string> = {
 
 function groupTitle(group: PublicationGroup): string {
   const part = group.rows[0].part;
-  if (group.format === 'reels' && part > 0 && ELEMENT_NAMES[part]) {
+  if (group.format !== 'carousel' && part > 0 && ELEMENT_NAMES[part]) {
     return `${ELEMENT_NAMES[part]} · ${FORMAT_NAMES[group.format]}`;
   }
   const format = group.format === 'carousel' ? `carousel (${group.rows.length} parça)` : `${FORMAT_NAMES[group.format]}${group.rows.length > 1 ? ` (${group.rows.length} video)` : ''}`;
@@ -71,7 +71,7 @@ function groupTitle(group: PublicationGroup): string {
 
 export function groupLabel(group: Pick<PublicationGroup, 'audience' | 'kind' | 'format'> & { rows?: PublicationRow[]; part?: number }): string {
   const part = group.part ?? group.rows?.[0]?.part;
-  if (group.format === 'reels' && part && ELEMENT_SHORT[part]) return `${ELEMENT_SHORT[part]} ${FORMAT_NAMES[group.format]}`;
+  if (group.format !== 'carousel' && part && ELEMENT_SHORT[part]) return `${ELEMENT_SHORT[part]} ${FORMAT_NAMES[group.format]}`;
   return `${AUDIENCE_LABELS[group.audience]} ${KIND_SHORT[group.kind]} ${FORMAT_NAMES[group.format]}`;
 }
 

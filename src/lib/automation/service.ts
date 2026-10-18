@@ -123,7 +123,21 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
   const settings = await getSettings(deps.db);
   const posts = await getCurrentPostsForDate(deps.db, date);
   const expected = planPublications(date, posts, settings.automation).filter((item) => item.format !== 'carousel');
-  if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) return 'Günün beklenen video paylaşımları eksik.';
+  const hasElements = rows.some((row) => row.part > 0);
+  if (hasElements) {
+    const formats: ('reels' | 'tiktok')[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
+    for (const fmt of formats) {
+      for (const part of [1, 2, 3, 4]) {
+        if (!rows.some((row) => row.format === fmt && row.part === part)) return 'Günün beklenen element video paylaşımları eksik.';
+      }
+    }
+    const expectedWeekly = expected.filter((item) => item.kind === 'weekly');
+    if (expectedWeekly.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) {
+      return 'Günün beklenen haftalık video paylaşımları eksik.';
+    }
+  } else if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) {
+    return 'Günün beklenen video paylaşımları eksik.';
+  }
   if (!rows.length) return 'Günün videoları henüz hazır değil.';
   for (const row of rows) {
     const error = videoSafetyError(row);
@@ -401,14 +415,14 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
     return;
   }
   if (action.action === 'retry') {
-    const retried = await retryFailedGroup(deps.db, { postId: action.postId, format: action.format }, now);
+    const retried = await retryFailedGroup(deps.db, { postId: action.postId, format: action.format, part: action.part }, now);
     await enqueueRows(deps, retried);
     await client.answerCallback(query.id, retried.length > 0 ? `🔁 ${retried.length} paylaşım yeniden deneniyor` : 'Yeniden denenecek paylaşım yok.');
     if (retried[0]) await refreshDayMessage(deps, retried[0].date, query.message.message_id);
     return;
   }
   if ('postId' in action) {
-    const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip' }, now);
+    const changed = await setGroupSkipped(deps.db, { postId: action.postId, format: action.format, skipped: action.action === 'skip', part: action.part }, now);
     if (action.action === 'undo') await enqueueRows(deps, changed.filter((row) => row.status === 'approved'));
     await client.answerCallback(query.id, changed.length === 0 ? 'Değişiklik yok.' : action.action === 'skip' ? 'Paylaşılmayacak.' : 'Geri alındı.');
     if (changed[0]) await refreshDayMessage(deps, changed[0].date, query.message.message_id);
