@@ -61,11 +61,11 @@ export function planPublications(date: DateKey, posts: readonly PlannablePost[],
     let clock = automation.schedule[post.kind][post.audience].reels;
     if (monday && hasWeekly) {
       if (post.kind === 'weekly') {
-        clock = post.audience === 'kadin' ? '08:30' : '08:45';
+        clock = post.audience === 'kadin' ? '11:00' : '11:15';
       } else if (post.kind === 'horoscope') {
-        clock = post.audience === 'kadin' ? '09:00' : '09:15';
+        clock = post.audience === 'kadin' ? '11:30' : '12:40';
       } else if (post.kind === 'tarot') {
-        clock = post.audience === 'kadin' ? '09:30' : '09:45';
+        clock = post.audience === 'kadin' ? '13:50' : '15:00';
       }
     }
     const captionFor = (platform: 'instagram' | 'tiktok') => formatPublicationCaption({ ...post, date, platform });

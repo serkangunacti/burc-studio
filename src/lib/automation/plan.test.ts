@@ -47,19 +47,19 @@ describe('paylaşım planı', () => {
     expect(plan[0].caption).toContain('#günlükburç #burçyorumu');
   });
 
-  it('pazartesi haftalık gönderileri ilk sırada (08:30 ve 08:45) video olarak planlar; özel ve genel gönderileri atlar', () => {
+  it('pazartesi haftalık gönderileri ilk sırada (11:00 ve 11:15) video olarak planlar; özel ve genel gönderileri atlar', () => {
     const plan = planPublications(
       '2026-09-28',
       [...DAILY, post('wk', 'weekly', 'kadin'), post('we', 'weekly', 'erkek'), post('sp', 'special', 'genel')],
       automation,
     );
     expect(plan).toHaveLength(6);
-    expect(plan.every((item) => item.scheduledAt.getTime() >= new Date('2026-09-28T05:30:00Z').getTime())).toBe(true);
+    expect(plan.every((item) => item.scheduledAt.getTime() >= new Date('2026-09-28T08:00:00Z').getTime())).toBe(true);
     expect(plan.some((item) => item.postId === 'sp')).toBe(false);
     expect(plan[0].postId).toBe('wk');
-    expect(plan[0].scheduledAt.toISOString()).toBe('2026-09-28T05:30:00.000Z');
+    expect(plan[0].scheduledAt.toISOString()).toBe('2026-09-28T08:00:00.000Z');
     expect(plan[1].postId).toBe('we');
-    expect(plan[1].scheduledAt.toISOString()).toBe('2026-09-28T05:45:00.000Z');
+    expect(plan[1].scheduledAt.toISOString()).toBe('2026-09-28T08:15:00.000Z');
   });
 
   it('eksik gönderi için satır üretmez', () => {

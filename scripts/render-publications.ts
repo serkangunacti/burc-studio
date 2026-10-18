@@ -211,7 +211,7 @@ async function main() {
         ),
       );
 
-    // Pazartesi günleri ilk sırada haftalık burç yorumları (08:30 Kadın, 08:45 Erkek) hazırlanır.
+    // Pazartesi günleri ilk sırada haftalık burç yorumları (11:00 Kadın, 11:15 Erkek) hazırlanır.
     if (isMonday && (!targetOnly || targetOnly.startsWith('weekly'))) {
       const weeklyTargets = targetOnly ? [targetOnly] : ['weekly-kadin', 'weekly-erkek'];
       for (const weeklyOnly of weeklyTargets) {
@@ -227,7 +227,7 @@ async function main() {
       result.failures.push(...sub.failures);
     }
 
-    // Element Reels (Ateş, Toprak, Hava, Su) Üretimi — Her gün sabit saatlerde (10:40, 11:05, 11:30, 11:55)
+    // Element Reels (Ateş, Toprak, Hava, Su) Üretimi — Her gün sabit saatlerde (11:30, 12:40, 13:50, 15:00)
     const shouldRenderElements = !targetOnly || targetOnly.startsWith('element');
     if (shouldRenderElements) {
       log('--- Element Reels (Ateş, Toprak, Hava, Su) Hazırlanıyor ---');
@@ -242,10 +242,10 @@ async function main() {
           const readingBySign = new Map(detail.slides.flatMap((s) => (s.reading ? [[s.reading.sign, s.reading] as const] : [])));
 
           const elements = [
-            { key: 'ates', name: 'Ateş Grubu', part: 1, time: '10:40', hook: 'Ateş Grubu Bugün Neler Bekliyor? (Koç, Aslan, Yay) 🔥', signs: ['koc', 'aslan', 'yay'] as const },
-            { key: 'toprak', name: 'Toprak Grubu', part: 2, time: '11:05', hook: 'Toprak Grubu Bugün Neler Bekliyor? (Boğa, Başak, Oğlak) 🌿', signs: ['boga', 'basak', 'oglak'] as const },
-            { key: 'hava', name: 'Hava Grubu', part: 3, time: '11:30', hook: 'Hava Grubu Bugün Neler Bekliyor? (İkizler, Terazi, Kova) 💨', signs: ['ikizler', 'terazi', 'kova'] as const },
-            { key: 'su', name: 'Su Grubu', part: 4, time: '11:55', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
+            { key: 'ates', name: 'Ateş Grubu', part: 1, time: '11:30', hook: 'Ateş Grubu Bugün Neler Bekliyor? (Koç, Aslan, Yay) 🔥', signs: ['koc', 'aslan', 'yay'] as const },
+            { key: 'toprak', name: 'Toprak Grubu', part: 2, time: '12:40', hook: 'Toprak Grubu Bugün Neler Bekliyor? (Boğa, Başak, Oğlak) 🌿', signs: ['boga', 'basak', 'oglak'] as const },
+            { key: 'hava', name: 'Hava Grubu', part: 3, time: '13:50', hook: 'Hava Grubu Bugün Neler Bekliyor? (İkizler, Terazi, Kova) 💨', signs: ['ikizler', 'terazi', 'kova'] as const },
+            { key: 'su', name: 'Su Grubu', part: 4, time: '15:00', hook: 'Su Grubu Bugün Neler Bekliyor? (Yengeç, Akrep, Balık) 🌊', signs: ['yengec', 'akrep', 'balik'] as const },
           ];
 
           const existingRows = (await listPublications(db, date)).filter((row) => row.postId === horoscopePost.id && row.part > 0);
