@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { dispatchRenderWorkflow } from './dispatch';
+import { checkRecentRenderFailure, dispatchRenderWorkflow } from './dispatch';
 
 describe('hazırlık tetikleyicisi', () => {
   it('günün tarihiyle iş akışını main dalında başlatır', async () => {
@@ -19,5 +19,37 @@ describe('hazırlık tetikleyicisi', () => {
       dispatched: false,
       reason: 'GitHub 403: Resource not accessible',
     });
+  });
+
+  it('tetikleme sonrası kota/ödeme nedeniyle başlatılmayan işi yakalar ve açıklamasını döndürür', async () => {
+    const since = new Date('2026-10-18T02:11:30Z');
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/runs?per_page=3')) {
+        return Response.json({
+          workflow_runs: [{ id: 39089205951, status: 'completed', conclusion: 'failure', created_at: '2026-10-18T02:11:32Z' }],
+        });
+      }
+      if (url.includes('/runs/39089205951/jobs')) {
+        return Response.json({ jobs: [{ id: 117562100203, conclusion: 'failure' }] });
+      }
+      if (url.includes('/check-runs/117562100203/annotations')) {
+        return Response.json([
+          {
+            message:
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+          },
+        ]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    const reason = await checkRecentRenderFailure({
+      token: 'T',
+      repository: 'o/r',
+      since,
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    expect(reason).toContain('GitHub Actions işi başlatılamadı (Run #39089205951)');
+    expect(reason).toContain('spending limit needs to be increased');
   });
 });

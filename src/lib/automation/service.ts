@@ -13,7 +13,7 @@ import type { AutomationSettings } from '@/lib/settings/schema';
 import { getPostDetail } from '@/lib/posts/repository';
 import { createTelegramClient, escapeHtml, TelegramError, type TelegramClient } from '@/lib/telegram/client';
 import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
-import { dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
+import { checkRecentRenderFailure, dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
 import {
   approveAndScheduleNow,
   claimYouTubeSubmission,
@@ -844,6 +844,44 @@ export async function startRender(deps: AutomationDeps, date: DateKey, options: 
   const integration = await getIntegration(deps.db, 'github');
   const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
   return dispatchRenderWorkflow({ token, repository: deps.repository, date, force: options.force, only: options.only, fetch: deps.fetch });
+}
+
+export async function startRenderWithAlert(
+  deps: AutomationDeps,
+  date: DateKey,
+  options: { force?: boolean; only?: string } = {},
+): Promise<{ dispatched: boolean; reason?: string }> {
+  const dispatchedAt = deps.now();
+  const result = await startRender(deps, date, options);
+  if (!result.dispatched) {
+    const paused = automationStartReason((await getSettings(deps.db)).automation.startDate, date, dispatchedAt);
+    if (result.reason && result.reason !== 'Otomatik paylaşım kapalı.' && result.reason !== paused) {
+      await notify(deps, `🚨 <b>Sabah video hazırlığı başlatılamadı (${escapeHtml(date)})</b>\n<i>${escapeHtml(result.reason)}</i>`);
+    }
+    return result;
+  }
+  await deps.sleep(5_000);
+  const integration = await getIntegration(deps.db, 'github');
+  const token = integration ? decryptSecret(integration.secretEncrypted, deps.integrationsKey) : undefined;
+  const failureReason = await checkRecentRenderFailure({
+    token,
+    repository: deps.repository,
+    since: dispatchedAt,
+    fetch: deps.fetch,
+  });
+  if (failureReason) {
+    await notify(deps, `🚨 <b>Sabah video hazırlığı başlatılamadı (${escapeHtml(date)})</b>\n<i>${escapeHtml(failureReason)}</i>`);
+    return { dispatched: false, reason: failureReason };
+  }
+  return result;
+}
+
+export async function notifyCronFailure(deps: AutomationDeps, date: DateKey, failures: readonly string[]): Promise<void> {
+  if (failures.length === 0) return;
+  await notify(
+    deps,
+    `🚨 <b>Sabah içerik üretiminde hata (${escapeHtml(date)})</b>\n${failures.map((f) => `• ${escapeHtml(f)}`).join('\n')}`,
+  );
 }
 
 // Kuyruk mesajları gönderildikleri yayın sürümünde işlenir; gün içinde yayınlanan düzeltmenin bekleyen paylaşımlara

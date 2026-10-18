@@ -110,6 +110,19 @@ jobs:
           VOICE_CACHE_DIR: .cache/voice
           AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
           APP_URL: https://burc-studio.vercel.app
+      - name: İş akışı hatasını Telegram’a bildir
+        if: failure() && (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true')
+        env:
+          RENDER_DATE: ${{ inputs.date }}
+          AUTOMATION_SECRET: ${{ secrets.AUTOMATION_SECRET }}
+          APP_URL: https://burc-studio.vercel.app
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DATE="${RENDER_DATE:-$(TZ=Europe/Istanbul date +%F)}"
+          curl -sS -X POST "${APP_URL}/api/automation/ready" \
+            -H "authorization: Bearer ${AUTOMATION_SECRET}" \
+            -H "content-type: application/json" \
+            -d "{\"date\":\"${DATE}\",\"failures\":[\"GitHub Actions hazırlık işi hata ile durdu (${RUN_URL})\"]}" || true
       - name: Konuşmaları hata durumunda da sakla
         uses: actions/cache/save@v4
         if: always() && (github.event_name != 'schedule' || steps.schedule-check.outputs.should-run == 'true') && steps.start-window.outputs.allowed == 'true'

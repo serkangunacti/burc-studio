@@ -14,6 +14,7 @@ export async function handleDailyCron(
     loadDeps: () => Promise<GenerationDeps & { settings: Settings }>;
     // Üretim bitince görsel hazırlığını başlatır; hata üretimin sonucunu bozmaz.
     startRender?: (date: DateKey) => Promise<{ dispatched: boolean; reason?: string }>;
+    notifyFailure?: (date: DateKey, failures: readonly string[]) => Promise<void>;
   },
 ): Promise<Response> {
   if (!isAuthorizedCronRequest(request.headers, deps.secret)) return Response.json({ error: 'Yetkisiz.' }, { status: 401 });
@@ -27,6 +28,10 @@ export async function handleDailyCron(
     trigger: 'cron',
     skipIfExists: true,
   });
+  const failedItems = generated.flatMap((entry) => ('error' in entry ? [`${entry.item.kind}-${entry.item.audience}: ${entry.error}`] : []));
+  if (failedItems.length > 0 && deps.notifyFailure) {
+    await deps.notifyFailure(deps.today, failedItems).catch((error: unknown) => console.error('Üretim hatası bildirilemedi', error));
+  }
   const render = generation.settings.automation.enabled && deps.startRender
     ? await deps.startRender(deps.today).catch((error: unknown) => ({ dispatched: false, reason: error instanceof Error ? error.message : String(error) }))
     : undefined;
