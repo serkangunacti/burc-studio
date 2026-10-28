@@ -1,6 +1,6 @@
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { istanbulDateKey } from '@/lib/date/istanbul';
-import { syncYouTubeShorts } from '@/lib/automation/service';
+import { automationStatus, syncYouTubeShorts } from '@/lib/automation/service';
 import { automationDeps } from '@/lib/automation/runtime';
 
 export const maxDuration = 300;
@@ -18,5 +18,15 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return Response.json({ error: 'POST kullanın.' }, { status: 405 });
+  try {
+    const status = await automationStatus(automationDeps());
+    return Response.json({
+      ok: true,
+      tiktok: status.tiktok?.ok ?? false,
+      instagramReels: status.instagramReels?.ok ?? false,
+      youtube: status.youtube?.ok ?? false,
+    });
+  } catch (error) {
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
 }

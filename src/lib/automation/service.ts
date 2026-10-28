@@ -187,7 +187,17 @@ type BufferService = 'tiktok' | 'instagram' | 'youtube';
 async function loadBuffer(deps: AutomationDeps, service: BufferService = 'tiktok'): Promise<{ client: BufferClient; channelId: string }> {
   const integration = await getIntegration(deps.db, 'buffer');
   if (!integration) throw new Error('Buffer bağlı değil. Ayarlar → Otomatik paylaşım bölümünden Buffer API anahtarını gir.');
-  const client = createBufferClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch, {
+  let token = decryptSecret(integration.secretEncrypted, deps.integrationsKey);
+  const envToken = process.env.BUFFER_API_KEY?.trim();
+  if (envToken && token !== envToken && deps.integrationsKey) {
+    token = envToken;
+    const encrypted = encryptSecret(envToken, deps.integrationsKey);
+    await saveIntegration(deps.db, { id: 'buffer', secretEncrypted: encrypted, account: integration.account, expiresAt: null });
+    const [ig, yt] = await Promise.all([getIntegration(deps.db, 'buffer_instagram'), getIntegration(deps.db, 'buffer_youtube')]);
+    if (ig) await saveIntegration(deps.db, { id: 'buffer_instagram', secretEncrypted: encrypted, account: ig.account, expiresAt: null });
+    if (yt) await saveIntegration(deps.db, { id: 'buffer_youtube', secretEncrypted: encrypted, account: yt.account, expiresAt: null });
+  }
+  const client = createBufferClient(token, deps.fetch, {
     now: deps.now,
     initialRateLimits: integration.account.rateLimits,
     onRateLimits: (limits) => saveBufferRateLimits(deps.db, limits),
