@@ -8,9 +8,9 @@ export type QualityIssue = { field: string; message: string };
 export type TextLimit = { min: number; max: number; maxEmoji: number };
 export type EntryLimits = { baslik: TextLimit; yorum: TextLimit; kisa: TextLimit };
 export const DAILY_LIMITS: EntryLimits = {
-  baslik: { min: 3, max: 40, maxEmoji: 1 },
+  baslik: { min: 3, max: 55, maxEmoji: 1 },
   yorum: { min: 280, max: 420, maxEmoji: 2 },
-  kisa: { min: 20, max: 140, maxEmoji: 1 },
+  kisa: { min: 20, max: 160, maxEmoji: 1 },
 };
 export const WEEKLY_LIMITS: EntryLimits = { ...DAILY_LIMITS, yorum: { min: 600, max: 850, maxEmoji: 3 } };
 // Burca göre metinde geçmemesi gereken ifadeler (ör. haftalık yorumda çekilen kartın adı).
@@ -163,15 +163,16 @@ export function checkHoroscopeBatch(
     sign,
     issues: issuesBySign.get(sign) ?? [{ field: 'burc', message: 'Bu burç yanıtta yok.' }],
   }));
+  const coverHook = fitToSentences(raw.kapakKanca, { min: 5, max: 90, maxEmoji: 2 });
   const postIssues = [
-    ...textIssues('kapakKanca', raw.kapakKanca, { min: 5, max: 60, maxEmoji: 1 }),
+    ...textIssues('kapakKanca', coverHook, { min: 5, max: 90, maxEmoji: 2 }),
     ...textIssues('caption', raw.caption, { min: 40, max: 700, maxEmoji: 4 }),
     ...(raw.caption.includes('#') ? [{ field: 'caption', message: 'Caption hashtag içermemeli; hashtagler ayrı alanda.' }] : []),
-    ...(looksTurkish(`${raw.kapakKanca} ${raw.caption}`) ? [] : [{ field: 'caption', message: 'Metin Türkçe görünmüyor.' }]),
+    ...(looksTurkish(`${coverHook} ${raw.caption}`) ? [] : [{ field: 'caption', message: 'Metin Türkçe görünmüyor.' }]),
   ];
   const post = postIssues.length
     ? null
-    : { coverHook: raw.kapakKanca.trim(), caption: raw.caption.trim(), hashtags: mergeHashtags(baseHashtags, raw.hashtagler) };
+    : { coverHook, caption: raw.caption.trim(), hashtags: mergeHashtags(baseHashtags, raw.hashtagler) };
   return { entries, failedSigns, post, postIssues };
 }
 

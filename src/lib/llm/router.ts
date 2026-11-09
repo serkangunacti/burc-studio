@@ -47,7 +47,7 @@ export type StructuredRequest<T> = {
 export type RouterResult<T> = { value: T; providerId: ProviderId; model: string };
 
 export const RATE_LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 25_000;
 const ATTEMPTS_PER_PROVIDER = 2;
 
 export class NoProvidersConfiguredError extends Error {
@@ -142,7 +142,7 @@ export async function generateWithFailover<T>(deps: RouterDeps, request: Structu
       } catch (error) {
         const { status, httpStatus } = classify(error);
         await record({ ...base, status, httpStatus, error: describeError(error), latencyMs: Date.now() - started });
-        if (MOVE_ON_IMMEDIATELY.includes(status)) break;
+        if (MOVE_ON_IMMEDIATELY.includes(status) || (status === 'timeout' && deps.timeoutMs === undefined)) break;
       } finally {
         clearTimeout(timer);
       }
