@@ -131,10 +131,6 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
         if (!rows.some((row) => row.format === fmt && row.part === part)) return 'Günün beklenen element video paylaşımları eksik.';
       }
     }
-    const expectedWeekly = expected.filter((item) => item.kind === 'weekly');
-    if (expectedWeekly.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) {
-      return 'Günün beklenen haftalık video paylaşımları eksik.';
-    }
   } else if (expected.some((item) => !rows.some((row) => row.postId === item.postId && row.format === item.format && row.part === 0))) {
     return 'Günün beklenen video paylaşımları eksik.';
   }

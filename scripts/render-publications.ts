@@ -196,31 +196,21 @@ async function main() {
   try {
     const forceRender = values.force || process.env.RENDER_FORCE === 'true';
     const targetOnly = values.only || process.env.RENDER_ONLY;
-    const isMonday = new Date(`${date}T12:00:00+03:00`).getDay() === 1;
     const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 
-    // Günlük tam (part 0) horoscope ve tarot videoları artık paylaşılmıyor; yalnızca Pazartesi haftalık (weekly) + her gün 4 Element paylaşılır.
+    // Günlük tam (part 0) horoscope, tarot ve haftalık (weekly) videolar artık paylaşılmıyor; tüm günler yalnızca 4 Element paylaşılır.
     await db
       .delete(publicationsTable)
       .where(
         and(
           eq(publicationsTable.date, date),
-          inArray(publicationsTable.kind, ['horoscope', 'tarot']),
+          inArray(publicationsTable.kind, ['horoscope', 'tarot', 'weekly']),
           eq(publicationsTable.part, 0),
           inArray(publicationsTable.status, ['ready', 'approved', 'failed', 'expired']),
         ),
       );
 
-    // Pazartesi günleri ilk sırada haftalık burç yorumları (11:00 Kadın, 11:15 Erkek) hazırlanır.
-    if (isMonday && (!targetOnly || targetOnly.startsWith('weekly'))) {
-      const weeklyTargets = targetOnly ? [targetOnly] : ['weekly-kadin', 'weekly-erkek'];
-      for (const weeklyOnly of weeklyTargets) {
-        const sub = await renderDay(db, date, renderers, { force: forceRender, only: weeklyOnly });
-        result.rendered.push(...sub.rendered);
-        result.kept.push(...sub.kept);
-        result.failures.push(...sub.failures);
-      }
-    } else if (targetOnly && !targetOnly.startsWith('element') && !targetOnly.startsWith('weekly')) {
+    if (targetOnly && !targetOnly.startsWith('element') && !targetOnly.startsWith('weekly')) {
       const sub = await renderDay(db, date, renderers, { force: forceRender, only: targetOnly });
       result.rendered.push(...sub.rendered);
       result.kept.push(...sub.kept);

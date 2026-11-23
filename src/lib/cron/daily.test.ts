@@ -49,7 +49,7 @@ describe('handleDailyCron', () => {
     expect(before.skipped).toContain('2026-10-05');
     expect(startRender).not.toHaveBeenCalled();
     const after = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...scheduled, now: () => new Date('2026-10-04T21:00:00Z') })).json();
-    expect(after.generated).toHaveLength(6);
+    expect(after.generated).toHaveLength(4);
     expect(startRender).toHaveBeenCalledWith('2026-10-05');
   });
 
@@ -74,15 +74,15 @@ describe('handleDailyCron', () => {
     expect(second.generated.map((entry: { result: { status: string } }) => entry.result.status)).toEqual(['skipped', 'skipped', 'skipped', 'skipped']);
   });
 
-  it('pazartesi günlük ve haftalık paketleri birlikte üretir', async () => {
+  it('pazartesi de haftalık üretmez, yalnızca günlük paketleri üretir', async () => {
     const body = await (await handleDailyCron(request('Bearer cron-anahtari'), { ...deps(), today: '2026-09-28' })).json();
     expect(body.ok).toBe(true);
     expect(
       body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`),
-    ).toEqual(['horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created']);
+    ).toEqual(['horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created']);
   });
 
-  it('tarotlu planla pazartesi 6 gönderi üretir', async () => {
+  it('tarotlu planla pazartesi de yalnızca 4 günlük gönderi üretir', async () => {
     const base = deps();
     const withTarot = {
       ...base,
@@ -106,7 +106,7 @@ describe('handleDailyCron', () => {
     const body = await (await handleDailyCron(request('Bearer cron-anahtari'), withTarot)).json();
     expect(body.ok).toBe(true);
     expect(body.generated.map((entry: { item: { kind: string; audience: string }; result: { status: string } }) => `${entry.item.kind}:${entry.item.audience}:${entry.result.status}`)).toEqual([
-      'horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created', 'weekly:kadin:created', 'weekly:erkek:created',
+      'horoscope:kadin:created', 'horoscope:erkek:created', 'tarot:kadin:created', 'tarot:erkek:created',
     ]);
   });
 

@@ -1,20 +1,16 @@
-import { isMonday } from '@/lib/astro/week';
 import type { DateKey } from '@/lib/date/istanbul';
 import { AllProvidersFailedError } from '@/lib/llm/router';
 import type { PlanItem } from '@/lib/settings/schema';
 import type { GeneratedKind } from './generation-spec';
 import { generateHoroscopeSet, type GenerationDeps, type SetResult } from './horoscope-service';
-import { AUDIENCES, type Audience, type RunTrigger } from './types';
+import type { Audience, RunTrigger } from './types';
 
 export type PackageItem = { kind: GeneratedKind; audience: Audience };
 export type PackageItemResult = { item: PackageItem; result: SetResult } | { item: PackageItem; error: string };
 
-// Pazartesi, plandaki her kitle için haftalık yorumlar da pakete ilk sırada girer.
-export function packageItemsFor(date: DateKey, plan: readonly PlanItem[]): PackageItem[] {
-  const planned = plan.map((item): PackageItem => ({ kind: item.kind, audience: item.audience }));
-  if (!isMonday(date)) return planned;
-  const audiences = AUDIENCES.filter((audience) => plan.some((item) => item.audience === audience));
-  return [...audiences.map((audience): PackageItem => ({ kind: 'weekly', audience })), ...planned];
+// Haftalık (weekly) üretim ve Pazartesi özel yayınları kaldırıldı; tüm günler yalnızca plandaki günlük kalemler üretilir.
+export function packageItemsFor(_date: DateKey, plan: readonly PlanItem[]): PackageItem[] {
+  return plan.map((item): PackageItem => ({ kind: item.kind, audience: item.audience }));
 }
 
 export function describeGenerationError(error: unknown): string {
