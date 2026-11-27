@@ -13,7 +13,7 @@ const INITIAL_STATE: ConnectState = { status: 'idle' };
 export type ConnectionStatus = {
   telegram: { username: string | null; chatLinked: boolean } | null;
   instagram: { username: string | null; expiresAt: string | null } | null;
-  tiktok: { channel: string | null } | null;
+  instagramReels: { channel: string | null } | null;
   renderTrigger: boolean;
   rateLimits?: BufferRateLimit[];
 };
@@ -32,7 +32,6 @@ function HealthCheck() {
       <p>Telegram: {report.telegram?.webhookOk && report.telegram.chatLinked ? '✓ Webhook ve onay sohbeti hazır' : 'Kontrol gerekli'}{report.telegram?.lastError ? ` · ${report.telegram.lastError}` : ''}. Bekleyen güncelleme: {report.telegram?.pendingUpdates ?? '—'}.</p>
       <p>Instagram carousel: {report.instagram ? report.instagram.publishing.ok ? `✓ Yayın izni var; ${report.instagram.publishing.used}/${report.instagram.publishing.total} yayın` : report.instagram.publishing.error : 'Bağlı değil'}.</p>
       <p>Instagram Reels (Buffer): {report.instagramReels?.ok ? '✓ Kanal hazır' : report.instagramReels?.error ?? 'Bağlı değil'}.</p>
-      <p>TikTok (Buffer): {report.tiktok?.ok && report.tiktok.enabled ? '✓ Kanal hazır, paylaşım açık' : report.tiktok?.error ?? 'Paylaşım kapalı veya bağlı değil'}.</p>
       <p>GitHub hazırlık tetikleyicisi: {report.renderTrigger ? '✓ Bağlı' : 'Bağlı değil; yedek zamanlama kullanılıyor'}.</p>
       <RateLimits limits={report.bufferRateLimits} />
     </div>}
@@ -78,7 +77,7 @@ function ConnectForm({ action, label, placeholder, connected }: { action: typeof
 }
 
 export function Connections({ status }: { status: ConnectionStatus }) {
-  const { telegram, instagram, tiktok, renderTrigger } = status;
+  const { telegram, instagram, instagramReels, renderTrigger } = status;
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <Card>
@@ -111,15 +110,15 @@ export function Connections({ status }: { status: ConnectionStatus }) {
       </Card>
       <Card>
         <CardHeader>
-          <ConnectedTitle title="TikTok (Buffer)" state={tiktok ? 'connected' : null} />
+          <ConnectedTitle title="Instagram Reels (Buffer)" state={instagramReels ? 'connected' : null} />
           <CardDescription>
-            {tiktok
-              ? `${tiktok.channel ?? 'TikTok'} kanalı bağlı; Reels videoları aynı saatte TikTok'ta da paylaşılır.`
-              : "Buffer'da TikTok'u bağla, Settings → API'den bir API anahtarı oluşturup buraya yapıştır."}
+            {instagramReels
+              ? `${instagramReels.channel ?? 'Instagram'} kanalı bağlı; Reels videoları planlanan saatlerde Buffer üzerinden Instagram'da paylaşılır.`
+              : "Buffer'da Instagram'ı bağla, Settings → API'den bir API anahtarı oluşturup buraya yapıştır."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConnectForm action={connectBufferAction} label="Buffer API anahtarı" placeholder="Buffer API anahtarı" connected={tiktok !== null} />
+          <ConnectForm action={connectBufferAction} label="Buffer API anahtarı" placeholder="Buffer API anahtarı" connected={instagramReels !== null} />
         </CardContent>
       </Card>
       <Card>

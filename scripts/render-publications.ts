@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { closeDb, getDb } from '../src/db/client';
 import { publications as publicationsTable, type PublicationFormat } from '../src/db/schema';
 import { missingPosts, renderDay, type RenderDayResult } from '../src/lib/automation/render-job';
@@ -198,15 +198,17 @@ async function main() {
     const targetOnly = values.only || process.env.RENDER_ONLY;
     const result: RenderDayResult = { rendered: [], kept: [], failures: [] };
 
-    // Günlük tam (part 0) horoscope, tarot ve haftalık (weekly) videolar artık paylaşılmıyor; tüm günler yalnızca 4 Element paylaşılır.
+    // Günlük tam (part 0) horoscope, tarot, haftalık (weekly) ve TikTok satırları artık paylaşılmıyor; tüm günler yalnızca Instagram 4 Element Reels paylaşılır.
     await db
       .delete(publicationsTable)
       .where(
         and(
           eq(publicationsTable.date, date),
-          inArray(publicationsTable.kind, ['horoscope', 'tarot', 'weekly']),
-          eq(publicationsTable.part, 0),
           inArray(publicationsTable.status, ['ready', 'approved', 'failed', 'expired']),
+          or(
+            and(inArray(publicationsTable.kind, ['horoscope', 'tarot', 'weekly']), eq(publicationsTable.part, 0)),
+            eq(publicationsTable.format, 'tiktok'),
+          ),
         ),
       );
 
@@ -239,7 +241,7 @@ async function main() {
           ];
 
           const existingRows = (await listPublications(db, date)).filter((row) => row.postId === horoscopePost.id && row.part > 0);
-          const formats: PublicationFormat[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
+          const formats: PublicationFormat[] = ['reels'];
 
           for (const el of elements) {
             if (targetOnly && targetOnly !== `element-${el.key}`) continue;

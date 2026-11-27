@@ -28,7 +28,7 @@ describe('otomasyon formu', () => {
           enabled: false,
           partGapMinutes: 5,
           cutoffTime: '22:15',
-          tiktok: { enabled: true },
+          tiktok: { enabled: false },
           schedule: { ...current.schedule, tarot: { ...current.schedule.tarot, erkek: { carousel: '13:30', reels: '23:15' } } },
         },
       },

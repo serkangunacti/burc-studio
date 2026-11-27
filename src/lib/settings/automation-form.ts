@@ -23,7 +23,7 @@ export function parseAutomationForm(
     schedule,
     partGapMinutes: Number(formData.get('partGapMinutes')),
     cutoffTime: String(formData.get('cutoffTime') ?? '').trim(),
-    tiktok: { enabled: formData.get('tiktokEnabled') === 'true' },
+    tiktok: { enabled: false },
   });
   if (!parsed.success) return { ok: false, error: 'Saatler SS:DD biçiminde, parça arası 1–30 dakika olmalı.' };
   const { enabled, schedule: nextSchedule, partGapMinutes, cutoffTime, tiktok } = parsed.data;

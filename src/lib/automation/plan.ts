@@ -71,10 +71,7 @@ export function planPublications(date: DateKey, posts: readonly PlannablePost[],
     const captionFor = (platform: 'instagram' | 'tiktok') => formatPublicationCaption({ ...post, date, platform });
     const base = { postId: post.id, kind: post.kind, audience: post.audience };
     const video = { ...base, part: 0, scheduledAt: istanbulInstant(date, clock) };
-    return [
-      { ...video, format: 'reels' as const, caption: captionFor('instagram') },
-      ...(automation.tiktok.enabled ? [{ ...video, format: 'tiktok' as const, caption: captionFor('tiktok') }] : []),
-    ];
+    return [{ ...video, format: 'reels' as const, caption: captionFor('instagram') }];
   });
   return items.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
 }

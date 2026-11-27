@@ -16,8 +16,6 @@ import { buildDayMessage, groupLabel, parseDayAction } from './day-message';
 import { checkRecentRenderFailure, dispatchRenderWorkflow, verifyRenderWorkflowAccess } from './dispatch';
 import {
   approveAndScheduleNow,
-  claimYouTubeSubmission,
-  setYouTubeState,
   stampImmediateApproval,
   approveDay,
   claimForPublishing,
@@ -125,7 +123,7 @@ export async function dayReadinessError(deps: AutomationDeps, date: DateKey): Pr
   const expected = planPublications(date, posts, settings.automation).filter((item) => item.format !== 'carousel');
   const hasElements = rows.some((row) => row.part > 0);
   if (hasElements) {
-    const formats: ('reels' | 'tiktok')[] = ['reels', ...(settings.automation.tiktok.enabled ? ['tiktok' as const] : [])];
+    const formats: ('reels')[] = ['reels'];
     for (const fmt of formats) {
       for (const part of [1, 2, 3, 4]) {
         if (!rows.some((row) => row.format === fmt && row.part === part)) return 'Günün beklenen element video paylaşımları eksik.';
@@ -178,9 +176,10 @@ async function loadTelegram(deps: AutomationDeps): Promise<{ client: TelegramCli
   return { client: createTelegramClient(decryptSecret(integration.secretEncrypted, deps.integrationsKey), deps.fetch), chatId: settings.automation.telegramChatId, automation: settings.automation };
 }
 
-type BufferService = 'tiktok' | 'instagram' | 'youtube';
+type BufferService = 'instagram';
 
-async function loadBuffer(deps: AutomationDeps, service: BufferService = 'tiktok'): Promise<{ client: BufferClient; channelId: string }> {
+async function loadBuffer(deps: AutomationDeps, _service: BufferService = 'instagram'): Promise<{ client: BufferClient; channelId: string }> {
+  void _service;
   const integration = await getIntegration(deps.db, 'buffer');
   if (!integration) throw new Error('Buffer bağlı değil. Ayarlar → Otomatik paylaşım bölümünden Buffer API anahtarını gir.');
   let token = decryptSecret(integration.secretEncrypted, deps.integrationsKey);
@@ -189,31 +188,14 @@ async function loadBuffer(deps: AutomationDeps, service: BufferService = 'tiktok
     token = envToken;
     const encrypted = encryptSecret(envToken, deps.integrationsKey);
     await saveIntegration(deps.db, { id: 'buffer', secretEncrypted: encrypted, account: integration.account, expiresAt: null });
-    const [ig, yt] = await Promise.all([getIntegration(deps.db, 'buffer_instagram'), getIntegration(deps.db, 'buffer_youtube')]);
+    const ig = await getIntegration(deps.db, 'buffer_instagram');
     if (ig) await saveIntegration(deps.db, { id: 'buffer_instagram', secretEncrypted: encrypted, account: ig.account, expiresAt: null });
-    if (yt) await saveIntegration(deps.db, { id: 'buffer_youtube', secretEncrypted: encrypted, account: yt.account, expiresAt: null });
   }
   const client = createBufferClient(token, deps.fetch, {
     now: deps.now,
     initialRateLimits: integration.account.rateLimits,
     onRateLimits: (limits) => saveBufferRateLimits(deps.db, limits),
   });
-  if (service === 'tiktok') return { client, channelId: integration.account.id };
-  if (service === 'youtube') {
-    const cached = await getIntegration(deps.db, 'buffer_youtube');
-    if (cached) return { client, channelId: cached.account.id };
-    const all = await client.allChannels();
-    const channel = all.find((c) => {
-      const s = c.service.toLowerCase();
-      return s.includes('youtube') || s.includes('google');
-    });
-    if (!channel) {
-      const channelSummary = all.map((c) => `${c.name} (${c.service})`).join(', ') || 'hiçbir kanal bulunamadı';
-      throw new Error(`Buffer hesabında bağlı YouTube kanalı bulunamadı. Buffer'daki bağlı kanallar: ${channelSummary}. Buffer'da Channels → Connect → YouTube ile kanalı bağla.`);
-    }
-    await saveIntegration(deps.db, { id: 'buffer_youtube', secretEncrypted: integration.secretEncrypted, account: { id: channel.id, username: channel.name }, expiresAt: null });
-    return { client, channelId: channel.id };
-  }
   // Instagram kanalı ilk kullanımda Buffer hesabından bulunur ve saklanır.
   const cached = await getIntegration(deps.db, 'buffer_instagram');
   if (cached) return { client, channelId: cached.account.id };
@@ -322,16 +304,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       return;
     }
     if (command === '/shorts') {
-      try {
-        const result = await syncYouTubeShorts(deps, istanbulDateKey(deps.now()));
-        if (result.errors.length > 0) {
-          await client.sendMessage(from, `⚠️ YouTube Shorts işlemi:\n• Gönderilen: ${result.sent}\n• Hatalar:\n${result.errors.map((e) => `  - ${escapeHtml(e)}`).join('\n')}`);
-        } else {
-          await client.sendMessage(from, `✅ ${result.sent} video YouTube Shorts olarak Buffer'a iletildi.`);
-        }
-      } catch (error) {
-        await client.sendMessage(from, `❌ YouTube Shorts işlemi başarısız:\n<i>${escapeHtml(error instanceof Error ? error.message : String(error))}</i>`);
-      }
+      await client.sendMessage(from, 'YouTube Shorts paylaşımı durduruldu; yalnızca Instagram paylaşılıyor.');
       return;
     }
     if (command === '/hemen') {
@@ -344,7 +317,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
           const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
           await client.sendMessage(
             from,
-            `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
+            `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
           );
         }
       } catch (error) {
@@ -357,7 +330,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
         const today = istanbulDateKey(deps.now());
         const result = await startRender(deps, today, { force: true });
         if (result.dispatched) {
-          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Mevcut şablon, içerik ve seslendirme korunuyor\n• YouTube Shorts 179 sn sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
+          await client.sendMessage(from, `🎨 <b>Günün paylaşımları yeniden çiziliyor...</b>\n\n• Mevcut şablon, içerik ve seslendirme korunuyor\n• 179 sn Reels sınırı\n\nÇizim tamamlandığında buraya <b>onay mesajı</b> gelecek. Sen onay vermeden hiçbir paylaşım yapılmayacak.`);
         } else {
           await client.sendMessage(from, `❌ Çizim başlatılamadı: ${result.reason ?? 'Bilinmeyen hata'}`);
         }
@@ -410,7 +383,7 @@ export async function handleTelegramUpdate(deps: AutomationDeps, update: Telegra
       const detail = result.errors.length > 0 ? `\n\n⚠️ Hatalar:\n${result.errors.map((e) => `• ${escapeHtml(e)}`).join('\n')}` : '';
       await client.sendMessage(
         chatId,
-        `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram, TikTok ve YouTube Shorts\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
+        `🚀 <b>${result.published} paylaşım için hemen paylaşım tetiklendi!</b>\n\n• Gönderiler Instagram\'a sırayla aktarılıyor.\n• Tamamlandıkça "📤 Paylaşıldı" bildirimi gelecektir.${detail}`,
       );
       if (query.message?.message_id) await refreshDayMessage(deps, targetDate, query.message.message_id);
     } catch (err) {
@@ -549,16 +522,16 @@ async function createCarousel(deps: AutomationDeps, instagram: InstagramClient, 
 }
 
 
-// TikTok ve Instagram Reels Buffer üzerinden gider: gönderi paylaşım saatinde "şimdi paylaş" olarak açılır ve durumu izlenir.
+// Instagram Reels Buffer üzerinden gider: gönderi paylaşım saatinde "şimdi paylaş" olarak açılır ve durumu izlenir.
 async function publishViaBuffer(deps: AutomationDeps, row: PublicationRow, service: BufferService): Promise<Published> {
-  const label = service === 'tiktok' ? 'TikTok' : 'Instagram Reels';
+  const label = 'Instagram Reels';
   if (row.publishAttemptedAt) throw new Error(`${label}: önceki Buffer oluşturma isteğinin sonucu belirsiz. Kopya paylaşımı önlemek için durduruldu; Buffer'daki gönderi kontrol edilmeli.`);
   const buffer = await loadBuffer(deps, service);
   const share = async () => {
     if (!row.media.videoUrl) throw new Error(`${label} videosu yok`);
     await markBufferSubmission(deps.db,row.id,deps.now());
     try {
-      return await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: service === 'instagram', isAiGenerated: true });
+      return await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl, instagramReel: true, isAiGenerated: true });
     } catch(error) {
       if (error instanceof BufferError && (error.rateLimited || (!error.retryable && !error.outcomeUnknown))) {
         await markBufferSubmission(deps.db,row.id,null);
@@ -596,7 +569,7 @@ async function publishViaBuffer(deps: AutomationDeps, row: PublicationRow, servi
 export async function publishPublication(deps: AutomationDeps, id: string): Promise<PublishOutcome> {
   const now = deps.now();
   const current = await getPublication(deps.db, id);
-  if (!current) return 'ignored';
+  if (!current || current.format === 'tiktok') return 'ignored';
   const safetyError = videoSafetyError(current);
   if (safetyError) { await markFailed(deps.db, id, safetyError); return 'failed'; }
   if (current.date === IMMEDIATE_APPROVAL_DATE && current.media.immediateApprovalDate !== IMMEDIATE_APPROVAL_DATE) return 'ignored';
@@ -605,12 +578,6 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
   }
   const { automation } = await getSettings(deps.db);
   if (!automation.enabled || (automation.startDate && current.date < automation.startDate)) return 'ignored';
-  if (current.status === 'published' && current.format === 'reels' && current.media.youtubeStatus !== 'sent') {
-    await syncYouTubeShorts(deps, current.date);
-    const latest = await getPublication(deps.db, id);
-    if (latest?.media.youtubeRemoteId && !['sent', 'error', 'unknown'].includes(latest.media.youtubeStatus ?? '')) throw new RetryLater(BUFFER_POLL_SECONDS, 'YouTube Shorts paylaşımı sürüyor');
-    return 'ignored';
-  }
   if (automation.startDate && istanbulDateKey(now) < automation.startDate) {
     throw new RetryLater(Math.max(1, Math.ceil((istanbulDayStart(automation.startDate).getTime() - now.getTime()) / 1000)), 'Otomasyon başlangıcı bekleniyor');
   }
@@ -638,19 +605,10 @@ export async function publishPublication(deps: AutomationDeps, id: string): Prom
 
   try {
     const { silent, ...result } =
-      row.format === 'tiktok'
-        ? await publishViaBuffer(deps, row, 'tiktok')
-        : row.format === 'reels'
-          ? await publishViaBuffer(deps, row, 'instagram')
-          : await publishToInstagram(deps, row);
+      row.format === 'reels'
+        ? await publishViaBuffer(deps, row, 'instagram')
+        : await publishToInstagram(deps, row);
     await markPublished(deps.db, id, result, deps.now());
-    if (row.format === 'reels') {
-      await syncYouTubeShorts(deps, row.date);
-      const youtube = (await getPublication(deps.db, id))?.media;
-      if (youtube?.youtubeRemoteId && !['sent', 'error', 'unknown'].includes(youtube.youtubeStatus ?? '')) {
-        await deps.enqueue(id, { delaySeconds: BUFFER_POLL_SECONDS, retentionSeconds: 86_400 });
-      }
-    }
     if (!silent) {
       const link = result.permalink ? ` · <a href="${escapeHtml(result.permalink)}">gör</a>` : '';
       await notify(deps, `📤 Paylaşıldı · ${escapeHtml(publicationLabel(row))}${link}`, true);
@@ -734,14 +692,13 @@ export type AutomationStatus = {
 };
 
 export async function automationStatus(deps: AutomationDeps): Promise<AutomationStatus> {
-  const [telegramRow, instagramRow, bufferRow, githubRow, settings, bufferInstagramRow, bufferYoutubeRow] = await Promise.all([
+  const [telegramRow, instagramRow, bufferRow, githubRow, settings, bufferInstagramRow] = await Promise.all([
     getIntegration(deps.db, 'telegram'),
     getIntegration(deps.db, 'instagram'),
     getIntegration(deps.db, 'buffer'),
     getIntegration(deps.db, 'github'),
     getSettings(deps.db),
     getIntegration(deps.db, 'buffer_instagram'),
-    getIntegration(deps.db, 'buffer_youtube'),
   ]);
   let telegram: AutomationStatus['telegram'] = null;
   if (telegramRow) {
@@ -761,9 +718,9 @@ export async function automationStatus(deps: AutomationDeps): Promise<Automation
       .catch((error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }));
     instagram = { username: instagramRow.account.username, expiresAt: instagramRow.expiresAt?.toISOString() ?? null, publishing };
   }
-  let tiktok: AutomationStatus['tiktok'] = null;
+  const tiktok: AutomationStatus['tiktok'] = null;
   let instagramReels: AutomationStatus['instagramReels'] = null;
-  let youtube: AutomationStatus['youtube'] = null;
+  const youtube: AutomationStatus['youtube'] = null;
   let bufferRateLimits = bufferRow?.account.rateLimits ?? [];
   if (bufferRow) {
     const {client} = await loadBuffer(deps);
@@ -773,28 +730,13 @@ export async function automationStatus(deps: AutomationDeps): Promise<Automation
       try { instagramChannelId = (await loadBuffer(deps,'instagram')).channelId; }
       catch (error) { discoveryError = error instanceof Error ? error.message : String(error); }
     }
-    let youtubeChannelId = bufferYoutubeRow?.account.id;
-    let ytDiscoveryError: string | null = null;
-    if (!youtubeChannelId) {
-      try { youtubeChannelId = (await loadBuffer(deps, 'youtube')).channelId; }
-      catch (error) { ytDiscoveryError = error instanceof Error ? error.message : String(error); }
-    }
     try {
-      const channelIds = [
-        bufferRow.account.id,
-        ...(instagramChannelId ? [instagramChannelId] : []),
-        ...(youtubeChannelId ? [youtubeChannelId] : []),
-      ];
-      const channels = await client.channelStates(channelIds);
+      const channels = instagramChannelId ? await client.channelStates([instagramChannelId]) : [];
       const checked = (channel:typeof channels[number]) => ({channel:channel.name,ok:!channel.isQueuePaused,error:channel.isQueuePaused ? "Buffer'da kanal kuyruğu duraklatılmış" : null});
-      tiktok = {...checked(channels[0]),enabled:settings.automation.tiktok.enabled};
-      instagramReels = channels[1] ? checked(channels[1]) : {channel:null,ok:false,error:discoveryError ?? 'Instagram Reels kanalı bağlı değil'};
-      youtube = channels[2] ? checked(channels[2]) : {channel:null,ok:false,error:ytDiscoveryError ?? 'YouTube kanalı bağlı değil'};
+      instagramReels = channels[0] ? checked(channels[0]) : {channel:null,ok:false,error:discoveryError ?? 'Instagram Reels kanalı bağlı değil'};
     } catch(error) {
       const checked = {ok:false,error:error instanceof Error ? error.message : String(error)};
-      tiktok = {channel:bufferRow.account.username,enabled:settings.automation.tiktok.enabled,...checked};
       instagramReels = {channel:bufferInstagramRow?.account.username ?? null,...checked};
-      youtube = {channel:bufferYoutubeRow?.account.username ?? null,...checked};
     }
     bufferRateLimits = [...client.rateLimits()];
   }
@@ -815,15 +757,8 @@ export function describeStatus(status: AutomationStatus): string {
         : `Paylaşım izni ❌ ${escapeHtml(instagram.publishing.error)}`,
     );
   }
-  const { tiktok, youtube } = status;
-  lines.push(
-    tiktok
-      ? `TikTok (Buffer): ${escapeHtml(tiktok.channel ?? '?')} · ${tiktok.ok ? '✅' : `❌ ${escapeHtml(tiktok.error ?? '')}`}${tiktok.enabled ? '' : ' · paylaşım kapalı'}`
-      : 'TikTok (Buffer): ❌ bağlı değil',
-  );
   lines.push(status.renderTrigger ? 'Hazırlık tetikleyicisi (GitHub): ✅' : 'Hazırlık tetikleyicisi (GitHub): ❌ bağlı değil · yedek zamanlama kullanılıyor');
   lines.push(status.instagramReels ? `Instagram Reels (Buffer): ${escapeHtml(status.instagramReels.channel ?? '?')} · ${status.instagramReels.ok ? '✅' : `❌ ${escapeHtml(status.instagramReels.error ?? '')}`}` : 'Instagram Reels (Buffer): ❌ bağlı değil');
-  lines.push(youtube ? `YouTube Shorts (Buffer): ${escapeHtml(youtube.channel ?? '?')} · ${youtube.ok ? '✅' : `❌ ${escapeHtml(youtube.error ?? '')}`}` : 'YouTube Shorts (Buffer): ❌ bağlı değil');
   for (const limit of status.bufferRateLimits) {
     const period = limit.windowSeconds === 900 ? '15 dakika' : limit.windowSeconds === 86400 ? '24 saat' : limit.windowSeconds === 2592000 ? '30 gün' : `${limit.windowSeconds} sn`;
     lines.push(`Buffer (${period}): ${limit.remaining}/${limit.limit} istek kaldı · kayıt yenilenmesi ${new Date(limit.resetsAt).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul'})}`);
@@ -832,15 +767,22 @@ export function describeStatus(status: AutomationStatus): string {
 }
 
 export async function connectBuffer(deps: AutomationDeps, apiKey: string): Promise<{ channel: string }> {
-  const [channel] = await createBufferClient(apiKey, deps.fetch).tiktokChannels();
-  if (!channel) throw new BufferError("Buffer hesabında bağlı TikTok kanalı bulunamadı. Önce Buffer'da TikTok'u bağla.", false);
+  const [channel] = await createBufferClient(apiKey, deps.fetch).channels('instagram');
+  if (!channel) throw new BufferError("Buffer hesabında bağlı Instagram kanalı bulunamadı. Önce Buffer'da Instagram'ı bağla.", false);
+  const encrypted = encryptSecret(apiKey, deps.integrationsKey);
   await saveIntegration(deps.db, {
     id: 'buffer',
-    secretEncrypted: encryptSecret(apiKey, deps.integrationsKey),
+    secretEncrypted: encrypted,
     account: { id: channel.id, username: channel.name },
     expiresAt: null,
   });
-  await saveSettings(deps.db, { automation: { tiktok: { enabled: true } } });
+  await saveIntegration(deps.db, {
+    id: 'buffer_instagram',
+    secretEncrypted: encrypted,
+    account: { id: channel.id, username: channel.name },
+    expiresAt: null,
+  });
+  await saveSettings(deps.db, { automation: { tiktok: { enabled: false } } });
   return { channel: channel.name };
 }
 
@@ -920,45 +862,11 @@ export async function requeueDay(deps: AutomationDeps, date: DateKey): Promise<{
   return { requeued: approved.length, retried: retried.length };
 }
 
-// YouTube is only submitted from already published Instagram rows, with persisted attempt/remote IDs.
-export async function syncYouTubeShorts(deps: AutomationDeps, date: DateKey): Promise<{ sent: number; errors: string[] }> {
-  const rows = (await listPublications(deps.db, date)).filter((row) => row.format === 'reels' && row.status === 'published');
-  let sent = 0;
-  const errors: string[] = [];
-  for (const row of rows) {
-    if (row.media.youtubeStatus === 'sent') continue;
-    try {
-      const safetyError = videoSafetyError(row);
-      if (safetyError) throw new Error(safetyError);
-      const buffer = await loadBuffer(deps, 'youtube');
-      let remoteId = row.media.youtubeRemoteId;
-      if (!remoteId) {
-        const claimed = await claimYouTubeSubmission(deps.db, row.id, deps.now());
-        if (!claimed) continue; // Previous/ambiguous submission must never be repeated.
-        try {
-          remoteId = await buffer.client.shareVideoNow({ channelId: buffer.channelId, text: row.caption, videoUrl: row.media.videoUrl!, youtube: { title: `${row.caption.split('\n')[0].replace(/[#*]/g, '').trim().slice(0, 85)} #Shorts` }, isAiGenerated: true });
-          await setYouTubeState(deps.db, row.id, { youtubeRemoteId: remoteId, youtubeStatus: 'pending' });
-          sent++;
-        } catch (error) {
-          if (error instanceof BufferError && !error.outcomeUnknown && (error.rateLimited || !error.retryable)) {
-            await setYouTubeState(deps.db, row.id, { youtubeAttemptedAt: null, youtubeStatus: 'error', youtubeError: error.message });
-          } else {
-            await setYouTubeState(deps.db, row.id, { youtubeStatus: 'unknown', youtubeError: 'Buffer isteğinin sonucu belirsiz; kopya oluşturmayı önlemek için tekrar gönderilmedi.' });
-          }
-          throw error;
-        }
-      }
-      const post = await buffer.client.post(remoteId);
-      await setYouTubeState(deps.db, row.id, { youtubeStatus: post.status, ...(post.error ? { youtubeError: post.error } : {}) });
-      if (post.status === 'sent') await notify(deps, `▶️ YouTube Shorts paylaşıldı · ${escapeHtml(publicationLabel(row))}`, true);
-      if (post.status === 'error') throw new Error(post.error ?? 'YouTube Shorts paylaşımı başarısız.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${publicationLabel(row)}: ${message}`);
-      await notify(deps, `⚠️ YouTube Shorts paylaşılamadı · ${escapeHtml(publicationLabel(row))}\n<i>${escapeHtml(message)}</i>`, true);
-    }
-  }
-  return { sent, errors };
+// YouTube Shorts paylaşımı durduruldu; yalnızca Instagram Reels paylaşılır.
+export async function syncYouTubeShorts(_deps: AutomationDeps, _date: DateKey): Promise<{ sent: number; errors: string[] }> {
+  void _deps;
+  void _date;
+  return { sent: 0, errors: [] };
 }
 
 export type PublishNowResult = { id: string; label: string; outcome: PublishOutcome | 'retry'; message?: string };
@@ -1046,7 +954,6 @@ export async function runMaintenance(deps: AutomationDeps): Promise<MaintenanceR
   const { automation } = await getSettings(deps.db);
   const paused = automationStartReason(automation.startDate, istanbulDateKey(now), now);
   if (paused) return { expired: 0, deletedImages: 0, deletedVideos: 0, tokenRefreshed: false, skipped: paused };
-  if (automation.enabled) await syncYouTubeShorts(deps, istanbulDateKey(now));
   const expired = await expireUnapproved(deps.db, istanbulDateKey(now));
   if (automation.enabled) await enqueueRows(deps, await listPendingBufferVerifications(deps.db));
   const cutoff = new Date(now.getTime() - MEDIA_RETENTION_DAYS * DAY_MS);

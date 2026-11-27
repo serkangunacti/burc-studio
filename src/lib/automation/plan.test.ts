@@ -66,17 +66,11 @@ describe('paylaşım planı', () => {
     expect(planPublications('2026-09-29', [DAILY[1]], automation).every((item) => item.postId === 'he')).toBe(true);
   });
 
-  it('aynı videoyu aynı saatte, platforma uygun açıklamayla iki platform için planlar (TikTok açıkken)', () => {
+  it('TikTok açık olsa bile yalnızca Instagram Reels planlar', () => {
     const plan = planPublications('2026-09-29', DAILY, { ...automation, tiktok: { enabled: true } });
-    expect(plan).toHaveLength(8);
-    const tiktok = plan.filter((item) => item.format === 'tiktok');
-    const reels = plan.filter((item) => item.format === 'reels');
-    expect(tiktok.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt }))).toEqual(
-      reels.map(({ postId, part, scheduledAt }) => ({ postId, part, scheduledAt })),
-    );
-    expect(tiktok[0].caption).toContain('Günün yorumları burada ✨');
-    expect(reels[0].caption).toContain('Günün yorumları burada ✨');
-    expect(tiktok[0].caption).not.toBe(reels[0].caption);
+    expect(plan).toHaveLength(4);
+    expect(plan.every((item) => item.format === 'reels')).toBe(true);
+    expect(plan[0].caption).toContain('Günün yorumları burada ✨');
   });
 
   it('tarot açıklamasında türü ve erkek hedef kitleyi belirtir; ilgili etiketleri kullanır', () => {

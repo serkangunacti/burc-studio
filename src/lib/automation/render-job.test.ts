@@ -42,11 +42,14 @@ describe('günün render işi', () => {
     expect((await renderDay(db,DATE,renderers)).failures).toHaveLength(1);
     expect(await listPublications(db,DATE)).toEqual([]);
   });
-  it('tam 178,9 saniyelik tek MP4 aynı ölçümle iki platforma kaydedilir',async()=>{
+  it('tam 178,9 saniyelik tek MP4 yalnız Instagram Reels olarak kaydedilir (TikTok kapalı)',async()=>{
     await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});await saveSettings(db,{automation:{tiktok:{enabled:true}}});
     const renderers=fakeRenderers();renderers.renderReels=async()=>({videoUrl:'https://blob.test/safe.mp4',durationSeconds:178.9});
     expect((await renderDay(db,DATE,renderers)).failures).toEqual([]);
-    expect((await listPublications(db,DATE)).map(r=>r.media)).toEqual(Array.from({length:2},()=>({videoUrl:'https://blob.test/safe.mp4',durationSeconds:178.9,partCount:1})));
+    const rows = await listPublications(db,DATE);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].format).toBe('reels');
+    expect(rows[0].media).toEqual({videoUrl:'https://blob.test/safe.mp4',durationSeconds:178.9,partCount:1});
   });
   it('paket yeniden hazırlanırken tüm eski videoları ilk renderdan önce onaydan çıkarır',async()=>{
     await seedPost(db,{date:DATE,kind:'horoscope',audience:'kadin'});
@@ -91,7 +94,7 @@ describe('günün render işi', () => {
     expect((await listPublications(db,DATE))[0]).toMatchObject({status:'ready',remoteId:null,publishAttemptedAt:null,publishedAt:null,approvedAt:null});
   });
 
-  it('sesli render sonucunun AI bilgisini aynı MP4 ile iki platforma ve sonradan açılan TikTok satırına taşır', async () => {
+  it('sesli render sonucunun AI bilgisini kaydeder ve TikTok açık olsa da TikTok satırı açmaz', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     const renderers = fakeRenderers();
     renderers.renderReels = vi.fn(async () => ({ videoUrl: 'https://blob.example/voice.mp4',durationSeconds:100, isAiGenerated: true }));
@@ -101,7 +104,7 @@ describe('günün render işi', () => {
     const later = fakeRenderers();
     await renderDay(db, DATE, later);
     expect(later.videos).not.toHaveBeenCalled();
-    expect((await listPublications(db, DATE)).find(row => row.format === 'tiktok')?.media).toEqual({ videoUrl: 'https://blob.example/voice.mp4',durationSeconds:100,partCount:1, isAiGenerated: true });
+    expect((await listPublications(db, DATE)).find(row => row.format === 'tiktok')).toBeUndefined();
   });
   it('başlangıçtan önce eski planı zorla tetikleme dahil çizmez', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
@@ -162,7 +165,7 @@ describe('günün render işi', () => {
     expect(result.rendered).toHaveLength(1);
   });
 
-  it('TikTok, Reels videosunu yeniden çizmeden kullanır; sonradan açılınca mevcut videoyu alır', async () => {
+  it('TikTok ayarı açık olsa bile yalnızca Instagram Reels satırı oluşturur', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await saveSettings(db, { automation: { ...DEFAULT_SETTINGS.automation, tiktok: { enabled: true } } });
     const renderers = fakeRenderers();
@@ -172,17 +175,16 @@ describe('günün render işi', () => {
     const url = `https://blob.example/${DATE}-horoscope-kadin.mp4`;
     expect(rows.filter((row) => row.format !== 'carousel').map((row) => [row.format, row.media.videoUrl])).toEqual([
       ['reels', url],
-      ['tiktok', url],
     ]);
   });
 
-  it('TikTok sonradan açılırsa yalnız TikTok satırını ekler, videoyu yeniden çizmez', async () => {
+  it('TikTok sonradan açılsa da yeni satır eklemez ve videoyu yeniden çizmez', async () => {
     await seedPost(db, { date: DATE, kind: 'horoscope', audience: 'kadin' });
     await renderDay(db, DATE, fakeRenderers());
     await saveSettings(db, { automation: { ...DEFAULT_SETTINGS.automation, tiktok: { enabled: true } } });
     const renderers = fakeRenderers();
     const result = await renderDay(db, DATE, renderers);
-    expect(result.rendered).toEqual(['horoscope-kadin-tiktok-0']);
+    expect(result.rendered).toEqual([]);
     expect(renderers.videos).not.toHaveBeenCalled();
     expect(renderers.stills).not.toHaveBeenCalled();
   });

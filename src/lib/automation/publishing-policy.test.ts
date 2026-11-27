@@ -57,19 +57,17 @@ describe('persisted publication safety', () => {
     expect(await claimYouTubeSubmission(db, row.id, deps.now())).not.toBeNull();
     expect(await claimYouTubeSubmission(db, row.id, deps.now())).toBeNull();
   });
-  it('tracks YouTube ID and status and does not duplicate subsequent syncs', async () => {
+  it('does not submit YouTube Shorts after YouTube publishing is disabled', async () => {
     const { db, date, row, deps, fetchMock } = await fixture();
-    expect(await syncYouTubeShorts(deps, date)).toEqual({ sent: 1, errors: [] });
-    expect((await getPublication(db, row.id))?.media).toMatchObject({ youtubeRemoteId: 'youtube-one', youtubeStatus: 'sent' });
     expect(await syncYouTubeShorts(deps, date)).toEqual({ sent: 0, errors: [] });
-    expect(fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes('createPost'))).toHaveLength(1);
+    expect((await getPublication(db, row.id))?.media.youtubeRemoteId).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it('never submits an unverified or overlong published video', async () => {
-    const { db, date, row, deps, fetchMock } = await fixture();
+    const { db, row, deps, fetchMock } = await fixture();
     await db.update(publications).set({ media: { videoUrl: 'https://blob.test/long.mp4', durationSeconds: 181 } }).where(eq(publications.id, row.id));
-    const result = await syncYouTubeShorts(deps, date);
-    expect(result.sent).toBe(0);
-    expect(result.errors).toHaveLength(1);
+    expect(videoSafetyError((await getPublication(db, row.id))!)).toBeTruthy();
+    expect(await publishPublication(deps, row.id)).toBe('failed');
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it('blocks today’s old approved queue deliveries without Telegram approval', async () => {
@@ -107,26 +105,15 @@ it('blocks partial days and automatically enqueues the complete next day', async
   const rows = await listPublications(db, date);
   expect(rows.every((row) => ['approved', 'published'].includes(row.status))).toBe(true);
   const newlyApproved = rows.filter((row) => row.status === 'approved');
-  expect(new Date(Math.min(...newlyApproved.map((row) => row.scheduledAt.getTime()))).toISOString()).toBe('2026-10-09T06:01:00.000Z');
+  expect(new Date(Math.min(...newlyApproved.map((row) => row.scheduledAt.getTime()))).toISOString()).toBe('2026-10-09T06:25:00.000Z');
   expect([...new Set(newlyApproved.map((row) => row.scheduledAt.getTime()))].sort((a,b)=>a-b).map(time=>new Date(time).toISOString())).toEqual([
-    '2026-10-09T06:01:00.000Z','2026-10-09T06:26:00.000Z','2026-10-09T06:51:00.000Z','2026-10-09T07:16:00.000Z',
+    '2026-10-09T06:25:00.000Z','2026-10-09T06:50:00.000Z','2026-10-09T07:15:00.000Z',
   ]);
   expect(enqueue).toHaveBeenCalledTimes(rows.filter((row) => row.status === 'approved').length);
 });
 
-it('keeps an ambiguous YouTube attempt blocked instead of duplicating it', async () => {
-  const { db, date, row, deps, fetchMock } = await fixture();
-  fetchMock.mockImplementation(async () => { throw new Error('connection interrupted'); });
-  expect((await syncYouTubeShorts(deps, date)).errors).toHaveLength(1);
-  expect((await getPublication(db, row.id))?.media.youtubeStatus).toBe('unknown');
-  expect(await syncYouTubeShorts(deps, date)).toEqual({ sent: 0, errors: [] });
-  expect(fetchMock).toHaveBeenCalledTimes(1);
-});
-
-it('never falls back to a regular YouTube video when Shorts is rejected', async () => {
+it('never calls Buffer for YouTube even when Shorts sync is invoked directly', async () => {
   const { date, deps, fetchMock } = await fixture();
-  fetchMock.mockImplementation(async () => Response.json({ data: { createPost: { message: 'YouTube Shorts limit is 3 minutes' } } }));
-  expect((await syncYouTubeShorts(deps, date)).errors).toHaveLength(1);
-  expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('#Shorts');
+  expect(await syncYouTubeShorts(deps, date)).toEqual({ sent: 0, errors: [] });
+  expect(fetchMock).not.toHaveBeenCalled();
 });

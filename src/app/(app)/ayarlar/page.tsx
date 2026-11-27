@@ -16,12 +16,13 @@ export const metadata: Metadata = { title: 'Ayarlar' };
 export default async function SettingsPage() {
   await connection();
   const db = getDb();
-  const [settings, usage, telegram, instagram, buffer, github] = await Promise.all([
+  const [settings, usage, telegram, instagram, buffer, bufferInstagram, github] = await Promise.all([
     getSettings(db),
     getUsageSummary(db, 7),
     getIntegration(db, 'telegram'),
     getIntegration(db, 'instagram'),
     getIntegration(db, 'buffer'),
+    getIntegration(db, 'buffer_instagram'),
     getIntegration(db, 'github'),
   ]);
   const providers = availableProviders(process.env).map(({ id, label, model, dailyCap }) => ({ id, label, model, dailyCap }));
@@ -42,7 +43,7 @@ export default async function SettingsPage() {
           status={{
             telegram: telegram && { username: telegram.account.username, chatLinked: settings.automation.telegramChatId !== null },
             instagram: instagram && { username: instagram.account.username, expiresAt: instagram.expiresAt?.toISOString() ?? null },
-            tiktok: buffer && { channel: buffer.account.username },
+            instagramReels: (bufferInstagram ?? buffer) && { channel: (bufferInstagram ?? buffer)!.account.username },
             renderTrigger: github !== null,
             rateLimits: buffer?.account.rateLimits ?? [],
           }}

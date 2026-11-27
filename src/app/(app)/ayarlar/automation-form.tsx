@@ -23,7 +23,6 @@ const ROWS = [
 export function AutomationSettingsForm({ initial }: { initial: AutomationSettings }) {
   const [state, formAction, pending] = useActionState(saveAutomationSettingsAction, INITIAL_STATE);
   const [enabled, setEnabled] = useState(initial.enabled);
-  const [tiktokEnabled, setTiktokEnabled] = useState(initial.tiktok.enabled);
 
   useEffect(() => {
     if (state.status === 'saved') toast.success('Paylaşım saatleri kaydedildi.');
@@ -36,12 +35,7 @@ export function AutomationSettingsForm({ initial }: { initial: AutomationSetting
         <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Otomatik paylaşım" />
         <input type="hidden" name="enabled" value={String(enabled)} />
       </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-sm font-medium">{"Reels videolarını aynı saatte TikTok'ta da paylaş (Buffer)"}</span>
-        <Switch checked={tiktokEnabled} onCheckedChange={setTiktokEnabled} aria-label="TikTok paylaşımı" />
-        <input type="hidden" name="tiktokEnabled" value={String(tiktokEnabled)} />
-      </div>
+      <input type="hidden" name="tiktokEnabled" value="false" />
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Paylaşım saatleri (TSİ)</legend>

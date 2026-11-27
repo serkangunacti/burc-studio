@@ -12,7 +12,7 @@ describe('bağlantı kartları', () => {
         status: {
           telegram: { username: 'kozmikarkan_bot', chatLinked: true },
           instagram: { username: 'kozmikarkan', expiresAt: '2026-11-26T18:11:03.527Z' },
-          tiktok: { channel: 'kozmikarkan' },
+          instagramReels: { channel: 'kozmikarkan' },
           renderTrigger: true,
         },
       }),
@@ -25,7 +25,7 @@ describe('bağlantı kartları', () => {
 
   it('bağlı olmayan hesaplarda kurulum yönergesini ve Bağla düğmesini, /start bekleyen botu ayrı gösterir', () => {
     const html = renderToStaticMarkup(
-      createElement(Connections, { status: { telegram: { username: 'kozmikarkan_bot', chatLinked: false }, instagram: null, tiktok: null, renderTrigger: false } }),
+      createElement(Connections, { status: { telegram: { username: 'kozmikarkan_bot', chatLinked: false }, instagram: null, instagramReels: null, renderTrigger: false } }),
     );
     expect(html).toContain('/start bekleniyor');
     expect(html).not.toContain('✓ Bağlı');
